@@ -1,0 +1,211 @@
+/* pages/profile/edit-profile.scss */
+/* 全局样式重置 */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+.container {
+  background-color: #f8f8f8;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+
+  /* 头部导航 */
+  .nav-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 44px;
+    background-color: #fff;
+    padding: 0 16rpx;
+    border-bottom: 1rpx solid #e5e5e5;
+    box-shadow: 0 1rpx 4rpx rgba(0, 0, 0, 0.05);
+
+    .nav-back {
+      font-size: 24px;
+      color: #333;
+      transition: all 0.3s ease;
+      padding: 8rpx;
+      border-radius: 50%;
+    }
+
+    .nav-back:hover {
+      background-color: #f0f0f0;
+    }
+
+    .nav-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: #333;
+    }
+
+    .nav-right {
+      width: 24px;
+    }
+  }
+
+  /* 表单容器 */
+  .form-container {
+    background-color: #fff;
+    margin-top: 12rpx;
+    flex: 1;
+    border-radius: 12rpx;
+    margin: 12rpx 16rpx 0;
+    box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.05);
+
+    .form-section {
+      margin-top: 16rpx;
+
+      .section-title {
+        padding: 14rpx 16rpx;
+        font-size: 14px;
+        font-weight: 600;
+        color: #333;
+        background-color: #f9f9f9;
+        border-top: 1rpx solid #f0f0f0;
+        border-bottom: 1rpx solid #f0f0f0;
+      }
+    }
+
+    .form-item {
+      display: flex;
+      align-items: center;
+      padding: 20rpx 16rpx;
+      border-bottom: 1rpx solid #f0f0f0;
+      transition: background-color 0.2s ease;
+
+      .form-item:last-child {
+        border-bottom: none;
+      }
+
+      .form-label {
+        width: 100rpx;
+        font-size: 14px;
+        color: #666;
+        font-weight: 500;
+      }
+
+      .form-value {
+        flex: 1;
+      }
+
+      .form-input {
+        flex: 1;
+        font-size: 14px;
+        color: #333;
+        padding: 0;
+        line-height: 20px;
+      }
+
+      /* 头像上传 */
+      .avatar-upload-btn {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 0;
+        background: none;
+        border: none;
+        transition: all 0.3s ease;
+      }
+
+      .avatar-upload-btn:hover {
+        transform: translateY(-2rpx);
+      }
+
+      .avatar {
+        width: 120rpx;
+        height: 120rpx;
+        border-radius: 50%;
+        margin-bottom: 12rpx;
+        border: 2rpx solid #f0f0f0;
+        box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.1);
+      }
+
+      .upload-text {
+        font-size: 12px;
+        color: #666;
+        font-weight: 400;
+      }
+
+      /* 角色文本 */
+      .role-text {
+        font-size: 14px;
+        color: #333;
+        font-weight: 500;
+      }
+    }
+  }
+
+  /* 保存按钮 */
+  .save-section {
+    padding: 32rpx 16rpx;
+    margin-top: auto;
+
+    .save-btn {
+      width: 100%;
+      height: 52px;
+      line-height: 52px;
+      background-color: #FF6B35;
+      color: #fff;
+      font-size: 16px;
+      font-weight: 600;
+      border-radius: 26px;
+      border: none;
+      transition: all 0.3s ease;
+      box-shadow: 0 4rpx 12rpx rgba(255, 107, 53, 0.3);
+    }
+
+    .save-btn:hover {
+      background-color: #FF5722;
+      box-shadow: 0 6rpx 16rpx rgba(255, 107, 53, 0.4);
+    }
+
+    .save-btn:active {
+      transform: translateY(2rpx);
+    }
+  }
+}
+
+/* 响应式设计 */
+@media (max-width: 375px) {
+  .container {
+    .form-container {
+      .form-item {
+        .avatar {
+          width: 100rpx;
+          height: 100rpx;
+        }
+      }
+    }
+  }
+}
+
+@media (min-width: 414px) {
+  .container {
+    .form-container {
+      .form-item {
+        .avatar {
+          width: 140rpx;
+          height: 140rpx;
+        }
+      }
+    }
+  }
+}
+
+/* 输入框焦点样式 */
+input:focus {
+  outline: none;
+  color: #333;
+}
+
+/* 按钮通用样式 */
+button {
+  outline: none;
+}
+
+button::after {
+  border: none;
+}

@@ -1,0 +1,102 @@
+/* pages/login/login.wxss */
+.content {
+  min-height: 100vh;
+  background-color: #fff;
+}
+
+.head {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 32vh;
+}
+
+.head image {
+  width: 360rpx;
+  height: 360rpx;
+}
+
+.form-box {
+  padding: 0rpx 80rpx;
+}
+
+.row-input {
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  height: 120rpx;
+  border-bottom: 1rpx solid #ececec;
+}
+
+.row-input input {
+  flex: 1;
+  font-size: 30rpx;
+  color: #333;
+}
+
+.login-btn {
+  margin-top: 30rpx;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 30rpx;
+  height: 100rpx;
+  background-color: #393a3e;
+  letter-spacing: 10rpx;
+  color: #f1f1f3;
+}
+
+.menu-link {
+  line-height: 100rpx;
+  font-size: 28rpx;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: #676769;
+}
+
+.line {
+  width: 100%;
+  margin: 50rpx 0rpx;
+  align-self: center;
+  position: relative;
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+  font-size: 24rpx;
+  color: #999;
+}
+
+.line:before {
+  content: "";
+  margin-right: 20rpx;
+  border-top: 1px solid #dddddd;
+  flex: 1 1 0rpx;
+}
+
+.line::after {
+  content: "";
+  margin-left: 20rpx;
+  border-top: 1px solid #dddddd;
+  flex: 1 1 0rpx;
+}
+
+.quick-login {
+  padding: 0 120rpx;
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+}
+
+.quick-login view {
+  margin: 0 30rpx;
+}
+
+.quick-login image {
+  width: 100rpx;
+  height: 100rpx;
+  border-radius: 100%;
+  background-color: #000000;
+}

@@ -1,0 +1,70 @@
+<!--pages/search/search.wxml-->
+<view class="search-container">
+  <!-- 搜索栏 -->
+  <view class="search-header">
+    <view class="search-input-container">
+      <icon type="search" size="20" color="#999" class="search-icon"/>
+      <input 
+        class="search-input" 
+        placeholder="请输入搜索内容" 
+        value="{{searchText}}" 
+        bindinput="onSearchInput"
+        bindconfirm="search"
+      />
+    </view>
+    <view class="search-btn" bindtap="search">搜索</view>
+  </view>
+
+  <!-- 搜索历史 -->
+  <view wx:if="{{!showResults && searchHistory.length > 0}}" class="search-history">
+    <view class="history-title">
+      <text class="history-title-text">搜索历史</text>
+      <text class="clear-history" bindtap="clearSearchHistory">清除</text>
+    </view>
+    <view class="history-list">
+      <view 
+        wx:for="{{searchHistory}}" 
+        wx:key="{{index}}"
+        class="history-item"
+        bindtap="clickHistory"
+        data-keyword="{{item}}"
+      >
+        {{item}}
+      </view>
+    </view>
+  </view>
+
+  <!-- 热门搜索 -->
+  <view wx:if="{{!showResults}}" class="hot-search">
+    <text class="hot-title">热门搜索</text>
+    <view class="hot-list">
+      <view 
+        wx:for="{{hotSearches}}" 
+        wx:key="{{index}}"
+        class="hot-item"
+        bindtap="clickHotSearch"
+        data-keyword="{{item}}"
+      >
+        {{item}}
+      </view>
+    </view>
+  </view>
+
+  <!-- 搜索结果 -->
+  <view wx:if="{{showResults}}" class="search-results">
+    <view 
+      wx:for="{{searchResults}}" 
+      wx:key="{{item.id}}"
+      class="result-item"
+      bindtap="clickResult"
+      data-id="{{item.id}}"
+    >
+      <text class="result-title">{{item.title}}</text>
+      <text class="result-desc">{{item.desc}}</text>
+      <text class="result-meta">{{item.meta}}</text>
+    </view>
+    <view wx:if="{{searchResults.length === 0}}" class="empty-container">
+      <text class="empty-text">暂无搜索结果</text>
+    </view>
+  </view>
+</view>

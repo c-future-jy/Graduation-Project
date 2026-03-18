@@ -1,0 +1,78 @@
+{
+  "entryPagePath": "pages/index/index",
+  "pages": [
+    "pages/index/index",
+    "pages/cate/cate",
+    "pages/cart/cart",
+    "pages/profile/profile",
+    "pages/profile/edit-profile",
+    "pages/profile/password-edit",
+    "pages/list/list",
+    "pages/detail/detail",
+    "pages/login/login",
+    "pages/address/address",
+    "pages/order/order",
+    "pages/order-detail/order-detail",
+    "pages/confirm-order/confirm-order",
+    "pages/feedback/feedback",
+    "pages/notice/notice",
+    "pages/merchant/merchant"
+  ],
+  "window": {
+    "navigationBarTitleText": "校园一站式服务平台",
+    "navigationBarBackgroundColor": "#f3514f",
+    "navigationBarTextStyle": "white",
+    "enablePullDownRefresh": true,
+    "backgroundColor": "#efefef",
+    "backgroundTextStyle": "dark",
+    "backgroundColorTop": "#f3514f",
+    "backgroundColorBottom": "#efefef"
+  },
+  "style": "v2",
+  "tabBar": {
+    "selectedColor": "#f3514f",
+    "color": "#666",
+    "borderStyle": "black",
+    "position": "bottom",
+    "list": [
+      {
+        "text": "首页",
+        "pagePath": "pages/index/index",
+        "iconPath": "assets/tabbar/shouye_1.jpg",
+        "selectedIconPath": "assets/tabbar/shouye_2.jpg"
+      },
+      {
+        "text": "分类",
+        "pagePath": "pages/cate/cate",
+        "iconPath": "assets/tabbar/fenlei_1.jpg",
+        "selectedIconPath": "assets/tabbar/fenlei_2.jpg"
+      },
+      {
+        "text": "购物车",
+        "pagePath": "pages/cart/cart",
+        "iconPath": "assets/tabbar/gouwuche_1.jpg",
+        "selectedIconPath": "assets/tabbar/gouwuche_2.jpg"
+      },
+      {
+        "text": "我的",
+        "pagePath": "pages/profile/profile",
+        "iconPath": "assets/tabbar/wode_1.jpg",
+        "selectedIconPath": "assets/tabbar/wode_2.jpg"
+      }
+    ]
+  },
+  "networkTimeout": {
+    "request": 30000,
+    "connectSocket": 30000,
+    "uploadFile": 30000,
+    "downloadFile": 30000
+  },
+  "debug": true,
+  "sitemapLocation": "sitemap.json",
+  "lazyCodeLoading": "requiredComponents",
+  "permission": {
+    "scope.userLocation": {
+      "desc": "用于获取您的位置，以便推荐附近商家"
+    }
+  }
+}

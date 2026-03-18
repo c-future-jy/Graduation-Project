@@ -1,0 +1,137 @@
+<!--pages/login/register.wxml-->
+<view class="container">
+  <!-- 头部导航 -->
+  <view class="nav-bar">
+    <view class="nav-left" bindtap="goBack">
+      <text class="nav-back">←</text>
+    </view>
+    <view class="nav-title">注册账号</view>
+    <view class="nav-right"></view>
+  </view>
+
+  <!-- 注册表单 -->
+  <view class="form-container">
+    <!-- 用户名 -->
+    <view class="form-item">
+      <input 
+        class="form-input" 
+        placeholder="请输入用户名" 
+        value="{{username}}" 
+        bindinput="onUsernameChange"
+        maxlength="20"
+      />
+    </view>
+
+    <!-- 账号 -->
+    <view class="form-item">
+      <input 
+        class="form-input" 
+        placeholder="请输入账号" 
+        value="{{account}}" 
+        bindinput="onAccountChange"
+        maxlength="20"
+      />
+    </view>
+
+    <!-- 手机号（可选） -->
+    <view class="form-item">
+      <input 
+        class="form-input" 
+        placeholder="请输入手机号（可选）" 
+        value="{{phone}}" 
+        bindinput="onPhoneChange"
+        type="number"
+        maxlength="11"
+      />
+    </view>
+
+    <!-- 密码 -->
+    <view class="form-item">
+      <input 
+        class="form-input" 
+        placeholder="请设置密码（6-18位，包含字母和数字）" 
+        value="{{password}}" 
+        bindinput="onPasswordChange"
+        password
+      />
+      <!-- 密码强度反馈 -->
+      <view class="password-strength" wx:if="{{password}}">
+        <view class="strength-bar">
+          <view class="strength-item {{passwordStrength >= 1 ? 'weak' : ''}} {{passwordStrength >= 2 ? 'medium' : ''}} {{passwordStrength >= 3 ? 'strong' : ''}}"></view>
+          <view class="strength-item {{passwordStrength >= 2 ? 'medium' : ''}} {{passwordStrength >= 3 ? 'strong' : ''}}"></view>
+          <view class="strength-item {{passwordStrength >= 3 ? 'strong' : ''}}"></view>
+        </view>
+        <text class="strength-text">{{strengthText}}</text>
+      </view>
+    </view>
+
+    <!-- 确认密码 -->
+    <view class="form-item">
+      <input 
+        class="form-input" 
+        placeholder="请确认密码" 
+        value="{{confirmPassword}}" 
+        bindinput="onConfirmPasswordChange"
+        password
+      />
+    </view>
+
+    <!-- 角色选择 -->
+    <view class="form-item">
+      <text class="form-label">选择角色</text>
+      <view class="role-buttons">
+        <view 
+          class="role-btn {{selectedRole === 1 ? 'active' : ''}}" 
+          bindtap="selectRole" 
+          data-role="1"
+        >
+          <text class="role-text">学生</text>
+        </view>
+        <view 
+          class="role-btn {{selectedRole === 2 ? 'active' : ''}}" 
+          bindtap="selectRole" 
+          data-role="2"
+        >
+          <text class="role-text">商家</text>
+        </view>
+      </view>
+    </view>
+
+    <!-- 协议勾选 -->
+    <view class="agreement-item">
+      <checkbox 
+        class="checkbox" 
+        checked="{{agreed}}" 
+        bindchange="onAgreementChange"
+      />
+      <text class="agreement-text">
+        我已阅读并同意
+        <text class="agreement-link" bindtap="goToAgreement">《用户协议》</text>
+        和
+        <text class="agreement-link" bindtap="goToPrivacy">《隐私政策》</text>
+      </text>
+    </view>
+  </view>
+
+  <!-- 注册按钮 -->
+  <view class="register-section">
+    <button 
+      class="register-btn" 
+      bindtap="register"
+      disabled="{{!username || !account || !password || !confirmPassword || !agreed || password !== confirmPassword}}"
+    >
+      注册
+    </button>
+  </view>
+
+  <!-- 微信授权登录 -->
+  <view class="wechat-login-section">
+    <view class="line">
+      <text class="line-text">其他登录方式</text>
+    </view>
+    <button class="wechat-login-btn" bindtap="wechatRegister">
+      <image src="/assets/images/weixin-1.jpg" class="wechat-icon" mode="aspectFit"/>
+      <text class="wechat-text">微信一键注册</text>
+    </button>
+  </view>
+</view>

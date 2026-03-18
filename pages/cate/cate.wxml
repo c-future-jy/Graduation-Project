@@ -1,0 +1,102 @@
+<view class="cate-container">
+  <!-- 左侧导航栏 -->
+  <view class="left-nav">
+    <view 
+      wx:for="{{categories}}" 
+      wx:key="{{item.id}}"
+      class="nav-item {{currentCategory === item.id ? 'active' : ''}} {{item.isDisabled ? 'disabled' : ''}}"
+      bindtap="switchCategory"
+      data-id="{{item.id}}"
+    >
+      <image class="nav-icon" src="{{item.icon}}" mode="aspectFit" />
+      <text class="nav-text">{{item.name}}</text>
+      <view wx:if="{{currentCategory === item.id}}" class="active-indicator"></view>
+      <view wx:if="{{item.isNightHighlight}}" class="night-highlight"></view>
+    </view>
+  </view>
+
+  <!-- 右侧内容区 -->
+  <view class="right-content">
+    <!-- 顶部筛选栏 -->
+    <view class="filter-bar">
+      <view class="filter-title">{{currentCategoryName}}</view>
+      <scroll-view scroll-x="true" class="filter-scroll">
+        <view 
+          wx:for="{{filters}}" 
+          wx:key="{{item.id}}"
+          class="filter-item {{currentFilter === item.id ? 'active' : ''}}"
+          bindtap="switchFilter"
+          data-id="{{item.id}}"
+        >
+          {{item.name}}
+        </view>
+      </scroll-view>
+    </view>
+
+    <!-- 拼单引导 -->
+    <view wx:if="{{showGroupBuy}}" class="group-buy-container">
+      <image class="group-buy-icon" src="../../assets/images/message.jpg" mode="aspectFit" />
+      <text class="group-buy-text">同宿舍正在拼单，一起凑单更划算！</text>
+      <button class="group-buy-btn" bindtap="goToGroupBuy">查看详情</button>
+    </view>
+
+    <!-- 内容区域 -->
+    <scroll-view scroll-y="true" class="content-scroll">
+      <!-- 加载状态 -->
+      <view wx:if="{{loading}}" class="loading-container">
+        <view class="loading-spinner"></view>
+        <text class="loading-text">加载中...</text>
+      </view>
+
+      <!-- 网络异常 -->
+      <view wx:elif="{{networkError}}" class="error-container">
+        <image class="error-icon" src="../../assets/images/message.jpg" mode="aspectFit" />
+        <text class="error-text">网络异常</text>
+        <button class="retry-btn" bindtap="retry">重试</button>
+      </view>
+
+      <!-- 空状态 -->
+      <view wx:elif="{{merchants.length === 0 && !loading}}" class="empty-container">
+        <image class="empty-icon" src="../../assets/images/shangpinliebiao.jpg" mode="aspectFit" />
+        <text class="empty-text">暂无商家，看看其他分类吧</text>
+        <button class="empty-btn" bindtap="goToRecommend">查看推荐</button>
+      </view>
+
+      <!-- 商家卡片 -->
+      <view wx:else class="merchants-container">
+        <view 
+          wx:for="{{merchants}}" 
+          wx:key="{{item.id}}"
+          class="merchant-card {{item.isClosed ? 'closed' : ''}}"
+          bindtap="goToMerchant"
+          data-id="{{item.id}}"
+        >
+          <image class="merchant-image" src="{{item.image}}" mode="aspectFill" />
+          <view wx:if="{{item.isClosed}}" class="closed-overlay">
+            <text class="closed-text">休息中</text>
+          </view>
+          <view class="merchant-info">
+            <view class="merchant-name">{{item.name}}</view>
+            <view class="merchant-meta">
+              <text class="meta-item">{{item.distance}}</text>
+              <text class="meta-item">{{item.deliveryTime}}</text>
+              <text class="meta-item price">{{item.minPrice}}</text>
+            </view>
+            <view class="merchant-tags">
+              <view 
+                wx:for="{{item.tags}}" 
+                wx:key="{{index}}"
+                class="tag"
+              >
+                {{item}}
+              </view>
+            </view>
+            <view class="merchant-hot">
+              <text class="hot-text">热销: {{item.hotDish}}</text>
+            </view>
+          </view>
+        </view>
+      </view>
+    </scroll-view>
+  </view>
+</view>

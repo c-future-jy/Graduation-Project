@@ -1,0 +1,308 @@
+/* pages/profile/edit-profile.scss */
+/* 全局样式重置 */
+
+.container {
+  background-color: #f8f8f8;
+  color: #222;
+  font-family: 'PingFang SC', 'Microsoft YaHei', '黑体', sans-serif;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  padding-bottom: env(safe-area-inset-bottom);
+
+  /* 头部导航 */
+  .nav-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: env(safe-area-inset-top) 16rpx 12rpx 16rpx;
+    min-height: 44px;
+    background-color: #fff;
+    border-bottom: 1rpx solid #e5e5e5;
+    box-shadow: 0 1rpx 4rpx rgba(0, 0, 0, 0.05);
+
+    .nav-back {
+      font-size: 24px;
+      color: #333;
+      padding: 8rpx;
+      border-radius: 50%;
+    }
+
+    .nav-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: #333;
+    }
+
+    .nav-right {
+      width: 24px;
+    }
+  }
+
+  /* 表单容器 */
+  .form-container {
+  flex: 1;
+  padding: 0;
+  background-color: transparent;
+
+
+    .form-section {
+      background-color: #fff;
+      border-radius: 0;
+      box-shadow: none;
+      margin: 0 0 12rpx 0;
+      overflow: visible;
+
+      /* 卡片内部间距，代替父容器的外边距 */
+      .section-title {
+        padding: 20rpx 16rpx;
+      }
+
+      .form-item {
+        padding: 16rpx;
+        border-bottom: 1rpx solid #f0f0f0;
+      }
+
+      .section-title {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 20rpx 16rpx;
+        font-size: 18px;
+        font-weight: 700;
+        color: #222;
+        border-bottom: 1rpx solid #f0f0f0;
+      }
+
+      .password-btn {
+        font-size: 13px;
+        color: #FF6B35;
+        background: none;
+        border: none;
+        padding: 4rpx 12rpx;
+      }
+
+      .section-save {
+        padding: 20rpx 16rpx;
+      }
+    }
+
+      .form-item {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      padding: 20rpx 16rpx;
+      border-bottom: 1rpx solid #f0f0f0;
+
+      .form-label {
+        width: 100%;
+        font-size: 14px;
+        color: #222;
+        font-weight: 600;
+        margin-bottom: 12rpx;
+      }
+
+      .form-value {
+        width: 100%;
+        display: flex;
+        justify-content: flex-end;
+      }
+
+      .form-input {
+        width: 100%;
+        height: 48px;
+        font-size: 14px;
+        color: #333;
+        padding: 0 12px;
+        line-height: 48px;
+        border-bottom: 1px solid #eee;
+      }
+
+      /* 头像上传 */
+      .avatar-upload-btn {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 0;
+        background: none;
+        border: none;
+        width: 100%;
+      }
+
+      .avatar {
+        width: 120rpx;
+        height: 120rpx;
+        border-radius: 50%;
+        margin-bottom: 12rpx;
+        border: 2rpx solid #f0f0f0;
+        box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.1);
+      }
+
+      .avatar-area {
+        display: flex;
+        align-items: center;
+        gap: 16rpx;
+        width: 100%;
+      }
+
+      .avatar-meta {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+      }
+
+      .uploading-tip {
+        position: absolute;
+        right: 16rpx;
+        top: 16rpx;
+        font-size: 12px;
+        color: #ff6600;
+      }
+
+      .upload-text {
+        font-size: 12px;
+        color: #222;
+        font-weight: 600;
+        margin-bottom: 8rpx;
+      }
+
+      .avatar-tip {
+        font-size: 12px;
+        color: #777;
+      }
+
+      /* 手机号输入容器 */
+      .phone-input-container {
+        width: 100%;
+        display: flex;
+        align-items: center;
+      }
+
+      .phone-input-container .form-input {
+        flex: 1;
+        margin-right: 12rpx;
+      }
+
+      .verify-btn {
+        font-size: 13px;
+        color: #FF6B35;
+        background: none;
+        border: 1rpx solid #FF6B35;
+        border-radius: 16rpx;
+        padding: 6rpx 16rpx;
+      }
+
+      .get-phone-btn {
+        font-size: 13px;
+        color: #fff;
+        background-color: #FF6B35;
+        border: none;
+        border-radius: 16rpx;
+        padding: 8rpx 14rpx;
+        margin-left: 8rpx;
+      }
+
+      /* 错误提示 */
+      .error-tip {
+        font-size: 12px;
+        color: #ff4d4f;
+        margin-top: 8rpx;
+        width: 100%;
+      }
+
+      /* 角色文本 */
+      .role-text {
+        font-size: 14px;
+        color: #222;
+        font-weight: 600;
+      }
+
+      /* 只读项 */
+      &.readonly-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+          .readonly-text {
+          color: #777;
+        }
+      }
+    }
+  }
+
+  /* 保存按钮 */
+  .save-btn {
+    width: 100%;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 24px;
+    border-radius: 24px;
+    background-color: #ff6600;
+    color: #fff;
+    font-size: 16px;
+    font-weight: 500;
+    line-height: 1.5;
+    border: none;
+    box-shadow: 0 4rpx 12rpx rgba(255, 107, 53, 0.3);
+  }
+}
+
+/* 响应式设计 */
+@media screen and (max-width: 375px) {
+  .container .form-container .form-item .avatar {
+    width: 100rpx;
+    height: 100rpx;
+  }
+}
+
+@media screen and (min-width: 414px) {
+  .container .form-container .form-item .avatar {
+    width: 140rpx;
+    height: 140rpx;
+  }
+}
+
+/* 输入框焦点样式 */
+input:focus {
+  outline: none;
+  color: #333;
+  border-bottom-color: #ff6600;
+}
+
+.form-input {
+  border: 1rpx solid #eee;
+  border-radius: 6rpx;
+  padding: 10rpx 12rpx;
+}
+
+.form-input:focus {
+  border-color: #ff6600;
+}
+
+/* 按钮通用样式 */
+button {
+  outline: none;
+}
+
+button::after {
+  border: none;
+}
+
+/* 按钮触摸反馈 */
+.save-btn:active {
+  transform: scale(0.98);
+  box-shadow: 0 2rpx 8rpx rgba(255, 107, 53, 0.3);
+}
+
+.save-btn[disabled] {
+  background-color: #ccc;
+  color: #fff;
+  opacity: 0.9;
+}
+
+.password-btn:active,
+.verify-btn:active {
+  opacity: 0.8;
+  transform: scale(0.98);
+}

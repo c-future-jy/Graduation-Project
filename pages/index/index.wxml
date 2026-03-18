@@ -1,0 +1,52 @@
+<!-- 搜索栏 -->
+<view class="search-container" bindtap="goToSearch">
+  <view class="search-box">
+  <icon type="search" size="20" color="#999" class="search-icon"/>
+  <text class="search-placeholder">请输入标题搜索</text>
+  </view>
+</view>
+
+
+<!-- 轮播图 -->
+<view class="swiper">
+<swiper 
+autoplay="true" 
+interval="2000" 
+indicator-dots="true"
+circular="true">
+   <swiper-item>
+     <image src="../../assets/tabbar/biyetu.jpg" 
+     show-menu-by-longpress 
+     lazy-load/>
+   </swiper-item>
+   <swiper-item>
+    <image src="../../assets/tabbar/gunbo_2.jpg" 
+     show-menu-by-longpress 
+     lazy-load/>
+   </swiper-item>
+   <swiper-item>
+    <image src="../../assets/tabbar/gunbo_3.jpg" 
+     show-menu-by-longpress 
+     lazy-load/>
+   </swiper-item>
+   <swiper-item>
+    <image src="../../assets/tabbar/gunbo_4.jpg" 
+     show-menu-by-longpress 
+     lazy-load/>
+   </swiper-item>
+</swiper>
+</view>
+
+<!--信息 -->
+<view class="info">
+<text>校园内配送</text>
+<text>校内认证商家</text>
+<text>课间极速达</text>
+<text>师生高口碑</text>
+</view>
+
+<!-- 导航 -->
+<view class="good-nav"></view>
+
+<!-- 推荐 -->
+<view class="good-hot"></view>
