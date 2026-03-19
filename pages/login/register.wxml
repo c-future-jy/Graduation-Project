@@ -15,22 +15,31 @@
     <view class="form-item">
       <input 
         class="form-input" 
-        placeholder="请输入用户名" 
+        placeholder="请输入用户名（最多6个字符）" 
         value="{{username}}" 
         bindinput="onUsernameChange"
-        maxlength="20"
+        maxlength="6"
       />
+      <view class="input-counter">
+        <text class="counter">{{username.length}}/6</text>
+        <text wx:if="{{usernameError}}" class="error-text">{{usernameError}}</text>
+      </view>
     </view>
 
     <!-- 账号 -->
     <view class="form-item">
       <input 
         class="form-input" 
-        placeholder="请输入账号" 
+        placeholder="请输入账号（6-11位纯数字）" 
         value="{{account}}" 
         bindinput="onAccountChange"
-        maxlength="20"
+        type="number"
+        maxlength="11"
       />
+      <view class="input-counter">
+        <text class="counter">{{account.length}}/11</text>
+        <text wx:if="{{accountError}}" class="error-text">{{accountError}}</text>
+      </view>
     </view>
 
     <!-- 手机号（可选） -->
@@ -49,11 +58,16 @@
     <view class="form-item">
       <input 
         class="form-input" 
-        placeholder="请设置密码（6-18位，包含字母和数字）" 
+        placeholder="请设置密码（6-8位，包含字母和数字）" 
         value="{{password}}" 
         bindinput="onPasswordChange"
         password
+        maxlength="8"
       />
+      <view class="input-counter">
+        <text class="counter">{{password.length}}/8</text>
+        <text wx:if="{{passwordError}}" class="error-text">{{passwordError}}</text>
+      </view>
       <!-- 密码强度反馈 -->
       <view class="password-strength" wx:if="{{password}}">
         <view class="strength-bar">
@@ -118,7 +132,7 @@
     <button 
       class="register-btn" 
       bindtap="register"
-      disabled="{{!username || !account || !password || !confirmPassword || !agreed || password !== confirmPassword}}"
+      disabled="{{!canRegister}}"
     >
       注册
     </button>

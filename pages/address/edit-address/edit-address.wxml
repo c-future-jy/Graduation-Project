@@ -1,0 +1,103 @@
+<!--pages/address/edit-address/edit-address.wxml-->
+<view class="container">
+  <!-- 联系人信息 -->
+  <view class="form-section">
+    <text class="section-title">联系人信息</text>
+    
+    <view class="form-item">
+      <text class="label">收货人</text>
+      <input 
+        class="input" 
+        placeholder="请输入收货人姓名（2-20个字符）" 
+        data-field="receiver_name"
+        value="{{formData.receiver_name}}"
+        bindinput="handleInput"
+      />
+    </view>
+    
+    <view class="form-item">
+      <text class="label">联系电话</text>
+      <input 
+        class="input" 
+        placeholder="请输入11位手机号" 
+        data-field="phone"
+        value="{{formData.phone}}"
+        bindinput="handleInput"
+        type="number"
+      />
+    </view>
+  </view>
+  
+  <!-- 地址信息 -->
+  <view class="form-section">
+    <text class="section-title">地址信息</text>
+    
+    <view class="form-item">
+      <text class="label">所在地区</text>
+      <view class="region-picker" bindtap="openRegionPicker">
+        <text class="region-text">
+          {{formData.province}}{{formData.city}}{{formData.district}}
+          {{!formData.province ? '请选择省市区' : ''}}
+        </text>
+        <text class="picker-arrow">>></text>
+      </view>
+    </view>
+    
+    <view class="form-item">
+      <text class="label">详细地址</text>
+      <input 
+        class="input detail-input" 
+        placeholder="请输入详细地址，如街道、门牌号等（最多100个字符）" 
+        data-field="detail"
+        value="{{formData.detail}}"
+        bindinput="handleInput"
+        maxlength="100"
+      />
+    </view>
+  </view>
+  
+  <!-- 默认地址设置 -->
+  <view class="form-section">
+    <view class="form-item checkbox-item">
+      <text class="label">默认地址</text>
+      <checkbox 
+        value="is_default" 
+        checked="{{formData.is_default === 1}}"
+        bindchange="toggleDefault"
+      />
+    </view>
+  </view>
+  
+  <!-- 地区选择器 -->
+  <view wx:if="{{showRegionPicker}}" class="region-picker-container">
+    <picker-view 
+      class="region-picker-view"
+      value="{{region}}"
+      bindchange="bindRegionChange"
+    >
+      <picker-view-column>
+        <view wx:for="{{provinces}}" wx:key="{{item}}" class="picker-item">{{item}}</view>
+      </picker-view-column>
+      <picker-view-column>
+        <view wx:for="{{cities}}" wx:key="{{item}}" class="picker-item">{{item}}</view>
+      </picker-view-column>
+      <picker-view-column>
+        <view wx:for="{{districts}}" wx:key="{{item}}" class="picker-item">{{item}}</view>
+      </picker-view-column>
+    </picker-view>
+    <view class="picker-footer">
+      <button class="cancel-btn" bindtap="closeRegionPicker">取消</button>
+      <button class="confirm-btn" bindtap="closeRegionPicker">确定</button>
+    </view>
+  </view>
+  
+  <!-- 提交按钮 -->
+  <button 
+    class="submit-btn" 
+    loading="{{loading}}"
+    disabled="{{loading}}"
+    bindtap="submitForm"
+  >
+    {{addressId ? '更新地址' : '添加地址'}}
+  </button>
+</view>

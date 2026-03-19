@@ -70,17 +70,19 @@ Page({
   getUserInfo() {
     getUserProfile()
       .then(res => {
+        console.log('API返回的用户信息:', res.data.user);
         const userInfo = res.data.user;
         this.setData({
           userInfo: {
-            avatarUrl: userInfo.avatar_url || '/assets/images/morentouxiang.jpg',
-            nickName: userInfo.nickname || '未设置昵称',
+            avatarUrl: userInfo.avatar_url || userInfo.avatarUrl || '/assets/images/morentouxiang.jpg',
+            nickName: userInfo.nickname || userInfo.nickName || '未设置昵称',
             phone: userInfo.phone || '',
             role: userInfo.role || 1
           }
         });
         // 更新本地存储
         wx.setStorageSync('userInfo', this.data.userInfo);
+        console.log('更新后的用户信息:', this.data.userInfo);
       })
       .catch(err => {
         console.error('获取用户信息失败:', err);

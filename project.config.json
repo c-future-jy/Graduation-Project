@@ -20,7 +20,12 @@
     "compileType": "miniprogram",
     "simulatorPluginLibVersion": {},
     "packOptions": {
-        "ignore": [],
+        "ignore": [
+            {
+                "type": "file",
+                "value": "backup/**"
+            }
+        ],
         "include": []
     },
     "appid": "wx76c50b4e13c6f3b0",

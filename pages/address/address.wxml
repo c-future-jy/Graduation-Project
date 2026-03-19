@@ -1,2 +1,69 @@
 <!--pages/address/address.wxml-->
-<text>pages/address/address.wxml</text>
+<view class="container">
+  <!-- 地址列表 -->
+  <view wx:if="{{addresses.length > 0}}" class="address-list">
+    <view 
+      wx:for="{{addresses}}" 
+      wx:key="{{item.id}}" 
+      class="address-item {{item.is_default === 1 ? 'default-address' : ''}}"
+      data-id="{{item.id}}"
+      data-address="{{item}}"
+      bindtap="selectAddress"
+    >
+      <view class="address-header">
+        <text class="receiver">{{item.receiver_name}}</text>
+        <text class="phone">{{item.maskedPhone}}</text>
+        <text wx:if="{{item.is_default === 1}}" class="default-tag">默认</text>
+      </view>
+      <view class="address-content">
+        <text>{{item.province}}{{item.city}}{{item.district}}{{item.detail}}</text>
+      </view>
+      <view class="address-actions">
+        <button 
+          class="action-btn edit-btn"
+          bindtap="navigateToEditAddress"
+          data-id="{{item.id}}"
+        >
+          编辑
+        </button>
+        <button 
+          class="action-btn delete-btn"
+          bindtap="deleteAddress"
+          data-id="{{item.id}}"
+        >
+          删除
+        </button>
+        <button 
+          wx:if="{{item.is_default === 0}}"
+          class="action-btn default-btn"
+          bindtap="setDefaultAddress"
+          data-id="{{item.id}}"
+        >
+          设为默认
+        </button>
+      </view>
+    </view>
+  </view>
+  
+  <!-- 空状态 -->
+  <view wx:else class="empty-state">
+    <image class="empty-icon" src="/assets/images/shouhuodizhi-1.jpg" mode="aspectFit" />
+    <text class="empty-text">暂无收货地址</text>
+    <text class="empty-subtext">添加收货地址，方便快捷地完成订单</text>
+    <button 
+      class="add-first-btn"
+      bindtap="navigateToAddAddress"
+    >
+      + 添加收货地址
+    </button>
+  </view>
+  
+  <!-- 添加地址按钮 -->
+  <button 
+    wx:if="{{addresses.length > 0}}"
+    class="add-btn"
+    bindtap="navigateToAddAddress"
+  >
+    + 添加收货地址
+  </button>
+</view>

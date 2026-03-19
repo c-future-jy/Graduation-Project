@@ -1,5 +1,5 @@
 {
-  "libVersion": "3.14.2",
+  "libVersion": "3.14.3",
   "projectname": "Graduation%20Project",
   "setting": {
     "urlCheck": false,
@@ -9,6 +9,7 @@
     "preloadBackgroundData": false,
     "autoAudits": false,
     "showShadowRootInWxmlPanel": true,
-    "compileHotReLoad": true
+    "compileHotReLoad": true,
+    "bigPackageSizeSupport": true
   }
 }

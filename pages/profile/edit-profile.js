@@ -15,9 +15,6 @@ Page({
     roleText: '学生',
     nickNameError: '',
     phoneError: '',
-    verifyCode: '',
-    countDown: 0
-    ,
     uploadingAvatar: false,
     saving: false,
     focusedField: '',
@@ -105,6 +102,35 @@ Page({
           attempt(0);
         });
 
+        const compressWithCanvas = (srcPath, maxDim = 1024) => new Promise((resolve, reject) => {
+          // 使用 canvas 缩放图片以进一步减小体积
+          wx.getImageInfo({ src: srcPath, success(info) {
+            const { width, height } = info;
+            const ratio = Math.min(1, maxDim / Math.max(width, height));
+            const destW = Math.floor(width * ratio);
+            const destH = Math.floor(height * ratio);
+
+            const ctx = wx.createCanvasContext('avatarCanvas', self);
+            ctx.clearRect(0, 0, destW, destH);
+            ctx.drawImage(srcPath, 0, 0, destW, destH);
+            ctx.draw(false, () => {
+              wx.canvasToTempFilePath({
+                canvasId: 'avatarCanvas',
+                x: 0,
+                y: 0,
+                width: destW,
+                height: destH,
+                destWidth: destW,
+                destHeight: destH,
+                success(res) { resolve(res.tempFilePath); },
+                fail(err) { reject(err); }
+              }, self);
+            });
+          }, fail(err) {
+            reject(err);
+          }});
+        });
+
         (async () => {
           try {
             let size = await getFileSize(tempFilePath);
@@ -112,9 +138,35 @@ Page({
             if (size > MAX_SIZE) {
               wx.showLoading({ title: '图片过大，正在压缩...' });
               try {
-                const compressed = await tryCompress(tempFilePath, [80, 60, 40]);
-                const newSize = await getFileSize(compressed);
-                if (newSize > MAX_SIZE) {
+                // 先用 compressImage 尝试压缩
+                let compressed = null;
+                try {
+                  compressed = await tryCompress(tempFilePath, [80, 60, 40]);
+                } catch (_) {
+                  compressed = null;
+                }
+
+                let newSize = 0;
+                if (compressed) {
+                  newSize = await getFileSize(compressed);
+                }
+
+                // 如果 compressImage 无法把大小降到要求，再尝试 canvas 缩放压缩
+                if (!compressed || newSize > MAX_SIZE) {
+                  try {
+                    const canvasCompressed = await compressWithCanvas(tempFilePath, 1024);
+                    const canvasSize = await getFileSize(canvasCompressed);
+                    if (canvasSize <= MAX_SIZE) {
+                      compressed = canvasCompressed;
+                      newSize = canvasSize;
+                    }
+                  } catch (canvasErr) {
+                    // canvas 压缩失败，继续后续处理
+                    console.warn('canvas compress failed', canvasErr);
+                  }
+                }
+
+                if (!compressed || newSize > MAX_SIZE) {
                   wx.hideLoading();
                   self.setData({ uploadingAvatar: false, lastUploadError: true });
                   wx.showModal({ title: '提示', content: '图片大小超过 2MB，无法上传，请选择更小的图片或裁剪后再试。', showCancel: false });
@@ -175,6 +227,40 @@ Page({
         // 用户取消选择
       }
     });
+  },
+
+  /**
+   * 重试上传当前预览头像（若为本地临时文件）
+   */
+  retryUpload() {
+    const path = this.data.userInfo.avatarUrl;
+    if (!path) {
+      return wx.showToast({ title: '无可上传的头像', icon: 'none' });
+    }
+
+    // 如果已经是远程 url，则不必重新上传
+    if (/^https?:\/\//.test(path)) {
+      return wx.showToast({ title: '当前头像已是远程图片，无需上传', icon: 'none' });
+    }
+
+    this.setData({ uploadingAvatar: true, lastUploadError: false });
+    uploadAvatar(path)
+      .then(resp => {
+        const url = resp.data && resp.data.url ? resp.data.url : (resp.url || path);
+        this.setData({ 'userInfo.avatarUrl': url, uploadingAvatar: false, lastUploadError: false });
+        wx.showToast({ title: '头像已上传', icon: 'success' });
+      })
+      .catch(err => {
+        this.setData({ uploadingAvatar: false, lastUploadError: true });
+        let msg = '头像上传失败';
+        if (err) {
+          if (err.data && err.data.message) msg = err.data.message;
+          else if (err.message) msg = err.message;
+          else if (err.errMsg) msg = err.errMsg;
+        }
+        console.error('retry uploadAvatar error:', err);
+        wx.showToast({ title: msg, icon: 'none' });
+      });
   },
 
   /**
@@ -277,34 +363,6 @@ Page({
   },
 
   /**
-   * 发送验证码
-   */
-  sendVerifyCode() {
-    const { userInfo } = this.data;
-    
-    if (!this.validatePhone(userInfo.phone)) {
-      return;
-    }
-    
-    // 模拟发送验证码
-    wx.showToast({
-      title: '验证码已发送',
-      icon: 'success'
-    });
-    
-    // 开始倒计时
-    this.setData({ countDown: 60 });
-    const timer = setInterval(() => {
-      this.setData({
-        countDown: this.data.countDown - 1
-      });
-      if (this.data.countDown <= 0) {
-        clearInterval(timer);
-      }
-    }, 1000);
-  },
-
-  /**
    * 保存基础信息
    */
   saveBasicInfo() {
@@ -331,8 +389,17 @@ Page({
     this.setData({ saving: true });
     updateProfile(updateData)
       .then(res => {
+        console.log('API返回的更新结果:', res.data);
         wx.showToast({ title: '保存成功', icon: 'success' });
-        wx.setStorageSync('userInfo', userInfo);
+        // 更新本地存储，确保字段名一致
+        const updatedUserInfo = {
+          avatarUrl: userInfo.avatarUrl,
+          nickName: userInfo.nickName,
+          phone: userInfo.phone,
+          role: userInfo.role
+        };
+        wx.setStorageSync('userInfo', updatedUserInfo);
+        console.log('更新后的本地存储用户信息:', updatedUserInfo);
         setTimeout(() => {
           wx.navigateBack();
         }, 1200);

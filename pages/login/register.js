@@ -1,4 +1,5 @@
 // pages/login/register.js
+import { register } from '../../utils/api';
 
 Page({
   /**
@@ -13,7 +14,11 @@ Page({
     selectedRole: 1, // 默认选择学生角色
     agreed: false,
     passwordStrength: 0,
-    strengthText: ''
+    strengthText: '',
+    usernameError: '',
+    accountError: '',
+    passwordError: '',
+    canRegister: false
   },
 
   /**
@@ -27,18 +32,26 @@ Page({
    * 用户名变化
    */
   onUsernameChange(e) {
+    const value = e.detail.value;
+    console.log('用户名输入变化:', value);
     this.setData({
-      username: e.detail.value
+      username: value
     });
+    this.validateUsername(value);
+    this.updateRegisterButtonStatus();
   },
 
   /**
    * 账号变化
    */
   onAccountChange(e) {
+    const value = e.detail.value;
+    console.log('账号输入变化:', value);
     this.setData({
-      account: e.detail.value
+      account: value
     });
+    this.validateAccount(value);
+    this.updateRegisterButtonStatus();
   },
 
   /**
@@ -48,6 +61,7 @@ Page({
     this.setData({
       phone: e.detail.value
     });
+    this.updateRegisterButtonStatus();
   },
 
   /**
@@ -55,19 +69,76 @@ Page({
    */
   onPasswordChange(e) {
     const password = e.detail.value;
+    console.log('密码输入变化:', password);
     this.setData({
       password: password
     });
+    this.validatePassword(password);
     this.checkPasswordStrength(password);
+    this.updateRegisterButtonStatus();
+  },
+
+  /**
+   * 验证用户名
+   */
+  validateUsername(value) {
+    if (value.length > 6) {
+      this.setData({ usernameError: '用户名长度不能超过6个字符' });
+      return false;
+    } else {
+      this.setData({ usernameError: '' });
+      return true;
+    }
+  },
+
+  /**
+   * 验证账号
+   */
+  validateAccount(value) {
+    if (value.length < 6) {
+      this.setData({ accountError: '账号长度不能少于6位' });
+      return false;
+    } else if (value.length > 11) {
+      this.setData({ accountError: '账号长度不能超过11位' });
+      return false;
+    } else if (!/^\d+$/.test(value)) {
+      this.setData({ accountError: '账号只能包含数字' });
+      return false;
+    } else {
+      this.setData({ accountError: '' });
+      return true;
+    }
+  },
+
+  /**
+   * 验证密码
+   */
+  validatePassword(value) {
+    if (value.length < 6) {
+      this.setData({ passwordError: '密码长度不能少于6位' });
+      return false;
+    } else if (value.length > 18) {
+      this.setData({ passwordError: '密码长度不能超过18位' });
+      return false;
+    } else if (!/[a-zA-Z]/.test(value) || !/\d/.test(value)) {
+      this.setData({ passwordError: '密码必须包含字母和数字' });
+      return false;
+    } else {
+      this.setData({ passwordError: '' });
+      return true;
+    }
   },
 
   /**
    * 确认密码变化
    */
   onConfirmPasswordChange(e) {
+    const value = e.detail.value;
+    console.log('确认密码输入变化:', value);
     this.setData({
-      confirmPassword: e.detail.value
+      confirmPassword: value
     });
+    this.updateRegisterButtonStatus();
   },
 
   /**
@@ -128,8 +199,24 @@ Page({
    * 协议勾选变化
    */
   onAgreementChange(e) {
+    const agreed = e.detail.value.length > 0;
+    console.log('协议勾选变化:', agreed);
     this.setData({
-      agreed: e.detail.value.length > 0
+      agreed: agreed
+    });
+    this.updateRegisterButtonStatus();
+  },
+
+  /**
+   * 更新注册按钮状态
+   */
+  updateRegisterButtonStatus() {
+    const { username, account, password, confirmPassword, agreed, usernameError, accountError, passwordError } = this.data;
+    const canRegister = !!username && !!account && !!password && !!confirmPassword && agreed && 
+                      password === confirmPassword && !usernameError && !accountError && !passwordError;
+    console.log('更新注册按钮状态:', canRegister);
+    this.setData({
+      canRegister: canRegister
     });
   },
 
@@ -137,7 +224,9 @@ Page({
    * 注册
    */
   register() {
+    console.log('注册按钮被点击');
     const { username, account, phone, password, confirmPassword, selectedRole, agreed } = this.data;
+    console.log('当前表单数据:', { username, account, phone, password, confirmPassword, selectedRole, agreed });
 
     // 验证数据
     if (!username) {
@@ -173,9 +262,9 @@ Page({
       return;
     }
 
-    if (password.length < 6 || password.length > 18) {
+    if (password.length < 6 || password.length > 8) {
       wx.showToast({
-        title: '密码长度应在6-18位之间',
+        title: '密码长度应在6-8位之间',
         icon: 'none'
       });
       return;
@@ -210,49 +299,32 @@ Page({
     });
 
     // 调用后端API进行注册
-    wx.request({
-      url: 'http://localhost:3000/api/users/register',
-      method: 'POST',
-      data: {
-        username,
-        account,
-        phone,
-        password,
-        role: selectedRole
-      },
-      success: (res) => {
-        wx.hideLoading();
-        if (res.statusCode === 200 && res.data.success) {
-          wx.showToast({
-            title: '注册成功',
-            icon: 'success'
-          });
+    register({
+      username,
+      account,
+      phone,
+      password,
+      role: selectedRole
+    }).then((res) => {
+      wx.hideLoading();
+      wx.showToast({
+        title: '注册成功',
+        icon: 'success'
+      });
 
-          // 存储token和用户信息
-          wx.setStorageSync('token', res.data.data.token);
-          wx.setStorageSync('userInfo', res.data.data.user);
-
-          // 跳转到首页
-          setTimeout(() => {
-            wx.switchTab({
-              url: '/pages/index/index'
-            });
-          }, 1500);
-        } else {
-          wx.showToast({
-            title: res.data.message || '注册失败',
-            icon: 'none'
-          });
-        }
-      },
-      fail: (err) => {
-        wx.hideLoading();
-        wx.showToast({
-          title: '注册失败，请重试',
-          icon: 'none'
+      // 跳转到登录界面
+      setTimeout(() => {
+        wx.redirectTo({
+          url: '/pages/login/login'
         });
-        console.error('注册失败:', err);
-      }
+      }, 1500);
+    }).catch((err) => {
+      wx.hideLoading();
+      wx.showToast({
+        title: err.message || '注册失败',
+        icon: 'none'
+      });
+      console.error('注册失败:', err);
     });
   },
 
@@ -303,46 +375,29 @@ Page({
    */
   wechatAuth(code) {
     // 调用后端API进行微信注册
-    wx.request({
-      url: 'http://localhost:3000/api/users/register/wechat',
-      method: 'POST',
-      data: {
-        code,
-        role: this.data.selectedRole
-      },
-      success: (res) => {
-        wx.hideLoading();
-        if (res.statusCode === 200 && res.data.success) {
-          wx.showToast({
-            title: '注册成功',
-            icon: 'success'
-          });
+    register({
+      code,
+      role: this.data.selectedRole
+    }).then((res) => {
+      wx.hideLoading();
+      wx.showToast({
+        title: '注册成功',
+        icon: 'success'
+      });
 
-          // 存储token和用户信息
-          wx.setStorageSync('token', res.data.data.token);
-          wx.setStorageSync('userInfo', res.data.data.user);
-
-          // 跳转到首页
-          setTimeout(() => {
-            wx.switchTab({
-              url: '/pages/index/index'
-            });
-          }, 1500);
-        } else {
-          wx.showToast({
-            title: res.data.message || '注册失败',
-            icon: 'none'
-          });
-        }
-      },
-      fail: (err) => {
-        wx.hideLoading();
-        wx.showToast({
-          title: '注册失败，请重试',
-          icon: 'none'
+      // 跳转到登录界面
+      setTimeout(() => {
+        wx.redirectTo({
+          url: '/pages/login/login'
         });
-        console.error('微信注册失败:', err);
-      }
+      }, 1500);
+    }).catch((err) => {
+      wx.hideLoading();
+      wx.showToast({
+        title: err.message || '注册失败',
+        icon: 'none'
+      });
+      console.error('微信注册失败:', err);
     });
   },
 

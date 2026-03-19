@@ -4,7 +4,7 @@
  * 日期：2026-03-11
  */
 // API 基础配置
-const BASE_URL = 'http://localhost:3000/api';
+const BASE_URL = 'http://192.168.3.194:3000/api';
 /**
  * 封装请求方法
  */
@@ -64,6 +64,18 @@ function request(options) {
 }
 
 //用户模块
+/**
+ * 注册
+ * @param {Object} data 注册数据
+ */
+export function register(data) {
+  return request({
+    url: '/users/auth/register',
+    method: 'POST',
+    data
+  });
+}
+
 /**
  * 微信登录
  * @param {String} code 微信登录 code
@@ -366,6 +378,95 @@ export function markAllNotificationsAsRead() {
   return request({
     url: '/notifications/read-all',
     method: 'POST'
+  });
+}
+
+//购物车模块
+/**
+ * 获取购物车列表
+ * @param {Object} params 查询参数 (page, pageSize)
+ */
+export function getCartList(params) {
+  return request({
+    url: '/cart',
+    method: 'GET',
+    data: params
+  });
+}
+
+/**
+ * 添加商品到购物车
+ * @param {Object} data 购物车商品数据
+ */
+export function addToCart(data) {
+  return request({
+    url: '/cart/items',
+    method: 'POST',
+    data
+  });
+}
+
+/**
+ * 更新购物车商品
+ * @param {Number} id 购物车商品 ID
+ * @param {Object} data 更新数据
+ */
+export function updateCartItem(id, data) {
+  return request({
+    url: `/cart/items/${id}`,
+    method: 'PUT',
+    data
+  });
+}
+
+/**
+ * 删除购物车商品
+ * @param {Number} id 购物车商品 ID
+ */
+export function deleteCartItem(id) {
+  return request({
+    url: `/cart/items/${id}`,
+    method: 'DELETE'
+  });
+}
+
+/**
+ * 删除选中的购物车商品
+ */
+export function deleteSelectedItems() {
+  return request({
+    url: '/cart/items/selected',
+    method: 'DELETE'
+  });
+}
+
+/**
+ * 清空购物车
+ */
+export function clearCart() {
+  return request({
+    url: '/cart/clear',
+    method: 'DELETE'
+  });
+}
+
+/**
+ * 删除失效商品
+ */
+export function deleteInvalidItems() {
+  return request({
+    url: '/cart/items/invalid',
+    method: 'DELETE'
+  });
+}
+
+/**
+ * 获取选中的购物车商品
+ */
+export function getSelectedItems() {
+  return request({
+    url: '/cart/selected',
+    method: 'GET'
   });
 }
 
