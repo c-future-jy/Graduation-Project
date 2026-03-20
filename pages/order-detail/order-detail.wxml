@@ -1,2 +1,157 @@
 <!--pages/order-detail/order-detail.wxml-->
-<text>pages/order-detail/order-detail.wxml</text>
+<view class="order-detail-container">
+  <!-- 订单状态顶部 -->
+  <view class="status-header status-{{order.status}}">
+    <view class="status-icon">{{order.statusIcon}}</view>
+    <view class="status-text">{{order.statusText}}</view>
+    <view class="status-desc">{{order.statusDesc}}</view>
+  </view>
+  
+  <!-- 订单状态进度条 -->
+  <view class="status-progress">
+    <view class="status-item {{order.status === '0' ? 'active' : ''}} {{order.status === '1' || order.status === '2' || order.status === '3' ? 'passed' : ''}}">
+      <view class="status-circle"></view>
+      <view class="status-text">待支付</view>
+      <view class="status-time">{{order.timestamps.paidAt || ''}}</view>
+    </view>
+    <view class="status-line {{order.status === '1' || order.status === '2' || order.status === '3' ? 'active' : ''}}"></view>
+    <view class="status-item {{order.status === '1' ? 'active' : ''}} {{order.status === '2' || order.status === '3' ? 'passed' : ''}}">
+      <view class="status-circle"></view>
+      <view class="status-text">待发货</view>
+      <view class="status-time">{{order.timestamps.shippedAt || ''}}</view>
+    </view>
+    <view class="status-line {{order.status === '2' || order.status === '3' ? 'active' : ''}}"></view>
+    <view class="status-item {{order.status === '2' ? 'active' : ''}} {{order.status === '3' ? 'passed' : ''}}">
+      <view class="status-circle"></view>
+      <view class="status-text">已发货</view>
+      <view class="status-time">{{order.timestamps.deliveredAt || ''}}</view>
+    </view>
+    <view class="status-line {{order.status === '3' ? 'active' : ''}}"></view>
+    <view class="status-item {{order.status === '3' ? 'active' : ''}}">
+      <view class="status-circle"></view>
+      <view class="status-text">已完成</view>
+      <view class="status-time">{{order.timestamps.completedAt || ''}}</view>
+    </view>
+  </view>
+  
+  <!-- 配送信息 -->
+  <view class="info-card">
+    <view class="info-header">
+      <view class="info-title">配送信息</view>
+      <view class="info-arrow" wx:if="order.status !== '3'">→</view>
+    </view>
+    <view class="delivery-info">
+      <view class="delivery-icon">📍</view>
+      <view class="delivery-content">
+        <view class="receiver-info">
+          <text class="receiver-name">{{order.receiverName}}</text>
+          <text class="receiver-phone">{{order.receiverPhone}}</text>
+        </view>
+        <view class="receiver-address">{{order.receiverAddress}}</view>
+      </view>
+    </view>
+  </view>
+  
+  <!-- 商家信息 -->
+  <view class="info-card">
+    <view class="info-header">
+      <view class="merchant-info" bindtap="goToMerchant" data-merchantId="{{order.merchantId}}">
+        <image class="merchant-logo" src="{{order.merchantLogo}}" mode="aspectFill"></image>
+        <view class="merchant-name">{{order.merchantName}}</view>
+        <view class="merchant-arrow">→</view>
+      </view>
+      <view class="contact-btn" bindtap="callShop">
+        联系商家
+        <text class="call-icon">📞</text>
+      </view>
+    </view>
+  </view>
+  
+  <!-- 商品清单 -->
+  <view class="info-card">
+    <view class="info-header">
+      <view class="info-title">商品清单</view>
+      <view class="info-count">共{{order.totalQuantity}}件</view>
+    </view>
+    <view class="goods-list">
+      <view wx:for="{{order.goodsList}}" wx:key="goodsId" class="goods-item" bindtap="previewImage" data-image="{{item.image}}">
+        <image class="goods-image" src="{{item.image}}" mode="aspectFill"></image>
+        <view class="goods-info">
+          <view class="goods-name">{{item.name}}</view>
+          <view class="goods-spec">{{item.spec || ''}}</view>
+          <view class="goods-price-row">
+            <view class="goods-price">¥{{item.price}}</view>
+            <view class="goods-quantity">x{{item.quantity}}</view>
+          </view>
+        </view>
+      </view>
+      <view wx:if="order.goodsList.length > 3" class="goods-more" bindtap="showAllGoods">
+        查看全部商品
+        <text class="more-arrow">↓</text>
+      </view>
+    </view>
+  </view>
+  
+  <!-- 订单信息 -->
+  <view class="info-card">
+    <view class="info-header">
+      <view class="info-title">订单信息</view>
+    </view>
+    <view class="order-info-list">
+      <view class="info-item">
+        <view class="info-label">订单编号</view>
+        <view class="info-value" bindtap="copyOrderId">{{order.orderId}} <text class="copy-icon">📋</text></view>
+      </view>
+      <view class="info-item">
+        <view class="info-label">下单时间</view>
+        <view class="info-value">{{order.createTime}}</view>
+      </view>
+      <view class="info-item" wx:if="order.payTime">
+        <view class="info-label">支付时间</view>
+        <view class="info-value">{{order.payTime}}</view>
+      </view>
+      <view class="info-item" wx:if="order.remark">
+        <view class="info-label">用户备注</view>
+        <view class="info-value">{{order.remark}}</view>
+      </view>
+    </view>
+  </view>
+  
+  <!-- 金额明细 -->
+  <view class="info-card">
+    <view class="info-header">
+      <view class="info-title">金额明细</view>
+    </view>
+    <view class="price-list">
+      <view class="price-item">
+        <view class="price-label">商品总额</view>
+        <view class="price-value">¥{{order.totalPrice}}</view>
+      </view>
+      <view class="price-item">
+        <view class="price-label">配送费</view>
+        <view class="price-value">¥{{order.shippingFee}}</view>
+      </view>
+      <view class="price-item" wx:if="order.discount > 0">
+        <view class="price-label">优惠</view>
+        <view class="price-value discount">-¥{{order.discount}}</view>
+      </view>
+      <view class="price-item total">
+        <view class="price-label">实付金额</view>
+        <view class="price-value total-price">¥{{order.payPrice}}</view>
+      </view>
+    </view>
+  </view>
+  
+  <!-- 底部操作栏 -->
+  <view class="order-actions">
+    <button 
+      wx:for="{{order.actions}}" 
+      wx:key="index"
+      class="action-btn {{item.type}}"
+      bindtap="handleAction"
+      data-action="{{item.action}}"
+    >
+      {{item.text}}
+    </button>
+  </view>
+</view>
