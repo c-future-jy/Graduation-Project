@@ -18,7 +18,16 @@
     "pages/confirm-order/confirm-order",
     "pages/feedback/feedback",
     "pages/notice/notice",
-    "pages/merchant/merchant"
+    "pages/merchant/merchant",
+    "pages/admin/index",
+    "pages/admin/dashboard/dashboard",
+    "pages/admin/users/users",
+    "pages/admin/merchants/merchants",
+    "pages/admin/products/products",
+    "pages/admin/orders/orders",
+    "pages/admin/feedbacks/feedbacks",
+    "pages/admin/notifications/notifications",
+    "pages/admin/test/test"
   ],
   "window": {
     "navigationBarTitleText": "校园一站式服务平台",

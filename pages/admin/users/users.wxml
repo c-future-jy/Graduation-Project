@@ -1,0 +1,108 @@
+<!-- pages/admin/users/users.wxml -->
+<view class="users-container">
+  <!-- 页面标题 -->
+  <view class="page-header">
+    <text class="page-title">用户管理</text>
+  </view>
+
+  <!-- 搜索和筛选 -->
+  <view class="search-filter">
+    <view class="search-box">
+      <input 
+        class="search-input" 
+        placeholder="输入昵称或手机号搜索" 
+        bindinput="searchKeyword"
+      />
+      <button class="search-btn" bindtap="searchUsers">搜索</button>
+    </view>
+    <view class="filter-box">
+      <picker class="filter-picker" bindchange="roleFilter">
+        <view class="picker-text">
+          角色：{{roleFilter === '' ? '全部' : roleFilter === '0' ? '管理员' : roleFilter === '1' ? '学生' : '商家'}}
+        </view>
+      </picker>
+      <picker class="filter-picker" bindchange="statusFilter">
+        <view class="picker-text">
+          状态：{{statusFilter === '' ? '全部' : statusFilter === '1' ? '正常' : '禁用'}}
+        </view>
+      </picker>
+    </view>
+  </view>
+
+  <!-- 批量操作 -->
+  <view class="batch-actions">
+    <checkbox-group bindchange="selectAllUsers">
+      <label class="checkbox-label">
+        <checkbox value="all" />
+        <text>全选</text>
+      </label>
+    </checkbox-group>
+    <button class="batch-btn" bindtap="batchDisableUsers">批量禁用</button>
+    <button class="batch-btn" bindtap="batchEnableUsers">批量启用</button>
+    <button class="batch-btn" bindtap="batchExportUsers">批量导出</button>
+  </view>
+
+  <!-- 用户列表 -->
+  <view class="users-table">
+    <view class="table-header">
+      <view class="table-col select-col">选择</view>
+      <view class="table-col id-col">ID</view>
+      <view class="table-col name-col">昵称</view>
+      <view class="table-col phone-col">手机号</view>
+      <view class="table-col role-col">角色</view>
+      <view class="table-col status-col">状态</view>
+      <view class="table-col time-col">注册时间</view>
+      <view class="table-col action-col">操作</view>
+    </view>
+    <view class="table-body">
+      <view wx:for="{{users}}" wx:key="id" class="table-row">
+        <view class="table-col select-col">
+          <checkbox-group bindchange="selectUser">
+            <label class="checkbox-label">
+              <checkbox value="{{item.id}}" checked="{{selectedUsers.includes(item.id)}}" />
+            </label>
+          </checkbox-group>
+        </view>
+        <view class="table-col id-col">{{item.id}}</view>
+        <view class="table-col name-col">{{item.nickname}}</view>
+        <view class="table-col phone-col">{{item.phone}}</view>
+        <view class="table-col role-col">
+          <text class="role-tag {{item.role === 0 ? 'admin' : item.role === 1 ? 'student' : 'merchant'}}">{{item.roleText}}</text>
+        </view>
+        <view class="table-col status-col">
+          <text class="status-tag {{item.status === 1 ? 'normal' : 'disabled'}}">{{item.statusText}}</text>
+        </view>
+        <view class="table-col time-col">{{item.createdAt}}</view>
+        <view class="table-col action-col">
+          <button class="action-btn view" bindtap="viewUserDetail" data-id="{{item.id}}">查看</button>
+          <button 
+            class="action-btn {{item.status === 1 ? 'disable' : 'enable'}}" 
+            bindtap="toggleUserStatus" 
+            data-id="{{item.id}}" 
+            data-status="{{item.status}}"
+          >
+            {{item.status === 1 ? '禁用' : '启用'}}
+          </button>
+          <button class="action-btn reset" bindtap="resetPassword" data-id="{{item.id}}">重置密码</button>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 空状态 -->
+  <view wx:if="{{users.length === 0 && !loading}}" class="empty-state">
+    <text class="empty-icon">🔍</text>
+    <text class="empty-text">未找到相关用户</text>
+  </view>
+
+  <!-- 加载状态 -->
+  <view wx:if="{{loading}}" class="loading-state">
+    <text>加载中...</text>
+  </view>
+
+  <!-- 分页信息 -->
+  <view wx:if="{{users.length > 0}}" class="pagination">
+    <text>共 {{total}} 条记录</text>
+    <text wx:if="{{!hasMore}}" class="no-more">没有更多数据了</text>
+  </view>
+</view>

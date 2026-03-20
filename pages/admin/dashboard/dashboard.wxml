@@ -1,0 +1,23 @@
+<view class="dashboard-container">
+  <view class="page-header">
+    <text class="page-title">数据统计</text>
+    <button class="refresh-btn" bindtap="refreshData">
+      <text class="refresh-icon">🔄</text>
+      <text>刷新</text>
+    </button>
+  </view>
+
+  <view class="stats-cards">
+    <view class="stat-card" data-page="users" bindtap="goToPage">
+      <view class="card-header">
+        <text class="card-icon">👥</text>
+        <text class="card-title">总用户数</text>
+      </view>
+      <text class="card-value">{{stats.totalUsers}}</text>
+      <view class="card-footer">
+        <text class="trend-up">+5%</text>
+        <text class="trend-desc">较昨日</text>
+      </view>
+    </view>
+  </view>
+</view>

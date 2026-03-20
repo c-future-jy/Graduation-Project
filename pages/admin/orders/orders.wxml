@@ -1,0 +1,93 @@
+<view class="container">
+  <view class="header">
+    <text class="title">订单管理</text>
+  </view>
+  
+  <!-- 搜索和筛选 -->
+  <view class="search-filter">
+    <view class="search-bar">
+      <input type="text" placeholder="订单号/用户/商家" bindinput="bindSearchInput" value="{{searchKeyword}}" />
+      <button class="search-btn" bindtap="searchOrders">搜索</button>
+    </view>
+    <view class="filter-row">
+      <picker mode="selector" range="{{orderStatuses}}" range-key="label" value="{{selectedStatus}}" bindchange="bindStatusChange">
+        <view class="picker">
+          <text>状态：{{orderStatuses[selectedStatus].label}}</text>
+        </view>
+      </picker>
+      <view class="date-range">
+        <text bindtap="bindStartTimeChange">开始时间：{{startTime || '选择'}}</text>
+        <text bindtap="bindEndTimeChange">结束时间：{{endTime || '选择'}}</text>
+      </view>
+    </view>
+  </view>
+  
+  <!-- 批量操作 -->
+  <view class="batch-operations" wx:if="{{selectedOrders.length > 0}}">
+    <text>已选择 {{selectedOrders.length}} 个订单</text>
+    <button class="batch-btn" bindtap="batchCancel">批量取消</button>
+    <button class="batch-btn" bindtap="clearSelection">取消选择</button>
+  </view>
+  
+  <!-- 订单列表 -->
+  <view class="order-list">
+    <view class="table-container">
+      <table class="order-table">
+        <tr class="table-header">
+          <th class="checkbox-col">
+            <checkbox value="" checked="{{selectAll}}" bindchange="toggleSelectAll" />
+          </th>
+          <th>订单号</th>
+          <th>用户</th>
+          <th>商家</th>
+          <th>金额</th>
+          <th>状态</th>
+          <th>下单时间</th>
+          <th>操作</th>
+        </tr>
+        <tr wx:for="{{orders}}" wx:key="id" class="table-row">
+          <td class="checkbox-col">
+            <checkbox value="{{item.id}}" checked="{{selectedOrders.indexOf(item.id) > -1}}" bindchange="toggleOrderSelection" data-id="{{item.id}}" />
+          </td>
+          <td>{{item.orderNo}}</td>
+          <td>{{item.userName}}</td>
+          <td>{{item.merchantName}}</td>
+          <td>¥{{item.amount.toFixed(2)}}</td>
+          <td>
+            <view class="status-tag" style="background-color: {{getStatusColor(item.status)}}">
+              {{getStatusText(item.status)}}
+            </view>
+          </td>
+          <td>{{item.createdAt}}</td>
+          <td class="action-col">
+            <button class="action-btn" bindtap="viewOrderDetail" data-id="{{item.id}}">查看详情</button>
+            <button class="action-btn" bindtap="handleDispute" data-id="{{item.id}}" wx:if="{{item.status !== 'cancelled' && item.status !== 'completed'}}">标记纠纷</button>
+            <button class="action-btn danger" bindtap="cancelOrder" data-id="{{item.id}}" wx:if="{{item.status === 'pending_payment'}}">取消订单</button>
+          </td>
+        </tr>
+      </table>
+    </view>
+    
+    <!-- 空状态 -->
+    <view class="empty-state" wx:if="{{orders.length === 0}}">
+      <image src="../../assets/images/empty.png" mode="aspectFit" class="empty-image" />
+      <text class="empty-text">未找到相关订单</text>
+      <button class="reload-btn" bindtap="loadOrders">重新加载</button>
+    </view>
+  </view>
+  
+  <!-- 分页 -->
+  <view class="pagination" wx:if="{{orders.length > 0}}">
+    <button class="page-btn" bindtap="prevPage" disabled="{{currentPage === 1}}">上一页</button>
+    <text>第 {{currentPage}} 页，共 {{totalPages}} 页</text>
+    <button class="page-btn" bindtap="nextPage" disabled="{{currentPage === totalPages}}">下一页</button>
+  </view>
+</view>
+
+<!-- 纠纷处理弹窗 -->
+<modal class="dispute-modal" wx:if="{{showDisputeModal}}" hidden="{{!showDisputeModal}}" bindconfirm="confirmDispute" bindcancel="cancelDispute">
+  <view class="modal-content">
+    <text class="modal-title">订单纠纷处理</text>
+    <textarea placeholder="请输入处理意见" value="{{disputeRemark}}" bindinput="bindDisputeRemark" class="dispute-textarea" />
+  </view>
+</modal>

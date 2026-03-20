@@ -29,6 +29,17 @@
     <text class="arrow">></text>
   </view>
   
+  <!-- 管理员后台入口 -->
+  <view class="menu-section" wx:if="{{isLogin && userInfo.role === 3}}">
+    <view class="menu-item" bindtap="goToAdmin">
+      <view class="menu-left">
+        <image class="menu-icon" src="/assets/images/admin.jpg" mode="aspectFit"></image>
+        <text class="menu-text">管理后台</text>
+      </view>
+      <text class="arrow">></text>
+    </view>
+  </view>
+  
   <!-- 订单快捷入口 -->
   <view class="order-section">
     <!-- 标题行 -->

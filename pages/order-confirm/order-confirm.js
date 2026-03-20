@@ -70,24 +70,24 @@ Page({
    * 加载默认地址
    */
   loadDefaultAddress() {
-    // 模拟接口请求获取默认地址
     wx.showLoading({ title: '加载中...' });
     
-    // 模拟默认地址数据
-    setTimeout(() => {
-      wx.hideLoading();
-      const defaultAddress = {
-        id: '1',
-        name: '张三',
-        phone: '13900139000',
-        province: '北京市',
-        city: '北京市',
-        district: '朝阳区',
-        detail: '某某街道某某小区1号楼1单元101室',
-        isDefault: true
-      };
-      this.setData({ address: defaultAddress });
-    }, 500);
+    const token = wx.getStorageSync('token');
+    wx.request({
+      url: 'http://localhost:3000/api/addresses/default',
+      method: 'GET',
+      header: { 'Authorization': 'Bearer ' + token },
+      success: (res) => {
+        wx.hideLoading();
+        if (res.statusCode === 200 && res.data.success) {
+          this.setData({ address: res.data.data });
+        }
+      },
+      fail: (err) => {
+        wx.hideLoading();
+        console.error('获取默认地址失败:', err);
+      }
+    });
   },
 
   /**
@@ -181,62 +181,50 @@ Page({
     
     this.setData({ submitting: true });
     
-    // 生成唯一订单号
-    const orderId = this.generateOrderId();
-    
     // 构建订单数据
     const orderData = {
-      orderId: orderId,
-      createTime: new Date().toLocaleString('zh-CN', { hour12: false }),
-      status: '0',
-      statusText: '待付款',
+      addressId: this.data.address.id,
+      goodsList: this.data.goodsList,
       totalPrice: this.data.totalPrice,
       shippingFee: this.data.shippingFee,
       discount: this.data.discount,
       payPrice: this.data.payPrice,
       remark: this.data.remark,
-      addressId: this.data.address.id,
-      address: this.data.address,
       deliveryType: this.data.deliveryType,
       timeType: this.data.timeType,
-      appointmentTime: this.data.appointmentTime,
-      goodsList: this.data.goodsList
+      appointmentTime: this.data.appointmentTime
     };
     
-    // 模拟数据库事务
-    this.createOrderWithTransaction(orderData);
-  },
-
-  /**
-   * 生成唯一订单号
-   */
-  generateOrderId() {
-    const timestamp = Date.now();
-    const random = Math.floor(Math.random() * 10000);
-    return `ORD${timestamp}${random.toString().padStart(4, '0')}`;
-  },
-
-  /**
-   * 开启数据库事务创建订单
-   */
-  createOrderWithTransaction(orderData) {
-    wx.showLoading({ title: '提交订单中...' });
-    
-    // 模拟数据库事务
-    setTimeout(() => {
-      // 模拟订单创建成功
-      wx.hideLoading();
-      wx.showToast({ title: '订单提交成功' });
-      
-      // 清空购物车中已选中的商品
-      wx.removeStorageSync('selectedGoods');
-      
-      // 跳转到订单详情页
-      setTimeout(() => {
-        wx.navigateTo({
-          url: `/pages/order-detail/order-detail?orderId=${orderData.orderId}`
-        });
-      }, 1000);
-    }, 1000);
+    const token = wx.getStorageSync('token');
+    wx.request({
+      url: 'http://localhost:3000/api/orders',
+      method: 'POST',
+      header: { 
+        'Authorization': 'Bearer ' + token,
+        'Content-Type': 'application/json'
+      },
+      data: orderData,
+      success: (res) => {
+        this.setData({ submitting: false });
+        if (res.statusCode === 201 && res.data.success) {
+          wx.showToast({ title: '订单提交成功' });
+          // 清空购物车中已选中的商品
+          wx.removeStorageSync('selectedGoods');
+          // 跳转到订单详情页
+          setTimeout(() => {
+            wx.navigateTo({
+              url: `/pages/order-detail/order-detail?orderId=${res.data.data.orderId}`
+            });
+          }, 1000);
+        } else {
+          wx.showToast({ title: res.data.message || '订单提交失败', icon: 'none' });
+        }
+      },
+      fail: (err) => {
+        this.setData({ submitting: false });
+        wx.showToast({ title: '网络错误，请重试', icon: 'none' });
+        console.error('提交订单失败:', err);
+      }
+    });
   }
 })

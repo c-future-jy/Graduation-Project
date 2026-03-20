@@ -12,6 +12,8 @@ const feedbackRoutes = require('./feedback');
 const notificationRoutes = require('./notification');
 const uploadRoutes = require('./upload');
 const cartRoutes = require('./cart');
+const dashboardRoutes = require('./dashboard');
+const adminRoutes = require('./admin');
 
 // 注册路由
 router.use('/users', userRoutes);
@@ -24,6 +26,8 @@ router.use('/feedback', feedbackRoutes);
 router.use('/notifications', notificationRoutes);
 router.use('/upload', uploadRoutes);
 router.use('/cart', cartRoutes);
+router.use('/admin/dashboard', dashboardRoutes);
+router.use('/admin', adminRoutes);
 
 // API文档根路径
 router.get('/', (req, res) => {
@@ -41,7 +45,9 @@ router.get('/', (req, res) => {
       feedback: '/api/feedback',
       notifications: '/api/notifications',
       upload: '/api/upload',
-      cart: '/api/cart'
+      cart: '/api/cart',
+      dashboard: '/api/admin/dashboard',
+      admin: '/api/admin'
     }
   });
 });

@@ -1,0 +1,121 @@
+<view class="container">
+  <view class="header">
+    <text class="title">通知管理</text>
+    <button class="publish-btn" bindtap="showPublishModal">发布通知</button>
+  </view>
+  
+  <!-- 搜索和筛选 -->
+  <view class="search-filter">
+    <view class="search-bar">
+      <input type="text" placeholder="标题关键词" bindinput="bindSearchInput" value="{{searchKeyword}}" />
+      <button class="search-btn" bindtap="searchNotifications">搜索</button>
+    </view>
+    <view class="filter-row">
+      <picker mode="selector" range="{{notificationTypes}}" range-key="label" value="{{selectedType}}" bindchange="bindTypeChange">
+        <view class="picker">
+          <text>类型：{{notificationTypes[selectedType].label}}</text>
+        </view>
+      </picker>
+    </view>
+  </view>
+  
+  <!-- 批量操作 -->
+  <view class="batch-operations" wx:if="{{selectedNotifications.length > 0}}">
+    <text>已选择 {{selectedNotifications.length}} 个通知</text>
+    <button class="batch-btn" bindtap="clearSelection">取消选择</button>
+  </view>
+  
+  <!-- 通知列表 -->
+  <view class="notification-list">
+    <view class="table-container">
+      <table class="notification-table">
+        <tr class="table-header">
+          <th class="checkbox-col">
+            <checkbox value="" checked="{{selectAll}}" bindchange="toggleSelectAll" />
+          </th>
+          <th>ID</th>
+          <th>标题</th>
+          <th>类型</th>
+          <th>接收范围</th>
+          <th>发送时间</th>
+          <th>已读数/未读数</th>
+          <th>操作</th>
+        </tr>
+        <tr wx:for="{{notifications}}" wx:key="id" class="table-row">
+          <td class="checkbox-col">
+            <checkbox value="{{item.id}}" checked="{{selectedNotifications.indexOf(item.id) > -1}}" bindchange="toggleNotificationSelection" data-id="{{item.id}}" />
+          </td>
+          <td>{{item.id}}</td>
+          <td class="title-col">{{item.title}}</td>
+          <td>
+            <view class="type-tag" style="background-color: {{getTypeColor(item.type)}}">
+              {{getTypeText(item.type)}}
+            </view>
+          </td>
+          <td>{{getScopeText(item.receiveScope)}}</td>
+          <td>{{item.sendTime}}</td>
+          <td>
+            <view class="read-status">
+              <text>已读 {{item.readCount}} 人</text>
+              <text class="unread">未读 {{item.unreadCount}} 人</text>
+            </view>
+          </td>
+          <td class="action-col">
+            <button class="action-btn" bindtap="viewNotificationDetail" data-id="{{item.id}}">查看详情</button>
+            <button class="action-btn danger" bindtap="deleteNotification" data-id="{{item.id}}">删除</button>
+          </td>
+        </tr>
+      </table>
+    </view>
+    
+    <!-- 空状态 -->
+    <view class="empty-state" wx:if="{{notifications.length === 0}}">
+      <image src="../../assets/images/empty.png" mode="aspectFit" class="empty-image" />
+      <text class="empty-text">未找到相关通知</text>
+      <button class="reload-btn" bindtap="loadNotifications">重新加载</button>
+    </view>
+  </view>
+  
+  <!-- 分页 -->
+  <view class="pagination" wx:if="{{notifications.length > 0}}">
+    <button class="page-btn" bindtap="prevPage" disabled="{{currentPage === 1}}">上一页</button>
+    <text>第 {{currentPage}} 页，共 {{totalPages}} 页</text>
+    <button class="page-btn" bindtap="nextPage" disabled="{{currentPage === totalPages}}">下一页</button>
+  </view>
+</view>
+
+<!-- 发布通知弹窗 -->
+<modal class="publish-modal" wx:if="{{showPublishModal}}" hidden="{{!showPublishModal}}" bindconfirm="publishNotification" bindcancel="cancelPublish">
+  <view class="modal-content">
+    <text class="modal-title">发布通知</text>
+    <view class="form-item">
+      <text class="form-label">标题</text>
+      <input type="text" placeholder="请输入通知标题" value="{{publishForm.title}}" bindinput="bindPublishFormInput" data-field="title" class="form-input" />
+    </view>
+    <view class="form-item">
+      <text class="form-label">内容</text>
+      <textarea placeholder="请输入通知内容" value="{{publishForm.content}}" bindinput="bindPublishFormInput" data-field="content" class="form-textarea" />
+    </view>
+    <view class="form-item">
+      <text class="form-label">类型</text>
+      <picker mode="selector" range="{{notificationTypes.slice(1)}}" range-key="label" bindchange="bindTypeChangePublish">
+        <view class="form-picker">
+          <text>{{getTypeText(publishForm.type)}}</text>
+        </view>
+      </picker>
+    </view>
+    <view class="form-item">
+      <text class="form-label">接收范围</text>
+      <picker mode="selector" range="{{receiveScopes}}" range-key="label" bindchange="bindScopeChange">
+        <view class="form-picker">
+          <text>{{getScopeText(publishForm.receiveScope)}}</text>
+        </view>
+      </picker>
+    </view>
+    <view class="form-item">
+      <text class="form-label">定时发送</text>
+      <input type="datetime-local" value="{{publishForm.scheduledTime}}" bindinput="bindScheduledTimeChange" class="form-input" />
+      <text class="form-hint">留空则立即发送</text>
+    </view>
+  </view>
+</modal>

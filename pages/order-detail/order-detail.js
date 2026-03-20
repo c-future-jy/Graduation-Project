@@ -1,4 +1,6 @@
 // pages/order-detail/order-detail.js
+import { getOrderById, cancelOrder, completeOrder, deleteOrder } from '../../utils/api';
+
 Page({
 
   /**
@@ -20,99 +22,93 @@ Page({
   /**
    * 加载订单详情
    */
-  loadOrderDetail(orderId) {
+  async loadOrderDetail(orderId) {
     wx.showLoading({ title: '加载中...' });
     
-    // 模拟接口请求
-    console.log('请求订单详情:', orderId);
-    
-    // 模拟订单详情数据
-    const mockOrder = {
-      orderId: orderId,
-      merchantId: '2001',
-      merchantName: '测试商家',
-      merchantLogo: 'https://via.placeholder.com/50x50',
-      merchantPhone: '13800138000',
-      createTime: '2026-03-20 10:00:00',
-      payTime: '2026-03-20 10:05:00',
-      status: '1',
-      statusText: '待发货',
-      statusIcon: '📦',
-      statusDesc: '商家正在准备商品',
-      totalPrice: 199.99,
-      shippingFee: 10,
-      discount: 20,
-      payPrice: 189.99,
-      totalQuantity: 3,
-      receiverName: '张三',
-      receiverPhone: '139****9000', // 手机号脱敏
-      receiverAddress: '北京市朝阳区某某街道某某小区1号楼1单元101室',
-      remark: '少糖，不要辣',
-      timestamps: {
-        paidAt: '2026-03-20 10:05',
-        shippedAt: '',
-        deliveredAt: '',
-        completedAt: ''
-      },
-      goodsList: [
-        { goodsId: '101', name: '商品1', spec: '规格1', price: 69.99, quantity: 1, image: 'https://via.placeholder.com/100' },
-        { goodsId: '102', name: '商品2', spec: '规格2', price: 59.99, quantity: 1, image: 'https://via.placeholder.com/100' },
-        { goodsId: '103', name: '商品3', spec: '规格3', price: 69.99, quantity: 1, image: 'https://via.placeholder.com/100' }
-      ],
-      actions: []
-    };
-    
-    // 根据订单状态设置不同的操作按钮
-    switch (mockOrder.status) {
+    try {
+      const res = await getOrderById(orderId);
+      const order = res.data.order;
+      
+      // 设置订单操作按钮
+      order.actions = this.getOrderActions(order.status);
+      
+      // 设置订单状态信息
+      order.statusIcon = this.getStatusIcon(order.status);
+      order.statusDesc = this.getStatusDesc(order.status);
+      
+      wx.hideLoading();
+      this.setData({
+        order: order
+      });
+    } catch (error) {
+      wx.hideLoading();
+      wx.showToast({ title: '加载失败', icon: 'none' });
+      console.error('加载订单详情失败:', error);
+    }
+  },
+
+  /**
+   * 获取订单操作按钮
+   */
+  getOrderActions(status) {
+    switch (status) {
       case '0':
-        mockOrder.actions = [
+        return [
           { text: '取消订单', action: 'cancel', type: 'default' },
           { text: '去支付', action: 'pay', type: 'primary' }
         ];
-        mockOrder.statusIcon = '💳';
-        mockOrder.statusDesc = '请在30分钟内完成支付';
-        break;
       case '1':
-        mockOrder.actions = [
+        return [
           { text: '查看物流', action: 'logistics', type: 'default' },
           { text: '取消订单', action: 'cancel', type: 'primary' }
         ];
-        mockOrder.statusIcon = '📦';
-        mockOrder.statusDesc = '商家正在准备商品';
-        break;
       case '2':
-        mockOrder.actions = [
+        return [
           { text: '查看物流', action: 'logistics', type: 'default' },
           { text: '确认收货', action: 'confirm', type: 'primary' }
         ];
-        mockOrder.statusIcon = '🚚';
-        mockOrder.statusDesc = '商品正在配送中';
-        break;
       case '3':
-        mockOrder.actions = [
+        return [
           { text: '评价', action: 'review', type: 'primary' },
           { text: '删除订单', action: 'delete', type: 'default' },
           { text: '再次购买', action: 'buyAgain', type: 'default' }
         ];
-        mockOrder.statusIcon = '✅';
-        mockOrder.statusDesc = '订单已完成';
-        break;
       case '4':
-        mockOrder.actions = [
+        return [
           { text: '删除订单', action: 'delete', type: 'default' },
           { text: '再次购买', action: 'buyAgain', type: 'primary' }
         ];
-        mockOrder.statusIcon = '❌';
-        mockOrder.statusDesc = '订单已取消';
-        break;
+      default:
+        return [];
     }
-    
-    setTimeout(() => {
-      wx.hideLoading();
-      this.setData({
-        order: mockOrder
-      });
-    }, 500);
+  },
+
+  /**
+   * 获取状态图标
+   */
+  getStatusIcon(status) {
+    switch (status) {
+      case '0': return '💳';
+      case '1': return '📦';
+      case '2': return '🚚';
+      case '3': return '✅';
+      case '4': return '❌';
+      default: return '📋';
+    }
+  },
+
+  /**
+   * 获取状态描述
+   */
+  getStatusDesc(status) {
+    switch (status) {
+      case '0': return '请在30分钟内完成支付';
+      case '1': return '商家正在准备商品';
+      case '2': return '商品正在配送中';
+      case '3': return '订单已完成';
+      case '4': return '订单已取消';
+      default: return '订单处理中';
+    }
   },
 
   /**
@@ -174,17 +170,24 @@ Page({
   /**
    * 取消订单
    */
-  cancelOrder() {
+  async cancelOrder() {
     wx.showModal({
       title: '取消订单',
       content: '确定要取消该订单吗？',
-      success: (res) => {
+      success: async (res) => {
         if (res.confirm) {
-          // 调用取消订单接口
-          console.log('取消订单');
-          wx.showToast({ title: '订单已取消' });
-          // 刷新订单详情
-          this.loadOrderDetail(this.data.order.orderId);
+          wx.showLoading({ title: '处理中...' });
+          try {
+            await cancelOrder(this.data.order.orderId);
+            wx.hideLoading();
+            wx.showToast({ title: '订单已取消' });
+            // 刷新订单详情
+            this.loadOrderDetail(this.data.order.orderId);
+          } catch (error) {
+            wx.hideLoading();
+            wx.showToast({ title: '取消失败', icon: 'none' });
+            console.error('取消订单失败:', error);
+          }
         }
       }
     });
@@ -207,17 +210,24 @@ Page({
   /**
    * 确认收货
    */
-  confirmReceipt() {
+  async confirmReceipt() {
     wx.showModal({
       title: '确认收货',
       content: '确定已收到商品吗？',
-      success: (res) => {
+      success: async (res) => {
         if (res.confirm) {
-          // 调用确认收货接口
-          console.log('确认收货');
-          wx.showToast({ title: '已确认收货' });
-          // 刷新订单详情
-          this.loadOrderDetail(this.data.order.orderId);
+          wx.showLoading({ title: '处理中...' });
+          try {
+            await completeOrder(this.data.order.orderId);
+            wx.hideLoading();
+            wx.showToast({ title: '已确认收货' });
+            // 刷新订单详情
+            this.loadOrderDetail(this.data.order.orderId);
+          } catch (error) {
+            wx.hideLoading();
+            wx.showToast({ title: '确认失败', icon: 'none' });
+            console.error('确认收货失败:', error);
+          }
         }
       }
     });
@@ -245,19 +255,26 @@ Page({
   /**
    * 删除订单
    */
-  deleteOrder() {
+  async deleteOrder() {
     wx.showModal({
       title: '删除订单',
       content: '确定要删除该订单吗？',
-      success: (res) => {
+      success: async (res) => {
         if (res.confirm) {
-          // 调用删除订单接口
-          console.log('删除订单');
-          wx.showToast({ title: '订单已删除' });
-          // 跳回订单列表页
-          setTimeout(() => {
-            wx.navigateBack();
-          }, 1000);
+          wx.showLoading({ title: '处理中...' });
+          try {
+            await deleteOrder(this.data.order.orderId);
+            wx.hideLoading();
+            wx.showToast({ title: '订单已删除' });
+            // 跳回订单列表页
+            setTimeout(() => {
+              wx.navigateBack();
+            }, 1000);
+          } catch (error) {
+            wx.hideLoading();
+            wx.showToast({ title: '删除失败', icon: 'none' });
+            console.error('删除订单失败:', error);
+          }
         }
       }
     });

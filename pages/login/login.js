@@ -132,10 +132,19 @@ Page({
           wx.setStorageSync('token', res.data.token);
           wx.setStorageSync('userInfo', res.data.user);
           
-          // 5. 跳转到首页
-          wx.switchTab({
-            url: '/pages/index/index'
-          });
+          // 5. 根据用户角色跳转到相应页面
+          const user = res.data.user;
+          if (user.role === 3) {
+            // 管理员跳转到管理后台
+            wx.redirectTo({
+              url: '/pages/admin/index'
+            });
+          } else {
+            // 学生和商家跳转到首页
+            wx.switchTab({
+              url: '/pages/index/index'
+            });
+          }
         } else {
           wx.showToast({
             title: res.message || '登录失败',
@@ -181,7 +190,7 @@ Page({
 
     // 调用后端API进行账号密码登录
     wx.request({
-      url: 'http://192.168.3.194:3000/api/users/login/account',
+      url: 'http://localhost:3000/api/users/login/account',
       method: 'POST',
       header: {
         'Content-Type': 'application/json'
@@ -199,10 +208,19 @@ Page({
           wx.setStorageSync('token', res.data.data.token);
           wx.setStorageSync('userInfo', res.data.data.user);
           
-          // 跳转到首页
-          wx.switchTab({
-            url: '/pages/index/index'
-          });
+          // 根据用户角色跳转到相应页面
+          const user = res.data.data.user;
+          if (user.role === 3) {
+            // 管理员跳转到管理后台
+            wx.redirectTo({
+              url: '/pages/admin/index'
+            });
+          } else {
+            // 学生和商家跳转到首页
+            wx.switchTab({
+              url: '/pages/index/index'
+            });
+          }
         } else {
           // 显示详细的错误信息
           const errorMsg = res.data.message || `登录失败，状态码：${res.statusCode}`;
@@ -232,7 +250,7 @@ Page({
   goToForgotPassword() {
     wx.showModal({
       title: '忘记密码',
-      content: '请联系管理员重置密码',
+      content: '请联系管理员重置密码：\n电话：13800138000\n或前往学生活动中心一楼服务中心',
       showCancel: false,
       confirmText: '我知道了'
     });

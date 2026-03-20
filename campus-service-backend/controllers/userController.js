@@ -29,27 +29,17 @@ exports.login = async (req, res, next) => {
         
         openid = response.data.openid;
         if (!openid) {
-          // 开发环境使用模拟数据
-          if (process.env.NODE_ENV === 'development') {
-            openid = code || 'test_openid';
-          } else {
-            return res.status(401).json({
-              success: false,
-              message: '微信登录失败，无法获取openid'
-            });
-          }
+          return res.status(401).json({
+            success: false,
+            message: '微信登录失败，无法获取openid'
+          });
         }
       } catch (wechatError) {
         console.error('微信API调用失败:', wechatError);
-        // 开发环境使用模拟数据
-        if (process.env.NODE_ENV === 'development') {
-          openid = code || 'test_openid';
-        } else {
-          return res.status(500).json({
-            success: false,
-            message: '微信登录服务暂时不可用'
-          });
-        }
+        return res.status(500).json({
+          success: false,
+          message: '微信登录服务暂时不可用'
+        });
       }
     } else {
       return res.status(400).json({
@@ -220,27 +210,17 @@ exports.register = async (req, res, next) => {
         
         openid = response.data.openid;
         if (!openid) {
-          // 开发环境使用模拟数据
-          if (process.env.NODE_ENV === 'development') {
-            openid = code || 'test_openid';
-          } else {
-            return res.status(400).json({
-              success: false,
-              message: '微信授权失败，无法获取openid'
-            });
-          }
+          return res.status(400).json({
+            success: false,
+            message: '微信授权失败，无法获取openid'
+          });
         }
       } catch (wechatError) {
         console.error('微信API调用失败:', wechatError);
-        // 开发环境使用模拟数据
-        if (process.env.NODE_ENV === 'development') {
-          openid = code || 'test_openid';
-        } else {
-          return res.status(500).json({
-            success: false,
-            message: '微信授权服务暂时不可用'
-          });
-        }
+        return res.status(500).json({
+          success: false,
+          message: '微信授权服务暂时不可用'
+        });
       }
       
       // 检查openid是否已存在
@@ -561,10 +541,17 @@ exports.decryptWeixinPhone = async (req, res, next) => {
       });
     }
     
-    // 这里需要实现微信手机号解密逻辑
+    // 实现微信手机号解密逻辑
     // 实际项目中需要使用微信提供的解密库
-    // 为了演示，这里返回模拟数据
-    const phoneNumber = '13800138000';
+    // 这里需要引入微信解密库并实现解密逻辑
+    const phoneNumber = ''; // 解密后获取真实手机号
+    
+    if (!phoneNumber) {
+      return res.status(400).json({
+        success: false,
+        message: '手机号解密失败'
+      });
+    }
     
     // 更新用户手机号
     await pool.query(
@@ -576,6 +563,257 @@ exports.decryptWeixinPhone = async (req, res, next) => {
       success: true,
       data: {
         phoneNumber
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * 获取用户列表（管理员）
+ * GET /api/admin/users
+ */
+exports.getAdminUserList = async (req, res, next) => {
+  try {
+    const { page = 1, pageSize = 10, role, keyword, startTime, endTime } = req.query;
+    const offset = (page - 1) * pageSize;
+    
+    let query = `
+      SELECT 
+        u.id, u.openid, u.nickname, u.avatar_url, u.phone, u.role, u.status, u.created_at,
+        m.name as merchant_name
+      FROM 
+        user u
+      LEFT JOIN 
+        merchant m ON u.merchant_id = m.id
+    `;
+    let countQuery = `
+      SELECT 
+        COUNT(*) as total
+      FROM 
+        user u
+      LEFT JOIN 
+        merchant m ON u.merchant_id = m.id
+    `;
+    let queryParams = [];
+    let whereClause = [];
+    
+    // 构建筛选条件
+    if (role) {
+      whereClause.push('u.role = ?');
+      queryParams.push(role);
+    }
+    
+    if (keyword) {
+      whereClause.push('(u.nickname LIKE ? OR u.phone LIKE ?)');
+      queryParams.push(`%${keyword}%`, `%${keyword}%`);
+    }
+    
+    if (startTime) {
+      whereClause.push('u.created_at >= ?');
+      queryParams.push(startTime);
+    }
+    
+    if (endTime) {
+      whereClause.push('u.created_at <= ?');
+      queryParams.push(endTime);
+    }
+    
+    // 添加WHERE子句
+    if (whereClause.length > 0) {
+      query += ' WHERE ' + whereClause.join(' AND ');
+      countQuery += ' WHERE ' + whereClause.join(' AND ');
+    }
+    
+    // 添加排序和分页
+    query += ' ORDER BY u.created_at DESC LIMIT ? OFFSET ?';
+    queryParams.push(parseInt(pageSize), parseInt(offset));
+    
+    const [users] = await pool.query(query, queryParams);
+    const [countResult] = await pool.query(countQuery, queryParams.slice(0, -2));
+    
+    const total = countResult[0].total;
+    const totalPages = Math.ceil(total / parseInt(pageSize));
+    
+    res.json({
+      success: true,
+      data: {
+        users,
+        pagination: {
+          total,
+          page: parseInt(page),
+          pageSize: parseInt(pageSize),
+          totalPages
+        }
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * 获取用户详情（管理员）
+ * GET /api/admin/users/:id
+ */
+exports.getAdminUserDetail = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    
+    // 获取用户基本信息
+    const [users] = await pool.query(`
+      SELECT 
+        u.*,
+        m.name as merchant_name
+      FROM 
+        user u
+      LEFT JOIN 
+        merchant m ON u.merchant_id = m.id
+      WHERE 
+        u.id = ?
+    `, [id]);
+    
+    if (users.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: '用户不存在'
+      });
+    }
+    
+    const user = users[0];
+    
+    // 获取用户订单统计
+    const [orderStats] = await pool.query(`
+      SELECT 
+        COUNT(*) as order_count,
+        SUM(total_amount) as total_spent
+      FROM 
+        \`order\`
+      WHERE 
+        user_id = ?
+    `, [id]);
+    
+    // 获取用户反馈记录
+    const [feedbacks] = await pool.query(`
+      SELECT 
+        id, content, reply, rating, created_at
+      FROM 
+        feedback
+      WHERE 
+        user_id = ?
+      ORDER BY 
+        created_at DESC
+    `, [id]);
+    
+    // 获取用户地址列表
+    const [addresses] = await pool.query(`
+      SELECT 
+        id, name, phone, province, city, district, detail, is_default
+      FROM 
+        address
+      WHERE 
+        user_id = ?
+    `, [id]);
+    
+    res.json({
+      success: true,
+      data: {
+        user,
+        orderStats: orderStats[0],
+        feedbacks,
+        addresses
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * 更新用户状态（管理员）
+ * PUT /api/admin/users/:id/status
+ */
+exports.updateUserStatus = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+    const adminId = req.user.id;
+    
+    if (status === undefined) {
+      return res.status(400).json({
+        success: false,
+        message: '缺少状态参数'
+      });
+    }
+    
+    // 更新用户状态
+    await pool.query(
+      'UPDATE user SET status = ? WHERE id = ?',
+      [status, id]
+    );
+    
+    // 记录操作日志
+    await pool.query(
+      'INSERT INTO admin_operation_log (admin_id, operation, target_user_id, created_at) VALUES (?, ?, ?, NOW())',
+      [adminId, status ? '启用用户' : '禁用用户', id]
+    );
+    
+    res.json({
+      success: true,
+      message: status ? '用户已启用' : '用户已禁用'
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * 重置用户密码（管理员）
+ * POST /api/admin/users/:id/reset-password
+ */
+exports.resetUserPassword = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const adminId = req.user.id;
+    
+    // 生成随机密码（8-12位，字母+数字）
+    const generateRandomPassword = () => {
+      const length = Math.floor(Math.random() * 5) + 8; // 8-12位
+      const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+      let password = '';
+      for (let i = 0; i < length; i++) {
+        password += chars.charAt(Math.floor(Math.random() * chars.length));
+      }
+      return password;
+    };
+    
+    const newPassword = generateRandomPassword();
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    
+    // 更新用户密码
+    await pool.query(
+      'UPDATE user SET password = ?, force_change_password = 1 WHERE id = ?',
+      [hashedPassword, id]
+    );
+    
+    // 记录操作日志
+    await pool.query(
+      'INSERT INTO admin_operation_log (admin_id, operation, target_user_id, created_at) VALUES (?, ?, ?, NOW())',
+      [adminId, '重置用户密码', id]
+    );
+    
+    // 插入通知
+    await pool.query(
+      'INSERT INTO notification (user_id, title, content, created_at) VALUES (?, ?, ?, NOW())',
+      [id, '密码重置通知', `您的密码已被管理员重置为：${newPassword}，请登录后修改密码`]
+    );
+    
+    res.json({
+      success: true,
+      message: '密码重置成功',
+      data: {
+        newPassword
       }
     });
   } catch (error) {

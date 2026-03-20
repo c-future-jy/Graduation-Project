@@ -51,134 +51,31 @@ Page({
       pageSize: this.data.pageSize
     };
     
-    // 模拟接口请求
-    console.log('请求订单列表:', params);
-    
-    // 模拟订单数据
-    const mockOrders = [
-      {
-        orderId: '1001',
-        merchantId: '2001',
-        merchantName: '测试商家',
-        merchantLogo: 'https://via.placeholder.com/50x50',
-        createTime: '2026-03-20 10:00:00',
-        status: '0',
-        statusText: '待支付',
-        totalPrice: 199.99,
-        originalPrice: 219.99,
-        totalQuantity: 3,
-        goodsList: [
-          { goodsId: '101', name: '商品1', spec: '规格1', price: 69.99, quantity: 1, image: 'https://via.placeholder.com/100' },
-          { goodsId: '102', name: '商品2', spec: '规格2', price: 59.99, quantity: 1, image: 'https://via.placeholder.com/100' },
-          { goodsId: '103', name: '商品3', spec: '规格3', price: 69.99, quantity: 1, image: 'https://via.placeholder.com/100' }
-        ],
-        actions: [
-          { text: '取消订单', action: 'cancel', type: 'default' },
-          { text: '去支付', action: 'pay', type: 'primary' }
-        ]
+    const token = wx.getStorageSync('token');
+    wx.request({
+      url: 'http://localhost:3000/api/orders',
+      method: 'GET',
+      header: { 'Authorization': 'Bearer ' + token },
+      data: params,
+      success: (res) => {
+        this.setData({ loading: false });
+        if (res.statusCode === 200 && res.data.success) {
+          const orders = res.data.data.orders || [];
+          // 按时间倒序排列
+          const sortedOrders = orders.sort((a, b) => {
+            return new Date(b.createTime) - new Date(a.createTime);
+          });
+          this.setData({
+            orders: this.data.page === 1 ? sortedOrders : [...this.data.orders, ...sortedOrders],
+            hasMore: sortedOrders.length === this.data.pageSize
+          });
+        }
       },
-      {
-        orderId: '1002',
-        merchantId: '2002',
-        merchantName: '测试商家2',
-        merchantLogo: 'https://via.placeholder.com/50x50',
-        createTime: '2026-03-19 15:30:00',
-        status: '1',
-        statusText: '待发货',
-        totalPrice: 299.99,
-        originalPrice: 299.99,
-        totalQuantity: 2,
-        goodsList: [
-          { goodsId: '201', name: '商品4', spec: '规格1', price: 149.99, quantity: 1, image: 'https://via.placeholder.com/100' },
-          { goodsId: '202', name: '商品5', spec: '规格2', price: 149.99, quantity: 1, image: 'https://via.placeholder.com/100' }
-        ],
-        actions: [
-          { text: '查看物流', action: 'logistics', type: 'default' },
-          { text: '取消订单', action: 'cancel', type: 'primary' }
-        ]
-      },
-      {
-        orderId: '1003',
-        merchantId: '2003',
-        merchantName: '测试商家3',
-        merchantLogo: 'https://via.placeholder.com/50x50',
-        createTime: '2026-03-18 09:00:00',
-        status: '3',
-        statusText: '已完成',
-        totalPrice: 399.99,
-        originalPrice: 429.99,
-        totalQuantity: 4,
-        goodsList: [
-          { goodsId: '301', name: '商品6', spec: '规格1', price: 99.99, quantity: 1, image: 'https://via.placeholder.com/100' },
-          { goodsId: '302', name: '商品7', spec: '规格2', price: 99.99, quantity: 1, image: 'https://via.placeholder.com/100' },
-          { goodsId: '303', name: '商品8', spec: '规格3', price: 99.99, quantity: 1, image: 'https://via.placeholder.com/100' },
-          { goodsId: '304', name: '商品9', spec: '规格4', price: 99.99, quantity: 1, image: 'https://via.placeholder.com/100' }
-        ],
-        actions: [
-          { text: '评价', action: 'review', type: 'primary' },
-          { text: '删除订单', action: 'delete', type: 'default' },
-          { text: '再次购买', action: 'buyAgain', type: 'default' }
-        ]
-      },
-      {
-        orderId: '1004',
-        merchantId: '2001',
-        merchantName: '测试商家',
-        merchantLogo: 'https://via.placeholder.com/50x50',
-        createTime: '2026-03-17 14:00:00',
-        status: '3',
-        statusText: '已完成',
-        totalPrice: 99.99,
-        originalPrice: 99.99,
-        totalQuantity: 1,
-        goodsList: [
-          { goodsId: '401', name: '商品10', spec: '规格1', price: 99.99, quantity: 1, image: 'https://via.placeholder.com/100' }
-        ],
-        actions: [
-          { text: '评价', action: 'review', type: 'primary' },
-          { text: '删除订单', action: 'delete', type: 'default' },
-          { text: '再次购买', action: 'buyAgain', type: 'default' }
-        ]
-      },
-      {
-        orderId: '1005',
-        merchantId: '2002',
-        merchantName: '测试商家2',
-        merchantLogo: 'https://via.placeholder.com/50x50',
-        createTime: '2026-03-16 11:00:00',
-        status: '4',
-        statusText: '已取消',
-        totalPrice: 149.99,
-        originalPrice: 149.99,
-        totalQuantity: 2,
-        goodsList: [
-          { goodsId: '501', name: '商品11', spec: '规格1', price: 74.99, quantity: 1, image: 'https://via.placeholder.com/100' },
-          { goodsId: '502', name: '商品12', spec: '规格2', price: 74.99, quantity: 1, image: 'https://via.placeholder.com/100' }
-        ],
-        actions: [
-          { text: '删除订单', action: 'delete', type: 'default' },
-          { text: '再次购买', action: 'buyAgain', type: 'primary' }
-        ]
+      fail: (err) => {
+        this.setData({ loading: false });
+        console.error('获取订单列表失败:', err);
       }
-    ];
-    
-    // 根据Tab筛选订单
-    const filteredOrders = this.data.activeTab 
-      ? mockOrders.filter(order => order.status === this.data.activeTab)
-      : mockOrders;
-    
-    // 按时间倒序排列
-    const sortedOrders = filteredOrders.sort((a, b) => {
-      return new Date(b.createTime) - new Date(a.createTime);
     });
-    
-    setTimeout(() => {
-      this.setData({
-        orders: this.data.page === 1 ? sortedOrders : [...this.data.orders, ...sortedOrders],
-        loading: false,
-        hasMore: sortedOrders.length === this.data.pageSize
-      });
-    }, 500);
   },
 
   /**
@@ -243,11 +140,25 @@ Page({
       content: '确定要取消该订单吗？',
       success: (res) => {
         if (res.confirm) {
-          // 调用取消订单接口
-          console.log('取消订单:', orderId);
-          wx.showToast({ title: '订单已取消' });
-          // 刷新订单列表
-          this.loadOrders();
+          const token = wx.getStorageSync('token');
+          wx.request({
+            url: `http://localhost:3000/api/orders/${orderId}/cancel`,
+            method: 'PUT',
+            header: { 'Authorization': 'Bearer ' + token },
+            success: (res) => {
+              if (res.statusCode === 200 && res.data.success) {
+                wx.showToast({ title: '订单已取消' });
+                // 刷新订单列表
+                this.loadOrders();
+              } else {
+                wx.showToast({ title: res.data.message || '取消订单失败', icon: 'none' });
+              }
+            },
+            fail: (err) => {
+              wx.showToast({ title: '网络错误，请重试', icon: 'none' });
+              console.error('取消订单失败:', err);
+            }
+          });
         }
       }
     });
@@ -276,11 +187,25 @@ Page({
       content: '确定已收到商品吗？',
       success: (res) => {
         if (res.confirm) {
-          // 调用确认收货接口
-          console.log('确认收货:', orderId);
-          wx.showToast({ title: '已确认收货' });
-          // 刷新订单列表
-          this.loadOrders();
+          const token = wx.getStorageSync('token');
+          wx.request({
+            url: `http://localhost:3000/api/orders/${orderId}/complete`,
+            method: 'PUT',
+            header: { 'Authorization': 'Bearer ' + token },
+            success: (res) => {
+              if (res.statusCode === 200 && res.data.success) {
+                wx.showToast({ title: '已确认收货' });
+                // 刷新订单列表
+                this.loadOrders();
+              } else {
+                wx.showToast({ title: res.data.message || '确认收货失败', icon: 'none' });
+              }
+            },
+            fail: (err) => {
+              wx.showToast({ title: '网络错误，请重试', icon: 'none' });
+              console.error('确认收货失败:', err);
+            }
+          });
         }
       }
     });
@@ -290,10 +215,24 @@ Page({
    * 再次购买
    */
   buyAgain(orderId) {
-    // 调用再次购买接口
-    console.log('再次购买:', orderId);
-    wx.showToast({ title: '商品已加入购物车' });
-    wx.switchTab({ url: '/pages/cart/cart' });
+    const token = wx.getStorageSync('token');
+    wx.request({
+      url: `http://localhost:3000/api/orders/${orderId}/buy-again`,
+      method: 'POST',
+      header: { 'Authorization': 'Bearer ' + token },
+      success: (res) => {
+        if (res.statusCode === 200 && res.data.success) {
+          wx.showToast({ title: '商品已加入购物车' });
+          wx.switchTab({ url: '/pages/cart/cart' });
+        } else {
+          wx.showToast({ title: res.data.message || '操作失败', icon: 'none' });
+        }
+      },
+      fail: (err) => {
+        wx.showToast({ title: '网络错误，请重试', icon: 'none' });
+        console.error('再次购买失败:', err);
+      }
+    });
   },
 
   /**
@@ -312,11 +251,25 @@ Page({
       content: '确定要删除该订单吗？',
       success: (res) => {
         if (res.confirm) {
-          // 调用删除订单接口
-          console.log('删除订单:', orderId);
-          wx.showToast({ title: '订单已删除' });
-          // 刷新订单列表
-          this.loadOrders();
+          const token = wx.getStorageSync('token');
+          wx.request({
+            url: `http://localhost:3000/api/orders/${orderId}`,
+            method: 'DELETE',
+            header: { 'Authorization': 'Bearer ' + token },
+            success: (res) => {
+              if (res.statusCode === 200 && res.data.success) {
+                wx.showToast({ title: '订单已删除' });
+                // 刷新订单列表
+                this.loadOrders();
+              } else {
+                wx.showToast({ title: res.data.message || '删除订单失败', icon: 'none' });
+              }
+            },
+            fail: (err) => {
+              wx.showToast({ title: '网络错误，请重试', icon: 'none' });
+              console.error('删除订单失败:', err);
+            }
+          });
         }
       }
     });

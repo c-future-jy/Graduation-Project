@@ -4,7 +4,7 @@
  * 日期：2026-03-11
  */
 // API 基础配置
-const BASE_URL = 'http://192.168.3.194:3000/api';
+const BASE_URL = 'http://localhost:3000/api';
 /**
  * 封装请求方法
  */

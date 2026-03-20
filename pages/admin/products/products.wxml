@@ -1,0 +1,115 @@
+<!-- pages/admin/products/products.wxml -->
+<view class="products-container">
+  <!-- 页面标题 -->
+  <view class="page-header">
+    <text class="page-title">商品管理</text>
+  </view>
+
+  <!-- 搜索和筛选 -->
+  <view class="search-filter">
+    <view class="search-box">
+      <input 
+        class="search-input" 
+        placeholder="输入商品名称搜索" 
+        bindinput="searchKeyword"
+      />
+      <button class="search-btn" bindtap="searchProducts">搜索</button>
+    </view>
+    <view class="filter-box">
+      <picker class="filter-picker" bindchange="merchantFilter">
+        <view class="picker-text">
+          商家：{{merchantFilter === '' ? '全部' : merchantFilter}}
+        </view>
+      </picker>
+      <picker class="filter-picker" bindchange="categoryFilter">
+        <view class="picker-text">
+          分类：{{categoryFilter === '' ? '全部' : categoryFilter}}
+        </view>
+      </picker>
+      <picker class="filter-picker" bindchange="statusFilter">
+        <view class="picker-text">
+          状态：{{statusFilter === '' ? '全部' : statusFilter === '1' ? '上架' : '下架'}}
+        </view>
+      </picker>
+    </view>
+  </view>
+
+  <!-- 批量操作 -->
+  <view class="batch-actions">
+    <checkbox-group bindchange="selectAllProducts">
+      <label class="checkbox-label">
+        <checkbox value="all" />
+        <text>全选</text>
+      </label>
+    </checkbox-group>
+    <button class="batch-btn" bindtap="batchOfflineProducts">批量下架</button>
+    <button class="batch-btn" bindtap="batchOnlineProducts">批量上架</button>
+  </view>
+
+  <!-- 商品列表 -->
+  <view class="products-table">
+    <view class="table-header">
+      <view class="table-col select-col">选择</view>
+      <view class="table-col id-col">ID</view>
+      <view class="table-col name-col">商品名称</view>
+      <view class="table-col merchant-col">商家</view>
+      <view class="table-col category-col">分类</view>
+      <view class="table-col price-col">价格</view>
+      <view class="table-col stock-col">库存</view>
+      <view class="table-col status-col">状态</view>
+      <view class="table-col action-col">操作</view>
+    </view>
+    <view class="table-body">
+      <view wx:for="{{products}}" wx:key="id" class="table-row">
+        <view class="table-col select-col">
+          <checkbox-group bindchange="selectProduct">
+            <label class="checkbox-label">
+              <checkbox value="{{item.id}}" checked="{{selectedProducts.includes(item.id)}}" />
+            </label>
+          </checkbox-group>
+        </view>
+        <view class="table-col id-col">{{item.id}}</view>
+        <view class="table-col name-col">{{item.name}}</view>
+        <view class="table-col merchant-col">{{item.merchant}}</view>
+        <view class="table-col category-col">{{item.category}}</view>
+        <view class="table-col price-col">¥{{item.price.toFixed(2)}}</view>
+        <view class="table-col stock-col">
+          <text class="stock-text {{item.stock < 10 ? 'low-stock' : ''}}">{{item.stock}}</text>
+          <text wx:if="{{item.stock < 10}}" class="stock-warning">⚠️</text>
+        </view>
+        <view class="table-col status-col">
+          <text class="status-tag {{item.status === 1 ? 'online' : 'offline'}}">{{item.statusText}}</text>
+        </view>
+        <view class="table-col action-col">
+          <button class="action-btn view" bindtap="viewProductDetail" data-id="{{item.id}}">查看</button>
+          <button class="action-btn edit" bindtap="editProduct" data-id="{{item.id}}">编辑</button>
+          <button 
+            class="action-btn {{item.status === 1 ? 'offline' : 'online'}}" 
+            bindtap="toggleProductStatus" 
+            data-id="{{item.id}}" 
+            data-status="{{item.status}}"
+          >
+            {{item.status === 1 ? '下架' : '上架'}}
+          </button>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 空状态 -->
+  <view wx:if="{{products.length === 0 && !loading}}" class="empty-state">
+    <text class="empty-icon">📦</text>
+    <text class="empty-text">未找到相关商品</text>
+  </view>
+
+  <!-- 加载状态 -->
+  <view wx:if="{{loading}}" class="loading-state">
+    <text>加载中...</text>
+  </view>
+
+  <!-- 分页信息 -->
+  <view wx:if="{{products.length > 0}}" class="pagination">
+    <text>共 {{total}} 条记录</text>
+    <text wx:if="{{!hasMore}}" class="no-more">没有更多数据了</text>
+  </view>
+</view>

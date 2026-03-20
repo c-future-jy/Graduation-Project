@@ -513,49 +513,330 @@ exports.getMerchantOrders = async (req, res, next) => {
 // 管理员获取订单列表
 exports.getAdminOrders = async (req, res, next) => {
   try {
-    const { status, merchant_id, page = 1, limit = 10 } = req.query;
-    const offset = (page - 1) * limit;
+    const { page = 1, pageSize = 10, order_no, user_id, merchant_id, status, startTime, endTime } = req.query;
+    const offset = (page - 1) * pageSize;
     
-    // 构建查询语句
-    let query = 'SELECT * FROM `order`';
-    let countQuery = 'SELECT COUNT(*) as total FROM `order`';
-    let params = [];
+    let query = `
+      SELECT 
+        o.*,
+        u.nickname as user_name,
+        m.name as merchant_name,
+        (SELECT GROUP_CONCAT(DISTINCT product_image) FROM order_item WHERE order_id = o.id LIMIT 3) as product_images
+      FROM 
+        \`order\` o
+      LEFT JOIN 
+        user u ON o.user_id = u.id
+      LEFT JOIN 
+        merchant m ON o.merchant_id = m.id
+    `;
+    let countQuery = `
+      SELECT 
+        COUNT(*) as total
+      FROM 
+        \`order\` o
+      LEFT JOIN 
+        user u ON o.user_id = u.id
+      LEFT JOIN 
+        merchant m ON o.merchant_id = m.id
+    `;
+    let queryParams = [];
+    let whereClause = [];
     
-    // 筛选条件
-    let conditions = [];
-    if (status) {
-      conditions.push('status = ?');
-      params.push(status);
+    // 构建筛选条件
+    if (order_no) {
+      whereClause.push('o.order_no LIKE ?');
+      queryParams.push(`%${order_no}%`);
     }
+    
+    if (user_id) {
+      whereClause.push('o.user_id = ?');
+      queryParams.push(user_id);
+    }
+    
     if (merchant_id) {
-      conditions.push('merchant_id = ?');
-      params.push(merchant_id);
+      whereClause.push('o.merchant_id = ?');
+      queryParams.push(merchant_id);
     }
     
-    if (conditions.length > 0) {
-      query += ' WHERE ' + conditions.join(' AND ');
-      countQuery += ' WHERE ' + conditions.join(' AND ');
+    if (status !== undefined) {
+      whereClause.push('o.status = ?');
+      queryParams.push(status);
     }
     
-    // 分页和排序
-    query += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
-    params.push(parseInt(limit), parseInt(offset));
+    if (startTime) {
+      whereClause.push('o.created_at >= ?');
+      queryParams.push(startTime);
+    }
     
-    // 执行查询
-    const [orders] = await pool.query(query, params);
-    const [countResult] = await pool.query(countQuery, params.slice(0, -2));
+    if (endTime) {
+      whereClause.push('o.created_at <= ?');
+      queryParams.push(endTime);
+    }
     
-    successResponse(res, {
-      orders,
-      pagination: {
-        page: parseInt(page),
-        pageSize: parseInt(limit),
-        total: countResult[0].total,
-        totalPages: Math.ceil(countResult[0].total / limit)
+    // 添加WHERE子句
+    if (whereClause.length > 0) {
+      query += ' WHERE ' + whereClause.join(' AND ');
+      countQuery += ' WHERE ' + whereClause.join(' AND ');
+    }
+    
+    // 添加排序和分页
+    query += ' ORDER BY o.created_at DESC LIMIT ? OFFSET ?';
+    queryParams.push(parseInt(pageSize), parseInt(offset));
+    
+    const [orders] = await pool.query(query, queryParams);
+    const [countResult] = await pool.query(countQuery, queryParams.slice(0, -2));
+    
+    const total = countResult[0].total;
+    const totalPages = Math.ceil(total / parseInt(pageSize));
+    
+    res.json({
+      success: true,
+      data: {
+        orders,
+        pagination: {
+          total,
+          page: parseInt(page),
+          pageSize: parseInt(pageSize),
+          totalPages
+        }
       }
     });
   } catch (error) {
     console.error('获取管理员订单列表失败:', error);
-    errorResponse(res, 500, '服务器内部错误');
+    res.status(500).json({ success: false, message: '服务器内部错误' });
   }
+};
+
+/**
+ * 获取订单详情（管理员）
+ * GET /api/admin/orders/:id
+ */
+exports.getAdminOrderDetail = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    
+    // 获取订单基本信息
+    const [orders] = await pool.query(`
+      SELECT 
+        o.*,
+        u.nickname as user_name,
+        u.phone as user_phone,
+        m.name as merchant_name,
+        m.phone as merchant_phone
+      FROM 
+        \`order\` o
+      LEFT JOIN 
+        user u ON o.user_id = u.id
+      LEFT JOIN 
+        merchant m ON o.merchant_id = m.id
+      WHERE 
+        o.id = ?
+    `, [id]);
+    
+    if (orders.length === 0) {
+      return res.status(404).json({ success: false, message: '订单不存在' });
+    }
+    
+    const order = orders[0];
+    
+    // 获取订单商品明细
+    const [items] = await pool.query(`
+      SELECT 
+        *
+      FROM 
+        order_item
+      WHERE 
+        order_id = ?
+    `, [id]);
+    
+    res.json({
+      success: true,
+      data: {
+        order,
+        items
+      }
+    });
+  } catch (error) {
+    console.error('获取订单详情失败:', error);
+    res.status(500).json({ success: false, message: '服务器内部错误' });
+  }
+};
+
+/**
+ * 更新订单状态（管理员）
+ * PUT /api/admin/orders/:id/status
+ */
+exports.updateAdminOrderStatus = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+    const adminId = req.user.id;
+    
+    if (status === undefined) {
+      return res.status(400).json({ success: false, message: '缺少状态参数' });
+    }
+    
+    // 检查订单是否存在
+    const [orders] = await pool.query('SELECT id, status, merchant_id, user_id FROM `order` WHERE id = ?', [id]);
+    
+    if (orders.length === 0) {
+      return res.status(404).json({ success: false, message: '订单不存在' });
+    }
+    
+    const order = orders[0];
+    
+    // 状态流转验证
+    const validTransitions = {
+      0: [1, 4], // 待支付 → 待发货/已取消
+      1: [2, 4], // 待发货 → 已发货/已取消
+      2: [3],     // 已发货 → 已完成
+      3: [],      // 已完成 → 无
+      4: []       // 已取消 → 无
+    };
+    
+    if (!validTransitions[order.status] || !validTransitions[order.status].includes(status)) {
+      return res.status(400).json({ success: false, message: '无效的状态变更' });
+    }
+    
+    // 开始事务
+    await pool.query('START TRANSACTION');
+    
+    try {
+      // 构建更新语句
+      let updateFields = ['status = ?', 'updated_at = NOW()'];
+      let updateParams = [status, id];
+      
+      // 根据状态更新时间戳
+      if (status === 1) {
+        updateFields.push('payment_time = NOW()');
+      } else if (status === 2) {
+        updateFields.push('delivery_time = NOW()');
+      } else if (status === 3) {
+        updateFields.push('complete_time = NOW()');
+      }
+      
+      // 执行更新
+      await pool.query(
+        `UPDATE \`order\` SET ${updateFields.join(', ')} WHERE id = ?`,
+        updateParams
+      );
+      
+      // 记录操作日志
+      await pool.query(
+        'INSERT INTO admin_operation_log (admin_id, operation, target_order_id, created_at) VALUES (?, ?, ?, NOW())',
+        [adminId, `更新订单状态为 ${status}`, id]
+      );
+      
+      // 状态更新后通知用户和商家
+      // 通知用户
+      await pool.query(
+        'INSERT INTO notification (user_id, title, content, created_at) VALUES (?, ?, ?, NOW())',
+        [order.user_id, '订单状态更新', `您的订单状态已更新为 ${getStatusText(status)}`]
+      );
+      
+      // 通知商家
+      await pool.query(
+        'INSERT INTO notification (user_id, title, content, created_at) VALUES (?, ?, ?, NOW())',
+        [order.merchant_id, '订单状态更新', `您的订单状态已更新为 ${getStatusText(status)}`]
+      );
+      
+      // 提交事务
+      await pool.query('COMMIT');
+      
+      res.json({ success: true, message: '订单状态更新成功' });
+    } catch (transactionError) {
+      // 回滚事务
+      await pool.query('ROLLBACK');
+      console.error('更新订单状态失败:', transactionError);
+      res.status(500).json({ success: false, message: '更新订单状态失败' });
+    }
+  } catch (error) {
+    console.error('更新订单状态失败:', error);
+    res.status(500).json({ success: false, message: '服务器内部错误' });
+  }
+};
+
+/**
+ * 强制取消订单
+ * POST /api/admin/orders/:id/force-cancel
+ */
+exports.forceCancelOrder = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { cancel_reason } = req.body;
+    const adminId = req.user.id;
+    
+    // 检查订单是否存在
+    const [orders] = await pool.query('SELECT id, status, merchant_id, user_id FROM `order` WHERE id = ?', [id]);
+    
+    if (orders.length === 0) {
+      return res.status(404).json({ success: false, message: '订单不存在' });
+    }
+    
+    const order = orders[0];
+    
+    // 开始事务
+    await pool.query('START TRANSACTION');
+    
+    try {
+      // 更新订单状态
+      await pool.query(
+        'UPDATE `order` SET status = 4, cancel_reason = ?, cancel_admin_id = ?, updated_at = NOW() WHERE id = ?',
+        [cancel_reason, adminId, id]
+      );
+      
+      // 恢复商品库存
+      const [items] = await pool.query('SELECT product_id, quantity FROM order_item WHERE order_id = ?', [id]);
+      
+      for (const item of items) {
+        await pool.query(
+          'UPDATE product SET stock = stock + ? WHERE id = ?',
+          [item.quantity, item.product_id]
+        );
+      }
+      
+      // 记录操作日志
+      await pool.query(
+        'INSERT INTO admin_operation_log (admin_id, operation, target_order_id, created_at) VALUES (?, ?, ?, NOW())',
+        [adminId, '强制取消订单', id]
+      );
+      
+      // 通知用户
+      await pool.query(
+        'INSERT INTO notification (user_id, title, content, created_at) VALUES (?, ?, ?, NOW())',
+        [order.user_id, '订单被取消', `您的订单已被管理员强制取消，原因：${cancel_reason || '无'}`]
+      );
+      
+      // 通知商家
+      await pool.query(
+        'INSERT INTO notification (user_id, title, content, created_at) VALUES (?, ?, ?, NOW())',
+        [order.merchant_id, '订单被取消', `您的订单已被管理员强制取消，原因：${cancel_reason || '无'}`]
+      );
+      
+      // 提交事务
+      await pool.query('COMMIT');
+      
+      res.json({ success: true, message: '订单已强制取消' });
+    } catch (transactionError) {
+      // 回滚事务
+      await pool.query('ROLLBACK');
+      console.error('强制取消订单失败:', transactionError);
+      res.status(500).json({ success: false, message: '强制取消订单失败' });
+    }
+  } catch (error) {
+    console.error('强制取消订单失败:', error);
+    res.status(500).json({ success: false, message: '服务器内部错误' });
+  }
+};
+
+// 获取状态文本
+function getStatusText(status) {
+  const statusMap = {
+    0: '待支付',
+    1: '待发货',
+    2: '已发货',
+    3: '已完成',
+    4: '已取消'
+  };
+  return statusMap[status] || '未知状态';
 };

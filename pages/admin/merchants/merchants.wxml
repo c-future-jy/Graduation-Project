@@ -1,0 +1,109 @@
+<!-- pages/admin/merchants/merchants.wxml -->
+<view class="merchants-container">
+  <!-- 页面标题 -->
+  <view class="page-header">
+    <text class="page-title">商家管理</text>
+  </view>
+
+  <!-- 搜索和筛选 -->
+  <view class="search-filter">
+    <view class="search-box">
+      <input 
+        class="search-input" 
+        placeholder="输入商家名称或店主搜索" 
+        bindinput="searchKeyword"
+      />
+      <button class="search-btn" bindtap="searchMerchants">搜索</button>
+    </view>
+    <view class="filter-box">
+      <picker class="filter-picker" bindchange="statusFilter">
+        <view class="picker-text">
+          状态：{{statusFilter === '' ? '全部' : statusFilter === '1' ? '营业中' : '休息中'}}
+        </view>
+      </picker>
+      <picker class="filter-picker" bindchange="auditFilter">
+        <view class="picker-text">
+          审核状态：{{auditFilter === '' ? '全部' : auditFilter === '1' ? '待审核' : auditFilter === '2' ? '已通过' : '已拒绝'}}
+        </view>
+      </picker>
+    </view>
+  </view>
+
+  <!-- 批量操作 -->
+  <view class="batch-actions">
+    <checkbox-group bindchange="selectAllMerchants">
+      <label class="checkbox-label">
+        <checkbox value="all" />
+        <text>全选</text>
+      </label>
+    </checkbox-group>
+    <button class="batch-btn" bindtap="batchDisableMerchants">批量禁用</button>
+    <button class="batch-btn" bindtap="batchEnableMerchants">批量启用</button>
+  </view>
+
+  <!-- 商家列表 -->
+  <view class="merchants-table">
+    <view class="table-header">
+      <view class="table-col select-col">选择</view>
+      <view class="table-col id-col">ID</view>
+      <view class="table-col name-col">商家名称</view>
+      <view class="table-col owner-col">店主</view>
+      <view class="table-col phone-col">联系电话</view>
+      <view class="table-col address-col">地址</view>
+      <view class="table-col status-col">状态</view>
+      <view class="table-col audit-col">审核状态</view>
+      <view class="table-col action-col">操作</view>
+    </view>
+    <view class="table-body">
+      <view wx:for="{{merchants}}" wx:key="id" class="table-row">
+        <view class="table-col select-col">
+          <checkbox-group bindchange="selectMerchant">
+            <label class="checkbox-label">
+              <checkbox value="{{item.id}}" checked="{{selectedMerchants.includes(item.id)}}" />
+            </label>
+          </checkbox-group>
+        </view>
+        <view class="table-col id-col">{{item.id}}</view>
+        <view class="table-col name-col">{{item.name}}</view>
+        <view class="table-col owner-col">{{item.owner}}</view>
+        <view class="table-col phone-col">{{item.phone}}</view>
+        <view class="table-col address-col">{{item.address}}</view>
+        <view class="table-col status-col">
+          <text class="status-tag {{item.status === 1 ? 'open' : 'closed'}}">{{item.statusText}}</text>
+        </view>
+        <view class="table-col audit-col">
+          <text class="audit-tag {{item.auditStatus === 1 ? 'pending' : item.auditStatus === 2 ? 'passed' : 'rejected'}}">{{item.auditStatusText}}</text>
+        </view>
+        <view class="table-col action-col">
+          <button class="action-btn view" bindtap="viewMerchantDetail" data-id="{{item.id}}">查看</button>
+          <button 
+            class="action-btn {{item.status === 1 ? 'disable' : 'enable'}}" 
+            bindtap="toggleMerchantStatus" 
+            data-id="{{item.id}}" 
+            data-status="{{item.status}}"
+          >
+            {{item.status === 1 ? '禁用' : '启用'}}
+          </button>
+          <button wx:if="{{item.auditStatus === 1}}" class="action-btn audit" bindtap="auditMerchant" data-id="{{item.id}}">审核</button>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 空状态 -->
+  <view wx:if="{{merchants.length === 0 && !loading}}" class="empty-state">
+    <text class="empty-icon">🏪</text>
+    <text class="empty-text">未找到相关商家</text>
+  </view>
+
+  <!-- 加载状态 -->
+  <view wx:if="{{loading}}" class="loading-state">
+    <text>加载中...</text>
+  </view>
+
+  <!-- 分页信息 -->
+  <view wx:if="{{merchants.length > 0}}" class="pagination">
+    <text>共 {{total}} 条记录</text>
+    <text wx:if="{{!hasMore}}" class="no-more">没有更多数据了</text>
+  </view>
+</view>

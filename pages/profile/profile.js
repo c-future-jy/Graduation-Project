@@ -93,14 +93,6 @@ Page({
    * 加载订单数量
    */
   loadOrderCounts() {
-    // 模拟数据
-    this.setData({
-      pendingPayCount: 2,
-      pendingDeliverCount: 1
-    });
-    
-    // 实际开发时调用API
-    /*
     const token = wx.getStorageSync('token');
     wx.request({
       url: 'http://localhost:3000/api/orders/counts',
@@ -113,9 +105,15 @@ Page({
             pendingDeliverCount: res.data.data.pendingDeliver || 0
           });
         }
+      },
+      fail: (err) => {
+        console.error('获取订单数量失败:', err);
+        this.setData({
+          pendingPayCount: 0,
+          pendingDeliverCount: 0
+        });
       }
     });
-    */
   },
 
   /**
@@ -133,9 +131,8 @@ Page({
       })
       .catch(err => {
         console.error('获取通知失败:', err);
-        // 模拟数据
         this.setData({
-          unreadNoticeCount: 3
+          unreadNoticeCount: 0
         });
       });
   },
@@ -259,6 +256,16 @@ Page({
           });
         }
       }
+    });
+  },
+
+  /**
+   * 跳转到管理后台
+   */
+  goToAdmin() {
+    if (!this.checkAuth()) return;
+    wx.navigateTo({
+      url: '/pages/admin/index',
     });
   },
 

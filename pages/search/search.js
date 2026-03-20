@@ -57,14 +57,34 @@ Page({
     // 保存搜索历史
     this.saveSearchHistory(searchText);
 
-    // 模拟搜索结果
-    this.setData({
-      searchResults: [
-        { id: 1, title: `搜索结果：${searchText} 相关内容1`, desc: '这是搜索结果的描述信息', meta: '2026-03-18' },
-        { id: 2, title: `搜索结果：${searchText} 相关内容2`, desc: '这是搜索结果的描述信息', meta: '2026-03-18' },
-        { id: 3, title: `搜索结果：${searchText} 相关内容3`, desc: '这是搜索结果的描述信息', meta: '2026-03-18' }
-      ],
-      showResults: true
+    // 调用搜索API
+    wx.showLoading({ title: '搜索中...' });
+    wx.request({
+      url: 'http://localhost:3000/api/search',
+      method: 'GET',
+      data: { keyword: searchText },
+      success: (res) => {
+        wx.hideLoading();
+        if (res.statusCode === 200 && res.data.success) {
+          this.setData({
+            searchResults: res.data.data.results || [],
+            showResults: true
+          });
+        } else {
+          this.setData({
+            searchResults: [],
+            showResults: true
+          });
+        }
+      },
+      fail: (err) => {
+        wx.hideLoading();
+        console.error('搜索失败:', err);
+        this.setData({
+          searchResults: [],
+          showResults: true
+        });
+      }
     });
   },
 
