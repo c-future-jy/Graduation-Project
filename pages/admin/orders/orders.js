@@ -59,7 +59,20 @@ Page({
       
       const res = await getAdminOrderList(params);
       
-      const orders = res.data.list.map(order => ({
+      // 检查响应数据结构
+      if (!res || !res.data || !Array.isArray(res.data.orders)) {
+        console.error('API返回数据结构异常:', res);
+        this.setData({ 
+          orders: [],
+          total: 0,
+          hasMore: false,
+          loading: false 
+        });
+        wx.showToast({ title: '数据加载失败', icon: 'none' });
+        return;
+      }
+      
+      const orders = res.data.orders.map(order => ({
         id: order.id,
         user: order.user_name,
         merchant: order.merchant_name,
@@ -69,7 +82,7 @@ Page({
         createdAt: order.created_at
       }));
       
-      const total = res.data.total;
+      const total = res.data.pagination?.total || 0;
       const hasMore = this.data.page * this.data.pageSize < total;
       
       this.setData({

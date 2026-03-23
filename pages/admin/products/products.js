@@ -62,7 +62,20 @@ Page({
       
       const res = await getAdminProductList(params);
       
-      const products = res.data.list.map(product => ({
+      // 检查响应数据结构
+      if (!res || !res.data || !Array.isArray(res.data.products)) {
+        console.error('API返回数据结构异常:', res);
+        this.setData({ 
+          products: [],
+          total: 0,
+          hasMore: false,
+          loading: false 
+        });
+        wx.showToast({ title: '数据加载失败', icon: 'none' });
+        return;
+      }
+      
+      const products = res.data.products.map(product => ({
         id: product.id,
         name: product.name,
         merchant: product.merchant_name,
@@ -74,7 +87,7 @@ Page({
         createdAt: product.created_at
       }));
       
-      const total = res.data.total;
+      const total = res.data.pagination?.total || 0;
       const hasMore = this.data.page * this.data.pageSize < total;
       
       this.setData({
