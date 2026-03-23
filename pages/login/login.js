@@ -109,7 +109,6 @@ Page({
                     title: '登录失败，请重试',
                     icon: 'none'
                   });
-                  console.error('微信登录失败:', err);
                 }
               });
             }
@@ -158,7 +157,6 @@ Page({
           title: '登录失败，请重试',
           icon: 'none'
         });
-        console.error('登录API调用失败:', err);
       });
   },
 
@@ -202,7 +200,6 @@ Page({
       },
       success: (res) => {
         wx.hideLoading();
-        console.log('登录API响应:', res);
         if (res.statusCode === 200 && res.data.success) {
           // 存储token和用户信息
           wx.setStorageSync('token', res.data.data.token);
@@ -229,7 +226,6 @@ Page({
             icon: 'none',
             duration: 3000
           });
-          console.error('登录失败:', res);
         }
       },
       fail: (err) => {
@@ -239,7 +235,6 @@ Page({
           icon: 'none',
           duration: 3000
         });
-        console.error('账号密码登录失败:', err);
       }
     });
   },

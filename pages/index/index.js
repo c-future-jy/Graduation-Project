@@ -20,20 +20,17 @@ Page({
     try {
       // 加载商家列表
       const merchantsRes = await getMerchants();
-      console.log('商家列表:', merchantsRes);
       this.setData({
         merchants: merchantsRes.data.merchants || []
       });
 
       // 加载分类列表
       const categoriesRes = await getCategories({ type: 2 });
-      console.log('分类列表:', categoriesRes);
       this.setData({
         categories: categoriesRes.data.categories || []
       });
       
     } catch (error) {
-      console.error('加载失败:', error);
       wx.showToast({
         title: '加载失败',
         icon: 'none'

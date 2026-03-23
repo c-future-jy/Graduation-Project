@@ -1,8 +1,3 @@
-/**
- * 校园一站式服务平台 - API 接口封装
- * 作者：蔡建懿
- * 日期：2026-03-11
- */
 // API 基础配置
 const BASE_URL = 'http://localhost:3000/api';
 /**
@@ -22,8 +17,6 @@ function request(options) {
         'Authorization': token ? `Bearer ${token}` : ''
       },
       success: (res) => {
-        console.log('API 响应:', res.data);
-        
         // 成功响应
         if (res.statusCode === 200 && res.data.success) {
           resolve(res.data);
@@ -51,7 +44,6 @@ function request(options) {
         }
       },
       fail: (err) => {
-        console.error('API 请求失败:', err);
         wx.showToast({
           title: '网络连接失败',
           icon: 'none',

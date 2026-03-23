@@ -73,7 +73,6 @@ Page({
       },
       fail: (err) => {
         this.setData({ loading: false });
-        console.error('获取订单列表失败:', err);
       }
     });
   },
@@ -96,7 +95,6 @@ Page({
    */
   handleAction(e) {
     const { orderId, action } = e.currentTarget.dataset;
-    console.log('订单操作:', orderId, action);
     
     // 根据不同的操作执行不同的逻辑
     switch (action) {

@@ -68,7 +68,6 @@ Page({
     
     try {
       const res = await getCartList();
-      console.log('购物车数据:', res);
       
       this.setData({
         merchants: res.data.merchants || [],
@@ -79,7 +78,6 @@ Page({
       
       if (callback) callback();
     } catch (error) {
-      console.error('加载购物车数据失败:', error);
       // 检查是否是未登录导致的错误
       if (error.message === '请先登录') {
         wx.redirectTo({

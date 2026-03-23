@@ -70,7 +70,6 @@ Page({
   getUserInfo() {
     getUserProfile()
       .then(res => {
-        console.log('API返回的用户信息:', res.data.user);
         const userInfo = res.data.user;
         this.setData({
           userInfo: {
@@ -82,10 +81,8 @@ Page({
         });
         // 更新本地存储
         wx.setStorageSync('userInfo', this.data.userInfo);
-        console.log('更新后的用户信息:', this.data.userInfo);
       })
       .catch(err => {
-        console.error('获取用户信息失败:', err);
       });
   },
 
@@ -107,7 +104,6 @@ Page({
         }
       },
       fail: (err) => {
-        console.error('获取订单数量失败:', err);
         this.setData({
           pendingPayCount: 0,
           pendingDeliverCount: 0
@@ -130,7 +126,6 @@ Page({
         });
       })
       .catch(err => {
-        console.error('获取通知失败:', err);
         this.setData({
           unreadNoticeCount: 0
         });
