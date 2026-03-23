@@ -76,5 +76,15 @@ Page({
     wx.navigateTo({
       url: '/pages/search/search'
     });
+  },
+
+  /**
+   * 筛选商家
+   */
+  filterMerchants(e) {
+    const type = e.currentTarget.dataset.type;
+    wx.navigateTo({
+      url: `/pages/search/search?filter=${type}`
+    });
   }
 });

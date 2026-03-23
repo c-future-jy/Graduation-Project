@@ -24,10 +24,10 @@ exports.getCategoryList = async (req, res, next) => {
 // 创建分类
 exports.createCategory = async (req, res, next) => {
   try {
-    const { merchant_id, name, type, sort_order } = req.body;
+    const { merchant_id, name, icon, type, sort_order } = req.body;
     const [result] = await pool.query(
-      'INSERT INTO category (merchant_id, name, type, sort_order) VALUES (?, ?, ?, ?)',
-      [merchant_id, name, type, sort_order || 0]
+      'INSERT INTO category (merchant_id, name, icon, type, sort_order) VALUES (?, ?, ?, ?, ?)',
+      [merchant_id, name, icon, type, sort_order || 0]
     );
     res.status(201).json({ success: true, data: { categoryId: result.insertId } });
   } catch (error) {
@@ -38,10 +38,10 @@ exports.createCategory = async (req, res, next) => {
 // 更新分类
 exports.updateCategory = async (req, res, next) => {
   try {
-    const { name, sort_order } = req.body;
+    const { name, icon, sort_order } = req.body;
     await pool.query(
-      'UPDATE category SET name = ?, sort_order = ?, updated_at = NOW() WHERE id = ?',
-      [name, sort_order, req.params.id]
+      'UPDATE category SET name = ?, icon = ?, sort_order = ?, updated_at = NOW() WHERE id = ?',
+      [name, icon, sort_order, req.params.id]
     );
     res.json({ success: true, message: '更新成功' });
   } catch (error) {

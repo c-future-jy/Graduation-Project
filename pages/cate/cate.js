@@ -1,55 +1,18 @@
 Page({
   data: {
     // 分类数据
-    categories: [
-      {
-        id: 'recommend',
-        name: '推荐',
-        icon: '../../assets/images/message.jpg'
-      },
-      {
-        id: 'breakfast',
-        name: '早餐',
-        icon: '../../assets/images/message.jpg',
-        isDisabled: false
-      },
-      {
-        id: 'lunch',
-        name: '午餐套餐',
-        icon: '../../assets/images/message.jpg'
-      },
-      {
-        id: 'noodles',
-        name: '面食粉类',
-        icon: '../../assets/images/message.jpg'
-      },
-      {
-        id: 'rice',
-        name: '米饭快餐',
-        icon: '../../assets/images/message.jpg'
-      },
-      {
-        id: 'salad',
-        name: '轻食沙拉',
-        icon: '../../assets/images/message.jpg'
-      },
-      {
-        id: 'snack',
-        name: '小吃夜宵',
-        icon: '../../assets/images/message.jpg',
-        isNightHighlight: false
-      },
-      {
-        id: 'drink',
-        name: '饮品甜点',
-        icon: '../../assets/images/message.jpg'
-      },
-      {
-        id: 'market',
-        name: '超市便利',
-        icon: '../../assets/images/message.jpg'
-      }
-    ],
+    categories: [],
+    // 分类ID映射关系
+    categoryMap: {
+      1: 'breakfast',
+      2: 'lunch',
+      3: 'noodles',
+      4: 'rice',
+      5: 'salad',
+      6: 'snack',
+      7: 'drink',
+      8: 'market'
+    },
     // 筛选标签
     filters: [
       { id: 'smart', name: '智能排序' },
@@ -75,10 +38,101 @@ Page({
   },
 
   onLoad: function () {
-    // 初始化检查时间敏感分类
-    this.checkTimeSensitiveCategories();
-    // 初始化加载推荐分类的商家数据
-    this.loadMerchants('recommend');
+    // 初始化加载分类列表
+    this.loadCategories();
+  },
+
+  // 加载分类列表
+  loadCategories: function () {
+    // 导入API模块
+    const { getCategories } = require('../../utils/api');
+
+    // 调用API获取分类数据
+    getCategories({ type: 1 })
+      .then(res => {
+        // 处理API返回的数据
+        const categories = res.data.categories.map(category => ({
+          id: this.data.categoryMap[category.id] || category.id.toString(),
+          name: category.name,
+          icon: category.icon || '../../assets/images/message.jpg'
+        }));
+
+        // 添加推荐分类
+        categories.unshift({
+          id: 'recommend',
+          name: '推荐',
+          icon: '../../assets/images/message.jpg'
+        });
+
+        this.setData({
+          categories: categories
+        });
+
+        // 初始化检查时间敏感分类
+        this.checkTimeSensitiveCategories();
+        // 初始化加载推荐分类的商家数据
+        this.loadMerchants('recommend');
+      })
+      .catch(err => {
+        console.error('获取分类数据失败:', err);
+        // 错误时使用默认分类
+        const defaultCategories = [
+          {
+            id: 'recommend',
+            name: '推荐',
+            icon: '../../assets/images/message.jpg'
+          },
+          {
+            id: 'breakfast',
+            name: '早餐',
+            icon: '../../assets/images/message.jpg'
+          },
+          {
+            id: 'lunch',
+            name: '午餐套餐',
+            icon: '../../assets/images/message.jpg'
+          },
+          {
+            id: 'noodles',
+            name: '面食粉类',
+            icon: '../../assets/images/message.jpg'
+          },
+          {
+            id: 'rice',
+            name: '米饭快餐',
+            icon: '../../assets/images/message.jpg'
+          },
+          {
+            id: 'salad',
+            name: '轻食沙拉',
+            icon: '../../assets/images/message.jpg'
+          },
+          {
+            id: 'snack',
+            name: '小吃夜宵',
+            icon: '../../assets/images/message.jpg'
+          },
+          {
+            id: 'drink',
+            name: '饮品甜点',
+            icon: '../../assets/images/message.jpg'
+          },
+          {
+            id: 'market',
+            name: '超市便利',
+            icon: '../../assets/images/message.jpg'
+          }
+        ];
+
+        this.setData({
+          categories: defaultCategories
+        });
+
+        // 初始化检查时间敏感分类
+        this.checkTimeSensitiveCategories();
+        // 初始化加载推荐分类的商家数据
+        this.loadMerchants('recommend');
+      });
   },
 
   onShow: function () {
@@ -92,10 +146,10 @@ Page({
     const hour = now.getHours();
     const updatedCategories = [...this.data.categories];
 
-    // 早餐分类：9点后禁用
+    // 早餐分类：9点后标记为非早餐时间（但不禁用点击）
     const breakfastIndex = updatedCategories.findIndex(cat => cat.id === 'breakfast');
     if (breakfastIndex !== -1) {
-      updatedCategories[breakfastIndex].isDisabled = hour >= 9;
+      updatedCategories[breakfastIndex].isBreakfastTime = hour < 9;
     }
 
     // 夜宵分类：20点后高亮
@@ -112,7 +166,17 @@ Page({
   // 切换分类
   switchCategory: function (e) {
     const categoryId = e.currentTarget.dataset.id;
-    const categoryName = this.data.categories.find(cat => cat.id === categoryId).name;
+    const category = this.data.categories.find(cat => cat.id === categoryId);
+    const categoryName = category.name;
+    
+    // 检查是否是早餐分类且不在早餐时间
+    if (categoryId === 'breakfast' && !category.isBreakfastTime) {
+      wx.showToast({
+        title: '当前不在早餐时间（9点前）',
+        icon: 'none',
+        duration: 2000
+      });
+    }
     
     this.setData({
       currentCategory: categoryId,

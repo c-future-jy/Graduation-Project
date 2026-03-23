@@ -6,10 +6,12 @@
       <icon type="search" size="20" color="#999" class="search-icon"/>
       <input 
         class="search-input" 
-        placeholder="请输入搜索内容" 
+        placeholder="搜索校园好店/美食..." 
         value="{{searchText}}" 
         bindinput="onSearchInput"
         bindconfirm="search"
+        bindfocus="onSearchFocus"
+        bindtap="onSearchTap"
       />
     </view>
     <view class="search-btn" bindtap="search">搜索</view>

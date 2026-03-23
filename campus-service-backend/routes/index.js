@@ -14,6 +14,7 @@ const uploadRoutes = require('./upload');
 const cartRoutes = require('./cart');
 const dashboardRoutes = require('./dashboard');
 const adminRoutes = require('./admin');
+const searchController = require('../controllers/searchController');
 
 // 注册路由
 router.use('/users', userRoutes);
@@ -28,6 +29,9 @@ router.use('/upload', uploadRoutes);
 router.use('/cart', cartRoutes);
 router.use('/admin/dashboard', dashboardRoutes);
 router.use('/admin', adminRoutes);
+
+// 搜索路由
+router.get('/search', searchController.search);
 
 // API文档根路径
 router.get('/', (req, res) => {

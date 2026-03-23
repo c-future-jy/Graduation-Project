@@ -4,7 +4,7 @@
     <view 
       wx:for="{{categories}}" 
       wx:key="{{item.id}}"
-      class="nav-item {{currentCategory === item.id ? 'active' : ''}} {{item.isDisabled ? 'disabled' : ''}}"
+      class="nav-item {{currentCategory === item.id ? 'active' : ''}}"
       bindtap="switchCategory"
       data-id="{{item.id}}"
     >

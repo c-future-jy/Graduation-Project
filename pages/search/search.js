@@ -7,7 +7,7 @@ Page({
   data: {
     searchText: '',
     searchHistory: [],
-    hotSearches: ['早餐', '午餐', '奶茶', '水果', '零食', '外卖'],
+    hotSearches: ['校园食堂', '奶茶店', '水果捞', '炸鸡', '披萨', '寿司', '甜品', '咖啡'],
     searchResults: [],
     showResults: false
   },
@@ -48,9 +48,24 @@ Page({
   },
 
   /**
+   * 搜索框聚焦
+   */
+  onSearchFocus(e) {
+    console.log('搜索框聚焦:', e);
+  },
+
+  /**
+   * 搜索框点击
+   */
+  onSearchTap(e) {
+    console.log('搜索框点击:', e);
+  },
+
+  /**
    * 执行搜索
    */
   search() {
+    console.log('执行搜索:', this.data.searchText);
     const { searchText } = this.data;
     if (!searchText.trim()) return;
 

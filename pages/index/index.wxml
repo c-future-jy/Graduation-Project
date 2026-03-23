@@ -1,88 +1,102 @@
-<!-- 搜索栏 -->
-<view class="search-container" bindtap="goToSearch">
-  <view class="search-box">
-  <icon type="search" size="20" color="#999" class="search-icon"/>
-  <text class="search-placeholder">请输入标题搜索</text>
-  </view>
-</view>
-
-
-<!-- 轮播图 -->
-<view class="swiper">
-<swiper 
-autoplay="true" 
-interval="2000" 
-indicator-dots="true"
-circular="true">
-   <swiper-item>
-     <image src="../../assets/tabbar/biyetu.jpg" 
-     show-menu-by-longpress 
-     lazy-load/>
-   </swiper-item>
-   <swiper-item>
-    <image src="../../assets/tabbar/gunbo_2.jpg" 
-     show-menu-by-longpress 
-     lazy-load/>
-   </swiper-item>
-   <swiper-item>
-    <image src="../../assets/tabbar/gunbo_3.jpg" 
-     show-menu-by-longpress 
-     lazy-load/>
-   </swiper-item>
-   <swiper-item>
-    <image src="../../assets/tabbar/gunbo_4.jpg" 
-     show-menu-by-longpress 
-     lazy-load/>
-   </swiper-item>
-</swiper>
-</view>
-
-<!--信息 -->
-<view class="info">
-<text>校园内配送</text>
-<text>校内认证商家</text>
-<text>课间极速达</text>
-<text>师生高口碑</text>
-</view>
-
-<!-- 导航 -->
-<view class="good-nav">
-  <scroll-view scroll-x="true" class="category-scroll">
-    <view 
-      wx:for="{{categories}}" 
-      wx:key="id" 
-      class="category-item" 
-      data-id="{{item.id}}" 
-      bindtap="selectCategory"
-      style="color: {{currentCategory == item.id ? '#f3514f' : '#333'}}"
-    >
-      {{item.name}}
+<view class="container">
+  <!-- 搜索栏 -->
+  <view class="search-container">
+    <view class="search-box" bindtap="goToSearch">
+      <view class="search-icon">🔍</view>
+      <text class="search-placeholder">搜索校园好店/美食...</text>
     </view>
-  </scroll-view>
-</view>
-
-<!-- 推荐 -->
-<view class="good-hot">
-  <view class="section-title">
-    <text>推荐商家</text>
   </view>
-  <view class="merchant-list">
-    <view 
-      wx:for="{{merchants}}" 
-      wx:key="id" 
-      class="merchant-item" 
-      data-id="{{item.id}}" 
-      bindtap="goToMerchant"
-    >
-      <image src="{{item.logo || '/assets/images/morentouxiang.jpg'}}" mode="aspectFill" class="merchant-logo"/>
-      <view class="merchant-info">
-        <text class="merchant-name">{{item.name}}</text>
-        <text class="merchant-desc">{{item.description || '暂无描述'}}</text>
-        <view class="merchant-meta">
-          <text class="merchant-rating">⭐ {{item.rating || 0}}</text>
-          <text class="merchant-sales">销量 {{item.sales || 0}}</text>
-        </view>
+
+  <!-- 轮播图 -->
+  <view class="swiper">
+  <swiper 
+    autoplay="true" 
+    interval="2000" 
+    indicator-dots="true"
+    circular="true">
+     <swiper-item>
+       <image src="../../assets/tabbar/biyetu.jpg" 
+       show-menu-by-longpress 
+       lazy-load/>
+     </swiper-item>
+     <swiper-item>
+      <image src="../../assets/tabbar/gunbo_2.jpg" 
+       show-menu-by-longpress 
+       lazy-load/>
+     </swiper-item>
+     <swiper-item>
+      <image src="../../assets/tabbar/gunbo_3.jpg" 
+       show-menu-by-longpress 
+       lazy-load/>
+     </swiper-item>
+     <swiper-item>
+      <image src="../../assets/tabbar/gunbo_4.jpg" 
+       show-menu-by-longpress 
+       lazy-load/>
+     </swiper-item>
+  </swiper>
+  </view>
+
+  <!-- 公告通知 -->
+  <view class="announcement">
+    <text class="announcement-text">祝2026届同学们，毕业快乐！前途似锦！不忘初心，继续前进！</text>
+  </view>
+
+  <!--信息 -->
+  <view class="info">
+    <view class="info-item" bindtap="filterMerchants" data-type="delivery">
+      <text>校园内配送</text>
+    </view>
+    <view class="info-item" bindtap="filterMerchants" data-type="certified">
+      <text>校内认证商家</text>
+    </view>
+    <view class="info-item" bindtap="filterMerchants" data-type="quick">
+      <text>课间极速达</text>
+    </view>
+    <view class="info-item" bindtap="filterMerchants" data-type="rated">
+      <text>师生高口碑</text>
+    </view>
+  </view>
+
+  <!-- 导航 -->
+  <view class="good-nav">
+    <scroll-view scroll-x="true" class="category-scroll">
+      <view 
+        wx:for="{{categories}}" 
+        wx:key="id" 
+        class="category-item {{currentCategory == item.id ? 'active' : ''}}" 
+        data-id="{{item.id}}" 
+        bindtap="selectCategory"
+      >
+        <image src="{{item.icon || '/assets/images/morentouxiang.jpg'}}" mode="aspectFill" class="category-icon"/>
+        <text>{{item.name}}</text>
       </view>
+    </scroll-view>
+  </view>
+
+  <!-- 推荐 -->
+  <view class="good-hot">
+    <view class="section-title">
+      <text>推荐商家</text>
+    </view>
+    <view class="merchant-list">
+      <view 
+        wx:for="{{merchants}}" 
+        wx:key="id" 
+        class="merchant-item" 
+        data-id="{{item.id}}" 
+        bindtap="goToMerchant"
+      >
+        <image src="{{item.logo || '/assets/images/morentouxiang.jpg'}}" mode="aspectFill" class="merchant-logo"/>
+        <view class="merchant-info">
+          <text class="merchant-name">{{item.name}}</text>
+          <text class="merchant-desc">{{item.description || '暂无描述'}}</text>
+          <view class="merchant-meta">
+            <text class="merchant-rating">⭐ {{item.rating || 0}}</text>
+            <text class="merchant-sales">销量 {{item.sales || 0}}</text>
+          </view>
+        </view>
+    </view>
     </view>
   </view>
 </view>

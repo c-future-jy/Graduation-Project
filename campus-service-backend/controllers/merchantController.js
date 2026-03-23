@@ -3,7 +3,34 @@ const { pool } = require('../config/db');
 // 获取商家列表
 exports.getMerchantList = async (req, res, next) => {
   try {
-    const [merchants] = await pool.query('SELECT * FROM merchant WHERE status = 1 ORDER BY created_at DESC');
+    const { category } = req.query;
+    let query = 'SELECT * FROM merchant WHERE status = 1';
+    let params = [];
+    
+    // 根据分类筛选
+    if (category && category !== 'recommend') {
+      // 分类映射关系
+      const categoryMap = {
+        breakfast: 1,  // 早餐
+        lunch: 2,      // 午餐
+        noodles: 3,    // 面食
+        rice: 4,       // 米饭
+        salad: 5,      // 沙拉
+        snack: 6,      // 小吃
+        drink: 7,      // 饮品
+        market: 8      // 超市
+      };
+      
+      const categoryId = categoryMap[category];
+      if (categoryId) {
+        query += ' AND category_id = ?';
+        params.push(categoryId);
+      }
+    }
+    
+    query += ' ORDER BY created_at DESC';
+    
+    const [merchants] = await pool.query(query, params);
     res.json({ success: true, data: { merchants } });
   } catch (error) {
     next(error);
