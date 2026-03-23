@@ -68,7 +68,7 @@ function request(options) {
  * 注册
  * @param {Object} data 注册数据
  */
-export function register(data) {
+function register(data) {
   return request({
     url: '/users/auth/register',
     method: 'POST',
@@ -83,7 +83,7 @@ export function register(data) {
  * @param {String} avatarUrl 用户头像
  * @param {Number} role 用户角色
  */
-export function login(code, nickname, avatarUrl, role = 1) {
+function login(code, nickname, avatarUrl, role = 1) {
   return request({
     url: '/users/login',
     method: 'POST',
@@ -93,7 +93,7 @@ export function login(code, nickname, avatarUrl, role = 1) {
 /**
  * 获取个人信息
  */
-export function getUserProfile() {
+function getUserProfile() {
   return request({
     url: '/users/profile',
     method: 'GET'
@@ -103,7 +103,7 @@ export function getUserProfile() {
  * 更新个人信息
  * @param {Object} data 用户信息
  */
-export function updateProfile(data) {
+function updateProfile(data) {
   return request({
     url: '/users/profile',
     method: 'PUT',
@@ -114,7 +114,7 @@ export function updateProfile(data) {
  * 使用微信加密数据解密手机号
  * @param {Object} data { encryptedData, iv }
  */
-export function decryptWeixinPhone(data) {
+function decryptWeixinPhone(data) {
   return request({
     url: '/users/decrypt-phone',
     method: 'POST',
@@ -126,7 +126,7 @@ export function decryptWeixinPhone(data) {
  * 上传头像文件（示例）
  * @param {String} filePath 本地文件路径
  */
-export function uploadAvatar(filePath) {
+function uploadAvatar(filePath) {
   return new Promise((resolve, reject) => {
     const token = wx.getStorageSync('token');
     wx.uploadFile({
@@ -161,7 +161,7 @@ export function uploadAvatar(filePath) {
  * 获取商家列表
  * @param {Object} params 查询参数
  */
-export function getMerchants(params) {
+function getMerchants(params) {
   return request({
     url: '/merchants',
     method: 'GET',
@@ -172,7 +172,7 @@ export function getMerchants(params) {
  * 获取商家详情
  * @param {Number} id 商家 ID
  */
-export function getMerchantById(id) {
+function getMerchantById(id) {
   return request({
     url: `/merchants/${id}`,
     method: 'GET'
@@ -183,7 +183,7 @@ export function getMerchantById(id) {
  * 获取商品列表
  * @param {Object} params 查询参数 (merchant_id, category_id, page, limit)
  */
-export function getProducts(params) {
+function getProducts(params) {
   return request({
     url: '/products',
     method: 'GET',
@@ -195,7 +195,7 @@ export function getProducts(params) {
  * 获取商品详情
  * @param {Number} id 商品 ID
  */
-export function getProductById(id) {
+function getProductById(id) {
   return request({
     url: `/products/${id}`,
     method: 'GET'
@@ -206,7 +206,7 @@ export function getProductById(id) {
  * 获取分类列表
  * @param {Object} params 查询参数 (type, merchant_id)
  */
-export function getCategories(params) {
+function getCategories(params) {
   return request({
     url: '/categories',
     method: 'GET',
@@ -218,7 +218,7 @@ export function getCategories(params) {
  * 获取订单列表
  * @param {Object} params 查询参数 (status, page, limit)
  */
-export function getOrders(params) {
+function getOrders(params) {
   return request({
     url: '/orders',
     method: 'GET',
@@ -230,7 +230,7 @@ export function getOrders(params) {
  * 创建订单
  * @param {Object} data 订单数据
  */
-export function createOrder(data) {
+function createOrder(data) {
   return request({
     url: '/orders',
     method: 'POST',
@@ -242,7 +242,7 @@ export function createOrder(data) {
  * 获取订单详情
  * @param {Number} id 订单 ID
  */
-export function getOrderById(id) {
+function getOrderById(id) {
   return request({
     url: `/orders/${id}`,
     method: 'GET'
@@ -253,7 +253,7 @@ export function getOrderById(id) {
  * 取消订单
  * @param {Number} id 订单 ID
  */
-export function cancelOrder(id) {
+function cancelOrder(id) {
   return request({
     url: `/orders/${id}/cancel`,
     method: 'PUT'
@@ -264,7 +264,7 @@ export function cancelOrder(id) {
  * 确认收货/完成订单
  * @param {Number} id 订单 ID
  */
-export function completeOrder(id) {
+function completeOrder(id) {
   return request({
     url: `/orders/${id}/complete`,
     method: 'PUT'
@@ -274,7 +274,7 @@ export function completeOrder(id) {
 /**
  * 获取地址列表
  */
-export function getAddresses() {
+function getAddresses() {
     return request({
         url: '/addresses',
         method: 'GET'
@@ -284,7 +284,7 @@ export function getAddresses() {
  * 创建地址
  * @param {Object} data 地址数据
  */
-export function createAddress(data) {
+function createAddress(data) {
   return request({
     url: '/addresses',
     method: 'POST',
@@ -297,7 +297,7 @@ export function createAddress(data) {
  * @param {Number} id 地址 ID
  * @param {Object} data 地址数据
  */
-export function updateAddress(id, data) {
+function updateAddress(id, data) {
   return request({
     url: `/addresses/${id}`,
     method: 'PUT',
@@ -309,7 +309,7 @@ export function updateAddress(id, data) {
  * 删除地址
  * @param {Number} id 地址 ID
  */
-export function deleteAddress(id) {
+function deleteAddress(id) {
   return request({
     url: `/addresses/${id}`,
     method: 'DELETE'
@@ -320,7 +320,7 @@ export function deleteAddress(id) {
  * 设置默认地址
  * @param {Number} id 地址 ID
  */
-export function setDefaultAddress(id) {
+function setDefaultAddress(id) {
   return request({
     url: `/addresses/${id}/default`,
     method: 'PUT'
@@ -330,7 +330,7 @@ export function setDefaultAddress(id) {
 /**
  * 获取反馈列表
  */
-export function getFeedbacks(params) {
+function getFeedbacks(params) {
   return request({
     url: '/feedback',
     method: 'GET',
@@ -342,7 +342,7 @@ export function getFeedbacks(params) {
  * 创建反馈
  * @param {Object} data 反馈数据
  */
-export function createFeedback(data) {
+function createFeedback(data) {
   return request({
     url: '/feedback',
     method: 'POST',
@@ -353,7 +353,7 @@ export function createFeedback(data) {
 /**
  * 获取通知列表
  */
-export function getNotifications() {
+function getNotifications() {
   return request({
     url: '/notifications',
     method: 'GET'
@@ -364,7 +364,7 @@ export function getNotifications() {
  * 标记通知为已读
  * @param {Number} id 通知 ID
  */
-export function markNotificationAsRead(id) {
+function markNotificationAsRead(id) {
   return request({
     url: `/notifications/${id}/read`,
     method: 'PUT'
@@ -374,7 +374,7 @@ export function markNotificationAsRead(id) {
 /**
  * 标记全部通知为已读
  */
-export function markAllNotificationsAsRead() {
+function markAllNotificationsAsRead() {
   return request({
     url: '/notifications/read-all',
     method: 'POST'
@@ -386,7 +386,7 @@ export function markAllNotificationsAsRead() {
  * 获取购物车列表
  * @param {Object} params 查询参数 (page, pageSize)
  */
-export function getCartList(params) {
+function getCartList(params) {
   return request({
     url: '/cart',
     method: 'GET',
@@ -398,7 +398,7 @@ export function getCartList(params) {
  * 添加商品到购物车
  * @param {Object} data 购物车商品数据
  */
-export function addToCart(data) {
+function addToCart(data) {
   return request({
     url: '/cart/items',
     method: 'POST',
@@ -411,7 +411,7 @@ export function addToCart(data) {
  * @param {Number} id 购物车商品 ID
  * @param {Object} data 更新数据
  */
-export function updateCartItem(id, data) {
+function updateCartItem(id, data) {
   return request({
     url: `/cart/items/${id}`,
     method: 'PUT',
@@ -423,7 +423,7 @@ export function updateCartItem(id, data) {
  * 删除购物车商品
  * @param {Number} id 购物车商品 ID
  */
-export function deleteCartItem(id) {
+function deleteCartItem(id) {
   return request({
     url: `/cart/items/${id}`,
     method: 'DELETE'
@@ -433,7 +433,7 @@ export function deleteCartItem(id) {
 /**
  * 删除选中的购物车商品
  */
-export function deleteSelectedItems() {
+function deleteSelectedItems() {
   return request({
     url: '/cart/items/selected',
     method: 'DELETE'
@@ -443,7 +443,7 @@ export function deleteSelectedItems() {
 /**
  * 清空购物车
  */
-export function clearCart() {
+function clearCart() {
   return request({
     url: '/cart/clear',
     method: 'DELETE'
@@ -453,7 +453,7 @@ export function clearCart() {
 /**
  * 删除失效商品
  */
-export function deleteInvalidItems() {
+function deleteInvalidItems() {
   return request({
     url: '/cart/items/invalid',
     method: 'DELETE'
@@ -463,12 +463,175 @@ export function deleteInvalidItems() {
 /**
  * 获取选中的购物车商品
  */
-export function getSelectedItems() {
+function getSelectedItems() {
   return request({
     url: '/cart/selected',
     method: 'GET'
   });
 }
 
+// 管理员模块
+/**
+ * 获取管理员用户列表
+ * @param {Object} params 查询参数 (page, pageSize, role, keyword, startTime, endTime)
+ */
+function getAdminUserList(params) {
+  return request({
+    url: '/admin/users',
+    method: 'GET',
+    data: params
+  });
+}
+
+/**
+ * 获取管理员商家列表
+ * @param {Object} params 查询参数 (page, pageSize, status, audit_status, keyword, category_id)
+ */
+function getAdminMerchantList(params) {
+  return request({
+    url: '/admin/merchants',
+    method: 'GET',
+    data: params
+  });
+}
+
+/**
+ * 获取管理员商品列表
+ * @param {Object} params 查询参数 (page, pageSize, merchant_id, category_id, status, keyword, stock_warning)
+ */
+function getAdminProductList(params) {
+  return request({
+    url: '/admin/products',
+    method: 'GET',
+    data: params
+  });
+}
+
+/**
+ * 获取管理员订单列表
+ * @param {Object} params 查询参数 (page, pageSize, order_no, user_id, merchant_id, status, startTime, endTime)
+ */
+function getAdminOrderList(params) {
+  return request({
+    url: '/admin/orders',
+    method: 'GET',
+    data: params
+  });
+}
+
+/**
+ * 获取管理员反馈列表
+ * @param {Object} params 查询参数 (page, pageSize, type, status, user_id, merchant_id, startTime, endTime)
+ */
+function getAdminFeedbackList(params) {
+  return request({
+    url: '/admin/feedbacks',
+    method: 'GET',
+    data: params
+  });
+}
+
+/**
+ * 获取管理员通知列表
+ * @param {Object} params 查询参数 (page, pageSize, type, user_id, is_read, startTime, endTime)
+ */
+function getAdminNotificationList(params) {
+  return request({
+    url: '/admin/notifications',
+    method: 'GET',
+    data: params
+  });
+}
+
+/**
+ * 获取管理员仪表盘统计数据
+ */
+function getAdminDashboardStats() {
+  return request({
+    url: '/admin/dashboard/stats',
+    method: 'GET'
+  });
+}
+
+/**
+ * 获取管理员订单趋势数据
+ * @param {Object} params 查询参数 (startTime, endTime, granularity)
+ */
+function getAdminOrderTrend(params) {
+  return request({
+    url: '/admin/dashboard/order-trend',
+    method: 'GET',
+    data: params
+  });
+}
+
+/**
+ * 获取管理员营业额数据
+ * @param {Object} params 查询参数 (startTime, endTime)
+ */
+function getAdminRevenue(params) {
+  return request({
+    url: '/admin/dashboard/revenue',
+    method: 'GET',
+    data: params
+  });
+}
+
+/**
+ * 获取管理员商家分类分布数据
+ */
+function getAdminMerchantCategories() {
+  return request({
+    url: '/admin/dashboard/merchant-categories',
+    method: 'GET'
+  });
+}
+
 // 导出 request 供外部使用
-export { request };
+module.exports = {
+  register,
+  login,
+  getUserProfile,
+  updateProfile,
+  decryptWeixinPhone,
+  uploadAvatar,
+  getMerchants,
+  getMerchantById,
+  getProducts,
+  getProductById,
+  getCategories,
+  getOrders,
+  createOrder,
+  getOrderById,
+  cancelOrder,
+  completeOrder,
+  getAddresses,
+  createAddress,
+  updateAddress,
+  deleteAddress,
+  setDefaultAddress,
+  getFeedbacks,
+  createFeedback,
+  getNotifications,
+  markNotificationAsRead,
+  markAllNotificationsAsRead,
+  getCartList,
+  addToCart,
+  updateCartItem,
+  deleteCartItem,
+  deleteSelectedItems,
+  clearCart,
+  deleteInvalidItems,
+  getSelectedItems,
+  getAdminUserList,
+  getAdminMerchantList,
+  getAdminProductList,
+  getAdminOrderList,
+  getAdminFeedbackList,
+  getAdminNotificationList,
+  getAdminDashboardStats,
+  getAdminOrderTrend,
+  getAdminRevenue,
+  getAdminMerchantCategories,
+  request
+};

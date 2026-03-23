@@ -1,5 +1,5 @@
 // pages/login/login.js
-import { login } from '../../utils/api';
+const { login } = require('../../utils/api');
 
 Page({
   /**

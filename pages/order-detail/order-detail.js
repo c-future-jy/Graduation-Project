@@ -1,5 +1,5 @@
 // pages/order-detail/order-detail.js
-import { getOrderById, cancelOrder, completeOrder, deleteOrder } from '../../utils/api';
+const { getOrderById, cancelOrder, completeOrder } = require('../../utils/api');
 
 Page({
 

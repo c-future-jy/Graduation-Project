@@ -1,22 +1,134 @@
 <view class="dashboard-container">
-  <view class="page-header">
-    <text class="page-title">数据统计</text>
-    <button class="refresh-btn" bindtap="refreshData">
-      <text class="refresh-icon">🔄</text>
-      <text>刷新</text>
-    </button>
+  <!-- 顶部用户信息栏 -->
+  <view class="user-info-bar">
+    <view class="user-details">
+      <text class="greeting">您好，{{userInfo.nickName}}</text>
+      <text class="current-time">{{currentDate}} {{currentTime}}</text>
+    </view>
+    <view class="notification-icon" bindtap="goToNotifications">
+      <text class="icon">🔔</text>
+      <view class="notification-badge" wx:if="{{unreadNotifications > 0}}">{{unreadNotifications}}</view>
+    </view>
   </view>
 
+  <!-- 数据概览模块 -->
+  <view class="section-title">数据概览</view>
   <view class="stats-cards">
+    <view class="stat-card" data-page="orders" bindtap="goToPage">
+      <view class="card-header">
+        <text class="card-icon">📋</text>
+        <text class="card-title">今日订单</text>
+      </view>
+      <text class="card-value">{{stats.todayOrders}}</text>
+      <view class="card-footer">
+        <text class="trend-up" wx:if="{{stats.orderTrend > 0}}">+{{stats.orderTrend}}%</text>
+        <text class="trend-down" wx:else>-{{Math.abs(stats.orderTrend)}}%</text>
+        <text class="trend-desc">较昨日</text>
+      </view>
+    </view>
     <view class="stat-card" data-page="users" bindtap="goToPage">
       <view class="card-header">
         <text class="card-icon">👥</text>
-        <text class="card-title">总用户数</text>
+        <text class="card-title">用户总数</text>
       </view>
       <text class="card-value">{{stats.totalUsers}}</text>
       <view class="card-footer">
-        <text class="trend-up">+5%</text>
+        <text class="trend-up" wx:if="{{stats.userTrend > 0}}">+{{stats.userTrend}}%</text>
+        <text class="trend-down" wx:else>-{{Math.abs(stats.userTrend)}}%</text>
         <text class="trend-desc">较昨日</text>
+      </view>
+    </view>
+    <view class="stat-card" data-page="merchants" bindtap="goToPage">
+      <view class="card-header">
+        <text class="card-icon">🏪</text>
+        <text class="card-title">商家数量</text>
+      </view>
+      <text class="card-value">{{stats.totalMerchants}}</text>
+      <view class="card-footer">
+        <text class="trend-up" wx:if="{{stats.merchantTrend > 0}}">+{{stats.merchantTrend}}%</text>
+        <text class="trend-down" wx:else>-{{Math.abs(stats.merchantTrend)}}%</text>
+        <text class="trend-desc">较昨日</text>
+      </view>
+    </view>
+    <view class="stat-card" data-page="products" bindtap="goToPage">
+      <view class="card-header">
+        <text class="card-icon">📦</text>
+        <text class="card-title">商品数量</text>
+      </view>
+      <text class="card-value">{{stats.totalProducts}}</text>
+      <view class="card-footer">
+        <text class="trend-up" wx:if="{{stats.productTrend > 0}}">+{{stats.productTrend}}%</text>
+        <text class="trend-down" wx:else>-{{Math.abs(stats.productTrend)}}%</text>
+        <text class="trend-desc">较昨日</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 待处理事项模块 -->
+  <view class="section-title">待处理事项</view>
+  <view class="pending-tasks">
+    <view class="task-card urgent" data-page="merchants" bindtap="goToPage">
+      <view class="task-icon">🏪</view>
+      <view class="task-info">
+        <text class="task-title">待审核商家</text>
+        <text class="task-desc">{{pendingTasks.pendingMerchants}} 家商家待审核</text>
+      </view>
+      <view class="task-badge urgent">{{pendingTasks.pendingMerchants}}</view>
+    </view>
+    <view class="task-card warning" data-page="orders" bindtap="goToPage">
+      <view class="task-icon">📋</view>
+      <view class="task-info">
+        <text class="task-title">未处理订单</text>
+        <text class="task-desc">{{pendingTasks.pendingOrders}} 个订单待处理</text>
+      </view>
+      <view class="task-badge warning">{{pendingTasks.pendingOrders}}</view>
+    </view>
+    <view class="task-card info" data-page="feedbacks" bindtap="goToPage">
+      <view class="task-icon">💬</view>
+      <view class="task-info">
+        <text class="task-title">用户反馈</text>
+        <text class="task-desc">{{pendingTasks.pendingFeedbacks}} 条反馈待处理</text>
+      </view>
+      <view class="task-badge info">{{pendingTasks.pendingFeedbacks}}</view>
+    </view>
+  </view>
+
+  <!-- 快捷操作模块 -->
+  <view class="section-title">快捷操作</view>
+  <view class="quick-actions">
+    <view class="action-button" data-page="products" bindtap="goToPage">
+      <text class="action-icon">➕</text>
+      <text class="action-text">新增商品</text>
+    </view>
+    <view class="action-button" data-page="merchants" bindtap="goToPage">
+      <text class="action-icon">✅</text>
+      <text class="action-text">审核商家</text>
+    </view>
+    <view class="action-button" data-page="orders" bindtap="goToPage">
+      <text class="action-icon">📋</text>
+      <text class="action-text">订单管理</text>
+    </view>
+    <view class="action-button" data-page="users" bindtap="goToPage">
+      <text class="action-icon">👥</text>
+      <text class="action-text">用户管理</text>
+    </view>
+  </view>
+
+  <!-- 数据趋势图 -->
+  <view class="section-title">数据趋势</view>
+  <view class="trend-chart">
+    <view class="chart-header">
+      <text class="chart-title">近7天订单趋势</text>
+      <view class="chart-toggle">
+        <text class="toggle-item active" bindtap="toggleChartType" data-type="orders">订单</text>
+        <text class="toggle-item" bindtap="toggleChartType" data-type="users">用户</text>
+      </view>
+    </view>
+    <view class="chart-container">
+      <!-- 这里可以使用第三方图表库或自定义图表 -->
+      <view class="chart-placeholder">
+        <text class="chart-icon">📈</text>
+        <text class="chart-desc">订单趋势图表</text>
       </view>
     </view>
   </view>

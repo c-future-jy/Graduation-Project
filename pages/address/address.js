@@ -1,5 +1,5 @@
 // pages/address/address.js
-import { getAddresses, createAddress, updateAddress, deleteAddress, setDefaultAddress } from '../../utils/api';
+const { getAddresses, createAddress, updateAddress, deleteAddress, setDefaultAddress } = require('../../utils/api');
 
 Page({
 

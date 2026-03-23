@@ -1,5 +1,5 @@
 // pages/login/register.js
-import { register } from '../../utils/api';
+const { register } = require('../../utils/api');
 
 Page({
   /**

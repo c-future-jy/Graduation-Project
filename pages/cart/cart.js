@@ -1,6 +1,5 @@
-import { getCartList, updateCartItem, deleteCartItem, deleteSelectedItems, deleteInvalidItems } from '../../utils/api';
-
 // pages/cart/cart.js
+const { getCartList, updateCartItem, deleteCartItem, deleteSelectedItems, deleteInvalidItems } = require('../../utils/api');
 Page({
 
   /**

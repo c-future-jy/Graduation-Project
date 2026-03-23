@@ -57,7 +57,7 @@
     <view class="table-body">
       <view wx:for="{{merchants}}" wx:key="id" class="table-row">
         <view class="table-col select-col">
-          <checkbox-group bindchange="selectMerchant">
+          <checkbox-group bindchange="selectMerchant" data-id="{{item.id}}">
             <label class="checkbox-label">
               <checkbox value="{{item.id}}" checked="{{selectedMerchants.includes(item.id)}}" />
             </label>

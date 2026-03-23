@@ -1,4 +1,6 @@
 // pages/admin/users/users.js
+const { getAdminUserList } = require('../../../utils/api');
+
 Page({
   /**
    * 页面的初始数据
@@ -47,21 +49,28 @@ Page({
     this.setData({ loading: true });
     
     try {
-      // 模拟数据，实际项目中应调用API
-      const users = [
-        { id: 1, nickname: '张三', phone: '13800138000', role: 1, roleText: '学生', status: 1, statusText: '正常', createdAt: '2026-03-01 10:00:00' },
-        { id: 2, nickname: '李四', phone: '13900139000', role: 2, roleText: '商家', status: 1, statusText: '正常', createdAt: '2026-03-02 11:00:00' },
-        { id: 3, nickname: '王五', phone: '13700137000', role: 1, roleText: '学生', status: 0, statusText: '禁用', createdAt: '2026-03-03 12:00:00' },
-        { id: 4, nickname: '赵六', phone: '13600136000', role: 0, roleText: '管理员', status: 1, statusText: '正常', createdAt: '2026-03-04 13:00:00' },
-        { id: 5, nickname: '钱七', phone: '13500135000', role: 1, roleText: '学生', status: 1, statusText: '正常', createdAt: '2026-03-05 14:00:00' },
-        { id: 6, nickname: '孙八', phone: '13400134000', role: 2, roleText: '商家', status: 1, statusText: '正常', createdAt: '2026-03-06 15:00:00' },
-        { id: 7, nickname: '周九', phone: '13300133000', role: 1, roleText: '学生', status: 1, statusText: '正常', createdAt: '2026-03-07 16:00:00' },
-        { id: 8, nickname: '吴十', phone: '13200132000', role: 1, roleText: '学生', status: 0, statusText: '禁用', createdAt: '2026-03-08 17:00:00' },
-        { id: 9, nickname: '郑一', phone: '13100131000', role: 2, roleText: '商家', status: 1, statusText: '正常', createdAt: '2026-03-09 18:00:00' },
-        { id: 10, nickname: '王二', phone: '13000130000', role: 1, roleText: '学生', status: 1, statusText: '正常', createdAt: '2026-03-10 19:00:00' }
-      ];
+      // 调用真实API获取数据
+      const params = {
+        page: this.data.page,
+        pageSize: this.data.pageSize,
+        role: this.data.roleFilter,
+        keyword: this.data.searchKeyword
+      };
       
-      const total = 100;
+      const res = await getAdminUserList(params);
+      
+      const users = res.data.list.map(user => ({
+        id: user.id,
+        nickname: user.nickname,
+        phone: user.phone,
+        role: user.role,
+        roleText: user.role === 0 ? '管理员' : user.role === 1 ? '学生' : '商家',
+        status: user.status,
+        statusText: user.status === 1 ? '正常' : '禁用',
+        createdAt: user.created_at
+      }));
+      
+      const total = res.data.total;
       const hasMore = this.data.page * this.data.pageSize < total;
       
       this.setData({
@@ -78,6 +87,13 @@ Page({
   },
 
   /**
+   * 搜索关键词变化
+   */
+  searchKeyword(e) {
+    this.setData({ searchKeyword: e.detail.value });
+  },
+
+  /**
    * 搜索用户
    */
   searchUsers() {
@@ -86,9 +102,19 @@ Page({
   },
 
   /**
-   * 筛选用户
+   * 角色筛选变化
    */
-  filterUsers() {
+  roleFilter(e) {
+    this.setData({ roleFilter: e.detail.value });
+    this.setData({ page: 1, users: [] });
+    this.loadUsers();
+  },
+
+  /**
+   * 状态筛选变化
+   */
+  statusFilter(e) {
+    this.setData({ statusFilter: e.detail.value });
     this.setData({ page: 1, users: [] });
     this.loadUsers();
   },
@@ -97,13 +123,17 @@ Page({
    * 选择用户
    */
   selectUser(e) {
-    const userId = e.currentTarget.dataset.id;
+    const userId = e.detail.value[0];
     let selectedUsers = this.data.selectedUsers;
     
-    if (selectedUsers.includes(userId)) {
-      selectedUsers = selectedUsers.filter(id => id !== userId);
+    if (userId) {
+      if (!selectedUsers.includes(userId)) {
+        selectedUsers.push(userId);
+      }
     } else {
-      selectedUsers.push(userId);
+      // 取消选择，需要找到当前取消的用户ID
+      const currentId = e.currentTarget.dataset.id;
+      selectedUsers = selectedUsers.filter(id => id !== currentId);
     }
     
     this.setData({ selectedUsers });

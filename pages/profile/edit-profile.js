@@ -1,5 +1,5 @@
 // pages/profile/edit-profile.js
-import { updateProfile, decryptWeixinPhone, uploadAvatar } from '../../utils/api';
+const { updateProfile, decryptWeixinPhone, uploadAvatar } = require('../../utils/api');
 
 Page({
   /**

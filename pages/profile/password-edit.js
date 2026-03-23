@@ -1,5 +1,5 @@
 // pages/profile/password-edit.js
-import { updateProfile } from '../../utils/api';
+const { updateProfile } = require('../../utils/api');
 
 Page({
   /**

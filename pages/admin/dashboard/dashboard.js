@@ -1,20 +1,31 @@
-// pages/admin/dashboard/dashboard.js
+// 管理后台首页逻辑
 Page({
   /**
    * 页面的初始数据
    */
   data: {
-    loading: false,
-    stats: {
-      totalUsers: 0,
-      totalMerchants: 0,
-      todayOrders: 0,
-      pendingFeedback: 0
+    userInfo: {
+      nickName: '管理员'
     },
-    timeRange: 'today',
-    orderTrend: [],
-    merchantCategory: [],
-    salesData: []
+    currentDate: '',
+    currentTime: '',
+    unreadNotifications: 3,
+    stats: {
+      todayOrders: 128,
+      totalUsers: 1250,
+      totalMerchants: 56,
+      totalProducts: 890,
+      orderTrend: 12,
+      userTrend: 5,
+      merchantTrend: 3,
+      productTrend: 8
+    },
+    pendingTasks: {
+      pendingMerchants: 8,
+      pendingOrders: 15,
+      pendingFeedbacks: 6
+    },
+    chartType: 'orders'
   },
 
   /**
@@ -22,6 +33,7 @@ Page({
    */
   onLoad(options) {
     this.checkLoginStatus();
+    this.updateDateTime();
     this.loadDashboardData();
   },
 
@@ -36,91 +48,44 @@ Page({
       wx.redirectTo({
         url: '/pages/login/login'
       });
+    } else {
+      this.setData({
+        userInfo: {
+          nickName: userInfo.nickName || '管理员'
+        }
+      });
     }
   },
 
   /**
-   * 生命周期函数--监听页面显示
+   * 更新日期和时间
    */
-  onShow() {
-    this.loadDashboardData();
+  updateDateTime() {
+    const now = new Date();
+    this.setData({
+      currentDate: now.toLocaleDateString(),
+      currentTime: now.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+    });
   },
 
   /**
    * 加载仪表盘数据
    */
-  async loadDashboardData() {
-    this.setData({ loading: true });
+  loadDashboardData() {
+    // 这里可以调用后端API获取真实数据
+    // 目前使用模拟数据
+    wx.showLoading({
+      title: '加载数据中...'
+    });
     
-    try {
-      // 模拟数据，实际项目中应调用API
-      const stats = {
-        totalUsers: 1234,
-        totalMerchants: 56,
-        todayOrders: 78,
-        pendingFeedback: 12
-      };
-      
-      const orderTrend = [
-        { date: '03-14', orders: 65 },
-        { date: '03-15', orders: 72 },
-        { date: '03-16', orders: 68 },
-        { date: '03-17', orders: 81 },
-        { date: '03-18', orders: 76 },
-        { date: '03-19', orders: 85 },
-        { date: '03-20', orders: 78 }
-      ];
-      
-      const merchantCategory = [
-        { name: '餐饮', value: 25 },
-        { name: '超市', value: 15 },
-        { name: '文具', value: 8 },
-        { name: '其他', value: 8 }
-      ];
-      
-      const salesData = [
-        { date: '03-14', sales: 12000 },
-        { date: '03-15', sales: 13500 },
-        { date: '03-16', sales: 12800 },
-        { date: '03-17', sales: 14200 },
-        { date: '03-18', sales: 13800 },
-        { date: '03-19', sales: 15000 },
-        { date: '03-20', sales: 14500 }
-      ];
-      
-      this.setData({
-        stats,
-        orderTrend,
-        merchantCategory,
-        salesData,
-        loading: false
-      });
-    } catch (error) {
-      console.error('加载仪表盘数据失败:', error);
-      this.setData({ loading: false });
-      wx.showToast({ title: '加载失败', icon: 'none' });
-    }
+    setTimeout(() => {
+      wx.hideLoading();
+      // 模拟数据已在data中设置
+    }, 1000);
   },
 
   /**
-   * 切换时间范围
-   */
-  switchTimeRange(e) {
-    const timeRange = e.currentTarget.dataset.range;
-    this.setData({ timeRange });
-    // 实际项目中应根据时间范围重新加载数据
-    this.loadDashboardData();
-  },
-
-  /**
-   * 手动刷新数据
-   */
-  refreshData() {
-    this.loadDashboardData();
-  },
-
-  /**
-   * 跳转到对应管理页面
+   * 跳转到指定页面
    */
   goToPage(e) {
     const page = e.currentTarget.dataset.page;
@@ -133,16 +98,52 @@ Page({
       case 'merchants':
         url = '/pages/admin/merchants/merchants';
         break;
+      case 'products':
+        url = '/pages/admin/products/products';
+        break;
       case 'orders':
         url = '/pages/admin/orders/orders';
         break;
       case 'feedbacks':
         url = '/pages/admin/feedbacks/feedbacks';
         break;
+      default:
+        return;
     }
     
-    if (url) {
-      wx.navigateTo({ url });
-    }
+    wx.navigateTo({
+      url: url
+    });
+  },
+
+  /**
+   * 跳转到通知页面
+   */
+  goToNotifications() {
+    wx.navigateTo({
+      url: '/pages/admin/notifications/notifications'
+    });
+  },
+
+  /**
+   * 切换图表类型
+   */
+  toggleChartType(e) {
+    const type = e.currentTarget.dataset.type;
+    this.setData({
+      chartType: type
+    });
+    // 这里可以根据类型切换图表数据
+  },
+
+  /**
+   * 刷新数据
+   */
+  refreshData() {
+    this.loadDashboardData();
+    wx.showToast({
+      title: '数据已刷新',
+      icon: 'success'
+    });
   }
 })

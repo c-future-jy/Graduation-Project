@@ -46,7 +46,43 @@ circular="true">
 </view>
 
 <!-- 导航 -->
-<view class="good-nav"></view>
+<view class="good-nav">
+  <scroll-view scroll-x="true" class="category-scroll">
+    <view 
+      wx:for="{{categories}}" 
+      wx:key="id" 
+      class="category-item" 
+      data-id="{{item.id}}" 
+      bindtap="selectCategory"
+      style="color: {{currentCategory == item.id ? '#f3514f' : '#333'}}"
+    >
+      {{item.name}}
+    </view>
+  </scroll-view>
+</view>
 
 <!-- 推荐 -->
-<view class="good-hot"></view>
+<view class="good-hot">
+  <view class="section-title">
+    <text>推荐商家</text>
+  </view>
+  <view class="merchant-list">
+    <view 
+      wx:for="{{merchants}}" 
+      wx:key="id" 
+      class="merchant-item" 
+      data-id="{{item.id}}" 
+      bindtap="goToMerchant"
+    >
+      <image src="{{item.logo || '/assets/images/morentouxiang.jpg'}}" mode="aspectFill" class="merchant-logo"/>
+      <view class="merchant-info">
+        <text class="merchant-name">{{item.name}}</text>
+        <text class="merchant-desc">{{item.description || '暂无描述'}}</text>
+        <view class="merchant-meta">
+          <text class="merchant-rating">⭐ {{item.rating || 0}}</text>
+          <text class="merchant-sales">销量 {{item.sales || 0}}</text>
+        </view>
+      </view>
+    </view>
+  </view>
+</view>

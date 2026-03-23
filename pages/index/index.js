@@ -1,4 +1,4 @@
-import { getMerchants, getCategories } from '../../utils/api';
+const { getMerchants, getCategories } = require('../../utils/api');
 
 Page({
   data: {

@@ -10,48 +10,68 @@ Page({
       nickName: '管理员'
     },
     today: '',
-    menuList: [
+    menuSections: [
       {
-        id: 'dashboard',
-        name: '数据统计',
-        icon: '📊',
-        url: '/pages/admin/dashboard/dashboard'
+        title: '数据分析',
+        items: [
+          {
+            id: 'dashboard',
+            name: '数据统计',
+            icon: '📊',
+            url: '/pages/admin/dashboard/dashboard'
+          }
+        ]
       },
       {
-        id: 'users',
-        name: '用户管理',
-        icon: '👥',
-        url: '/pages/admin/users/users'
+        title: '用户与商家',
+        items: [
+          {
+            id: 'users',
+            name: '用户管理',
+            icon: '👥',
+            url: '/pages/admin/users/users'
+          },
+          {
+            id: 'merchants',
+            name: '商家管理',
+            icon: '🏪',
+            url: '/pages/admin/merchants/merchants'
+          }
+        ]
       },
       {
-        id: 'merchants',
-        name: '商家管理',
-        icon: '🏪',
-        url: '/pages/admin/merchants/merchants'
+        title: '业务管理',
+        items: [
+          {
+            id: 'products',
+            name: '商品管理',
+            icon: '📦',
+            url: '/pages/admin/products/products'
+          },
+          {
+            id: 'orders',
+            name: '订单管理',
+            icon: '📋',
+            url: '/pages/admin/orders/orders'
+          }
+        ]
       },
       {
-        id: 'products',
-        name: '商品管理',
-        icon: '📦',
-        url: '/pages/admin/products/products'
-      },
-      {
-        id: 'orders',
-        name: '订单管理',
-        icon: '📋',
-        url: '/pages/admin/orders/orders'
-      },
-      {
-        id: 'feedbacks',
-        name: '反馈管理',
-        icon: '💬',
-        url: '/pages/admin/feedbacks/feedbacks'
-      },
-      {
-        id: 'notifications',
-        name: '通知管理',
-        icon: '📢',
-        url: '/pages/admin/notifications/notifications'
+        title: '运营管理',
+        items: [
+          {
+            id: 'feedbacks',
+            name: '反馈管理',
+            icon: '💬',
+            url: '/pages/admin/feedbacks/feedbacks'
+          },
+          {
+            id: 'notifications',
+            name: '通知管理',
+            icon: '📢',
+            url: '/pages/admin/notifications/notifications'
+          }
+        ]
       }
     ]
   },
@@ -61,8 +81,26 @@ Page({
    */
   onLoad(options) {
     this.checkLoginStatus();
+    this.updateDateTime();
+  },
+
+  /**
+   * 更新日期和时间
+   */
+  updateDateTime() {
+    const now = new Date();
+    const weekdays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+    const weekday = weekdays[now.getDay()];
+    const year = now.getFullYear();
+    const month = now.getMonth() + 1;
+    const day = now.getDate();
+    const hours = now.getHours().toString().padStart(2, '0');
+    const minutes = now.getMinutes().toString().padStart(2, '0');
+    
     this.setData({
-      today: new Date().toLocaleDateString()
+      today: `${year}年${month}月${day}日`,
+      currentTime: `${hours}:${minutes}`,
+      weekday: weekday
     });
   },
 
@@ -95,6 +133,16 @@ Page({
     const url = e.currentTarget.dataset.url;
     
     this.setData({ activeTab: id });
+    wx.navigateTo({
+      url: url
+    });
+  },
+
+  /**
+   * 跳转到指定页面
+   */
+  goToPage(e) {
+    const url = e.currentTarget.dataset.url;
     wx.navigateTo({
       url: url
     });

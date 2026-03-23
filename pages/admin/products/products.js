@@ -1,4 +1,6 @@
 // pages/admin/products/products.js
+const { getAdminProductList } = require('../../../utils/api');
+
 Page({
   /**
    * 页面的初始数据
@@ -48,21 +50,31 @@ Page({
     this.setData({ loading: true });
     
     try {
-      // 模拟数据，实际项目中应调用API
-      const products = [
-        { id: 1, name: '校园午餐', merchant: '校园餐厅', category: '餐饮', price: 15.00, stock: 100, status: 1, statusText: '上架', createdAt: '2026-03-01 10:00:00' },
-        { id: 2, name: '矿泉水', merchant: '校园超市', category: '饮料', price: 2.00, stock: 500, status: 1, statusText: '上架', createdAt: '2026-03-02 11:00:00' },
-        { id: 3, name: '笔记本', merchant: '文具店', category: '文具', price: 5.00, stock: 50, status: 1, statusText: '上架', createdAt: '2026-03-03 12:00:00' },
-        { id: 4, name: '珍珠奶茶', merchant: '奶茶店', category: '饮料', price: 10.00, stock: 20, status: 1, statusText: '上架', createdAt: '2026-03-04 13:00:00' },
-        { id: 5, name: '苹果', merchant: '水果店', category: '水果', price: 8.00, stock: 8, status: 1, statusText: '上架', createdAt: '2026-03-05 14:00:00' },
-        { id: 6, name: '打印服务', merchant: '打印店', category: '服务', price: 1.00, stock: 999, status: 1, statusText: '上架', createdAt: '2026-03-06 15:00:00' },
-        { id: 7, name: '咖啡', merchant: '咖啡店', category: '饮料', price: 15.00, stock: 30, status: 1, statusText: '上架', createdAt: '2026-03-07 16:00:00' },
-        { id: 8, name: '教材', merchant: '书店', category: '图书', price: 50.00, stock: 10, status: 0, statusText: '下架', createdAt: '2026-03-08 17:00:00' },
-        { id: 9, name: '生日蛋糕', merchant: '蛋糕店', category: '食品', price: 100.00, stock: 5, status: 1, statusText: '上架', createdAt: '2026-03-09 18:00:00' },
-        { id: 10, name: '耳环', merchant: '饰品店', category: '饰品', price: 20.00, stock: 15, status: 1, statusText: '上架', createdAt: '2026-03-10 19:00:00' }
-      ];
+      // 调用真实API获取数据
+      const params = {
+        page: this.data.page,
+        pageSize: this.data.pageSize,
+        merchant_id: this.data.merchantFilter,
+        category_id: this.data.categoryFilter,
+        status: this.data.statusFilter,
+        keyword: this.data.searchKeyword
+      };
       
-      const total = 100;
+      const res = await getAdminProductList(params);
+      
+      const products = res.data.list.map(product => ({
+        id: product.id,
+        name: product.name,
+        merchant: product.merchant_name,
+        category: product.category_name,
+        price: product.price,
+        stock: product.stock,
+        status: product.status,
+        statusText: product.status === 1 ? '上架' : '下架',
+        createdAt: product.created_at
+      }));
+      
+      const total = res.data.total;
       const hasMore = this.data.page * this.data.pageSize < total;
       
       this.setData({
@@ -79,6 +91,13 @@ Page({
   },
 
   /**
+   * 搜索关键词变化
+   */
+  searchKeyword(e) {
+    this.setData({ searchKeyword: e.detail.value });
+  },
+
+  /**
    * 搜索商品
    */
   searchProducts() {
@@ -87,9 +106,28 @@ Page({
   },
 
   /**
-   * 筛选商品
+   * 商家筛选变化
    */
-  filterProducts() {
+  merchantFilter(e) {
+    this.setData({ merchantFilter: e.detail.value });
+    this.setData({ page: 1, products: [] });
+    this.loadProducts();
+  },
+
+  /**
+   * 分类筛选变化
+   */
+  categoryFilter(e) {
+    this.setData({ categoryFilter: e.detail.value });
+    this.setData({ page: 1, products: [] });
+    this.loadProducts();
+  },
+
+  /**
+   * 状态筛选变化
+   */
+  statusFilter(e) {
+    this.setData({ statusFilter: e.detail.value });
     this.setData({ page: 1, products: [] });
     this.loadProducts();
   },
@@ -98,13 +136,17 @@ Page({
    * 选择商品
    */
   selectProduct(e) {
-    const productId = e.currentTarget.dataset.id;
+    const productId = e.detail.value[0];
     let selectedProducts = this.data.selectedProducts;
     
-    if (selectedProducts.includes(productId)) {
-      selectedProducts = selectedProducts.filter(id => id !== productId);
+    if (productId) {
+      if (!selectedProducts.includes(productId)) {
+        selectedProducts.push(productId);
+      }
     } else {
-      selectedProducts.push(productId);
+      // 取消选择，需要找到当前取消的商品ID
+      const currentId = e.currentTarget.dataset.id;
+      selectedProducts = selectedProducts.filter(id => id !== currentId);
     }
     
     this.setData({ selectedProducts });

@@ -57,7 +57,7 @@
     <view class="table-body">
       <view wx:for="{{users}}" wx:key="id" class="table-row">
         <view class="table-col select-col">
-          <checkbox-group bindchange="selectUser">
+          <checkbox-group bindchange="selectUser" data-id="{{item.id}}">
             <label class="checkbox-label">
               <checkbox value="{{item.id}}" checked="{{selectedUsers.includes(item.id)}}" />
             </label>

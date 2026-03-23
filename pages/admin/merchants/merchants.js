@@ -1,4 +1,6 @@
 // pages/admin/merchants/merchants.js
+const { getAdminMerchantList } = require('../../../utils/api');
+
 Page({
   /**
    * 页面的初始数据
@@ -47,21 +49,31 @@ Page({
     this.setData({ loading: true });
     
     try {
-      // 模拟数据，实际项目中应调用API
-      const merchants = [
-        { id: 1, name: '校园餐厅', owner: '张三', phone: '13800138000', address: '校园内1号楼', status: 1, statusText: '营业中', auditStatus: 2, auditStatusText: '已通过', createdAt: '2026-03-01 10:00:00' },
-        { id: 2, name: '校园超市', owner: '李四', phone: '13900139000', address: '校园内2号楼', status: 0, statusText: '休息中', auditStatus: 2, auditStatusText: '已通过', createdAt: '2026-03-02 11:00:00' },
-        { id: 3, name: '文具店', owner: '王五', phone: '13700137000', address: '校园内3号楼', status: 1, statusText: '营业中', auditStatus: 1, auditStatusText: '待审核', createdAt: '2026-03-03 12:00:00' },
-        { id: 4, name: '奶茶店', owner: '赵六', phone: '13600136000', address: '校园内4号楼', status: 1, statusText: '营业中', auditStatus: 2, auditStatusText: '已通过', createdAt: '2026-03-04 13:00:00' },
-        { id: 5, name: '水果店', owner: '钱七', phone: '13500135000', address: '校园内5号楼', status: 1, statusText: '营业中', auditStatus: 3, auditStatusText: '已拒绝', createdAt: '2026-03-05 14:00:00' },
-        { id: 6, name: '打印店', owner: '孙八', phone: '13400134000', address: '校园内6号楼', status: 1, statusText: '营业中', auditStatus: 2, auditStatusText: '已通过', createdAt: '2026-03-06 15:00:00' },
-        { id: 7, name: '咖啡店', owner: '周九', phone: '13300133000', address: '校园内7号楼', status: 1, statusText: '营业中', auditStatus: 1, auditStatusText: '待审核', createdAt: '2026-03-07 16:00:00' },
-        { id: 8, name: '书店', owner: '吴十', phone: '13200132000', address: '校园内8号楼', status: 0, statusText: '休息中', auditStatus: 2, auditStatusText: '已通过', createdAt: '2026-03-08 17:00:00' },
-        { id: 9, name: '蛋糕店', owner: '郑一', phone: '13100131000', address: '校园内9号楼', status: 1, statusText: '营业中', auditStatus: 2, auditStatusText: '已通过', createdAt: '2026-03-09 18:00:00' },
-        { id: 10, name: '饰品店', owner: '王二', phone: '13000130000', address: '校园内10号楼', status: 1, statusText: '营业中', auditStatus: 2, auditStatusText: '已通过', createdAt: '2026-03-10 19:00:00' }
-      ];
+      // 调用真实API获取数据
+      const params = {
+        page: this.data.page,
+        pageSize: this.data.pageSize,
+        status: this.data.statusFilter,
+        audit_status: this.data.auditFilter,
+        keyword: this.data.searchKeyword
+      };
       
-      const total = 50;
+      const res = await getAdminMerchantList(params);
+      
+      const merchants = res.data.list.map(merchant => ({
+        id: merchant.id,
+        name: merchant.name,
+        owner: merchant.owner,
+        phone: merchant.phone,
+        address: merchant.address,
+        status: merchant.status,
+        statusText: merchant.status === 1 ? '营业中' : '休息中',
+        auditStatus: merchant.audit_status,
+        auditStatusText: merchant.audit_status === 1 ? '待审核' : merchant.audit_status === 2 ? '已通过' : '已拒绝',
+        createdAt: merchant.created_at
+      }));
+      
+      const total = res.data.total;
       const hasMore = this.data.page * this.data.pageSize < total;
       
       this.setData({
@@ -78,6 +90,13 @@ Page({
   },
 
   /**
+   * 搜索关键词变化
+   */
+  searchKeyword(e) {
+    this.setData({ searchKeyword: e.detail.value });
+  },
+
+  /**
    * 搜索商家
    */
   searchMerchants() {
@@ -86,9 +105,19 @@ Page({
   },
 
   /**
-   * 筛选商家
+   * 状态筛选变化
    */
-  filterMerchants() {
+  statusFilter(e) {
+    this.setData({ statusFilter: e.detail.value });
+    this.setData({ page: 1, merchants: [] });
+    this.loadMerchants();
+  },
+
+  /**
+   * 审核状态筛选变化
+   */
+  auditFilter(e) {
+    this.setData({ auditFilter: e.detail.value });
     this.setData({ page: 1, merchants: [] });
     this.loadMerchants();
   },
@@ -97,13 +126,17 @@ Page({
    * 选择商家
    */
   selectMerchant(e) {
-    const merchantId = e.currentTarget.dataset.id;
+    const merchantId = e.detail.value[0];
     let selectedMerchants = this.data.selectedMerchants;
     
-    if (selectedMerchants.includes(merchantId)) {
-      selectedMerchants = selectedMerchants.filter(id => id !== merchantId);
+    if (merchantId) {
+      if (!selectedMerchants.includes(merchantId)) {
+        selectedMerchants.push(merchantId);
+      }
     } else {
-      selectedMerchants.push(merchantId);
+      // 取消选择，需要找到当前取消的商家ID
+      const currentId = e.currentTarget.dataset.id;
+      selectedMerchants = selectedMerchants.filter(id => id !== currentId);
     }
     
     this.setData({ selectedMerchants });

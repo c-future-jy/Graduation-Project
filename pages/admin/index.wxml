@@ -6,9 +6,13 @@
       <text class="logo">校园服务管理后台</text>
     </view>
     <view class="header-right">
-      <image class="avatar" src="{{userInfo.avatarUrl}}" mode="aspectFill"></image>
-      <text class="user-name">{{userInfo.nickName}}</text>
-      <button class="logout-btn" bindtap="logout">退出</button>
+      <view class="user-info">
+        <image class="avatar" src="{{userInfo.avatarUrl}}" mode="aspectFill"></image>
+        <view class="user-details">
+          <text class="user-name">{{userInfo.nickName}}</text>
+          <text class="user-role">管理员</text>
+        </view>
+      </view>
     </view>
   </view>
 
@@ -16,44 +20,61 @@
   <view class="admin-content">
     <!-- 左侧菜单 -->
     <view class="admin-sidebar">
-      <view 
-        wx:for="{{menuList}}" 
-        wx:key="id"
-        class="menu-item {{activeTab === item.id ? 'active' : ''}}"
-        data-id="{{item.id}}"
-        data-url="{{item.url}}"
-        bindtap="switchMenu"
-      >
-        <text class="menu-icon">{{item.icon}}</text>
-        <text class="menu-name">{{item.name}}</text>
+      <!-- 顶部LOGO区域 
+      <view class="sidebar-header">
+        <text class="logo">校园服务管理</text>
+      </view>-->
+      
+      <!-- 中间菜单区域 -->
+      <view wx:for="{{menuSections}}" wx:key="title" class="menu-section">
+        <view class="section-title">{{item.title}}</view>
+        <view 
+          wx:for="{{item.items}}" 
+          wx:key="id"
+          class="menu-item {{activeTab === item.id ? 'active' : ''}}"
+          data-id="{{item.id}}"
+          data-url="{{item.url}}"
+          bindtap="switchMenu"
+        >
+          <text class="menu-name">{{item.name}}</text>
+        </view>
+      </view>
+      
+      <!-- 底部区域 -->
+      <view class="sidebar-footer">
+        <view class="footer-button" bindtap="logout">
+          <text class="menu-name">退出登录</text>
+        </view>
       </view>
     </view>
 
     <!-- 右侧内容区 -->
     <view class="admin-main">
       <view class="welcome-section">
-        <text class="welcome-title">欢迎回来，{{userInfo.nickName}}</text>
-        <text class="welcome-desc">今天是 {{today}}，祝您工作愉快！</text>
+        <text class="welcome-title">👋 欢迎回来，{{userInfo.nickName}}！</text>
+        <text class="welcome-datetime">{{today}}</text>
+        <text class="welcome-datetime">{{weekday}} {{currentTime}}</text>
+        <text class="welcome-blessing">祝您工作顺利！</text>
       </view>
       <view class="dashboard-preview">
         <text class="preview-title">管理概览</text>
         <view class="preview-cards">
-          <view class="preview-card">
+          <view class="preview-card" bindtap="goToPage" data-url="/pages/admin/users/users">
             <text class="card-icon">👥</text>
             <text class="card-title">用户管理</text>
             <text class="card-desc">管理平台用户账号</text>
           </view>
-          <view class="preview-card">
+          <view class="preview-card" bindtap="goToPage" data-url="/pages/admin/merchants/merchants">
             <text class="card-icon">🏪</text>
             <text class="card-title">商家管理</text>
             <text class="card-desc">审核和管理商家</text>
           </view>
-          <view class="preview-card">
+          <view class="preview-card" bindtap="goToPage" data-url="/pages/admin/products/products">
             <text class="card-icon">📦</text>
             <text class="card-title">商品管理</text>
             <text class="card-desc">管理平台商品</text>
           </view>
-          <view class="preview-card">
+          <view class="preview-card" bindtap="goToPage" data-url="/pages/admin/orders/orders">
             <text class="card-icon">📋</text>
             <text class="card-title">订单管理</text>
             <text class="card-desc">处理平台订单</text>
