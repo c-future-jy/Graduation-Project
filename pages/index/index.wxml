@@ -96,7 +96,7 @@
             <text class="merchant-sales">销量 {{item.sales || 0}}</text>
           </view>
         </view>
-    </view>
+      </view>
     </view>
   </view>
 </view>

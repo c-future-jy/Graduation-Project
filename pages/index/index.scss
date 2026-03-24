@@ -184,13 +184,20 @@ page {
         border-radius: 12rpx;
         transition: all 0.3s ease;
         width: 120rpx;
+        touch-action: manipulation;
         
         &:last-child {
           margin-right: 0;
         }
         
+        &:active {
+          background-color: #f5f5f5;
+          transform: scale(0.98);
+        }
+        
         &.active {
           color: #f3514f;
+          background-color: #fff3e0;
         }
         
         .category-icon {
@@ -198,16 +205,35 @@ page {
           height: 60rpx;
           border-radius: 8rpx;
           margin-bottom: 8rpx;
+          transition: all 0.3s ease;
+        }
+        
+        &.active .category-icon {
+          transform: scale(1.1);
         }
         
         text {
           font-size: 24rpx;
           color: #333;
           text-align: center;
+          position: relative;
+          transition: all 0.3s ease;
         }
         
         &.active text {
           font-weight: bold;
+        }
+        
+        &.active text::after {
+          content: '';
+          position: absolute;
+          bottom: -4rpx;
+          left: 50%;
+          transform: translateX(-50%);
+          width: 32rpx;
+          height: 4rpx;
+          background-color: #f3514f;
+          border-radius: 2rpx;
         }
       }
   }

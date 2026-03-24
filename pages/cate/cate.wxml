@@ -3,7 +3,7 @@
   <view class="left-nav">
     <view 
       wx:for="{{categories}}" 
-      wx:key="{{item.id}}"
+      wx:key="id"
       class="nav-item {{currentCategory === item.id ? 'active' : ''}}"
       bindtap="switchCategory"
       data-id="{{item.id}}"
@@ -23,7 +23,7 @@
       <scroll-view scroll-x="true" class="filter-scroll">
         <view 
           wx:for="{{filters}}" 
-          wx:key="{{item.id}}"
+          wx:key="id"
           class="filter-item {{currentFilter === item.id ? 'active' : ''}}"
           bindtap="switchFilter"
           data-id="{{item.id}}"
@@ -66,7 +66,7 @@
       <view wx:else class="merchants-container">
         <view 
           wx:for="{{merchants}}" 
-          wx:key="{{item.id}}"
+          wx:key="id"
           class="merchant-card {{item.isClosed ? 'closed' : ''}}"
           bindtap="goToMerchant"
           data-id="{{item.id}}"
