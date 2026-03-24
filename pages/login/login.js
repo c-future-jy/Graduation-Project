@@ -130,13 +130,18 @@ Page({
           // 4. 存储token和用户信息
           wx.setStorageSync('token', res.data.token);
           wx.setStorageSync('userInfo', res.data.user);
-          
+
           // 5. 根据用户角色跳转到相应页面
           const user = res.data.user;
           if (user.role === 3) {
             // 管理员跳转到管理后台
             wx.redirectTo({
               url: '/pages/admin/index'
+            });
+          } else if (user.role === 2) {
+            //商家跳转到商家中心
+            wx.redirectTo({
+              url: '/pages/merchant/index/index'
             });
           } else {
             // 学生和商家跳转到首页

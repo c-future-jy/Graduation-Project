@@ -1,0 +1,74 @@
+<!--pages/merchant/index/index.wxml-->
+<view class="merchant-home">
+  <!-- 店铺信息区块 -->
+  <view class="shop-info-card">
+    <view class="shop-info-header">
+      <view class="shop-name">{{shopInfo.name}}</view>
+      <view class="shop-status {{shopInfo.status === 1 ? 'open' : 'closed'}}">
+        {{shopInfo.status === 1 ? '营业中' : '休息中'}}
+        <view class="status-indicator {{shopInfo.status === 1 ? 'open' : 'closed'}}"></view>
+      </view>
+    </view>
+    <view class="shop-info-details">
+      <view class="info-item">
+        <text class="info-label">店铺地址：</text>
+        <text class="info-value">{{shopInfo.address}}</text>
+      </view>
+      <view class="info-item">
+        <text class="info-label">联系电话：</text>
+        <text class="info-value">{{shopInfo.phone}}</text>
+      </view>
+      <view class="info-item">
+        <text class="info-label">店铺描述：</text>
+        <text class="info-value">{{shopInfo.description || '暂无描述'}}</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 数据统计区块 -->
+  <view class="stats-section">
+    <view class="stats-title">数据统计</view>
+    <view class="stats-cards">
+      <view class="stat-card">
+        <view class="stat-icon goods-icon">📦</view>
+        <view class="stat-content">
+          <view class="stat-value">{{stats.productCount}}</view>
+          <view class="stat-label">商品数量</view>
+        </view>
+      </view>
+      <view class="stat-card">
+        <view class="stat-icon order-icon">📋</view>
+        <view class="stat-content">
+          <view class="stat-value">{{stats.orderCount}}</view>
+          <view class="stat-label">订单数量</view>
+        </view>
+      </view>
+      <view class="stat-card">
+        <view class="stat-icon today-icon">📅</view>
+        <view class="stat-content">
+          <view class="stat-value">{{stats.todayOrderCount}}</view>
+          <view class="stat-label">今日订单</view>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 功能入口区块 -->
+  <view class="function-section">
+    <view class="function-title">功能管理</view>
+    <view class="function-buttons">
+      <view class="function-btn" bindtap="goToProducts">
+        <view class="btn-icon">🛍️</view>
+        <view class="btn-text">商品管理</view>
+      </view>
+      <view class="function-btn" bindtap="goToOrders">
+        <view class="btn-icon">📋</view>
+        <view class="btn-text">订单管理</view>
+      </view>
+      <view class="function-btn" bindtap="goToProfile">
+        <view class="btn-icon">🏪</view>
+        <view class="btn-text">店铺信息</view>
+      </view>
+    </view>
+  </view>
+</view>

@@ -840,3 +840,32 @@ function getStatusText(status) {
   };
   return statusMap[status] || '未知状态';
 };
+
+// 获取订单数量统计
+exports.getOrderCounts = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    
+    // 查询各状态订单数量
+    const [statusCounts] = await pool.query(
+      'SELECT status, COUNT(*) as count FROM `order` WHERE user_id = ? GROUP BY status',
+      [userId]
+    );
+    
+    const statusCountMap = {};
+    statusCounts.forEach(item => {
+      statusCountMap[item.status] = item.count;
+    });
+    
+    successResponse(res, {
+      pendingPay: statusCountMap[0] || 0,           // 待支付
+      pendingDeliver: statusCountMap[1] || 0,       // 待发货
+      delivered: statusCountMap[2] || 0,            // 已发货
+      completed: statusCountMap[3] || 0,            // 已完成
+      cancelled: statusCountMap[4] || 0             // 已取消
+    });
+  } catch (error) {
+    console.error('获取订单数量失败:', error);
+    errorResponse(res, 500, '服务器内部错误');
+  }
+};

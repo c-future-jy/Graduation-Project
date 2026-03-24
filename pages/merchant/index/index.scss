@@ -1,0 +1,248 @@
+/* pages/merchant/index/index.wxss */
+page {
+  background-color: #f5f5f5;
+  padding: 20rpx;
+  box-sizing: border-box;
+  min-height: 100vh;
+}
+
+.merchant-home {
+  display: flex;
+  flex-direction: column;
+  gap: 20rpx;
+}
+
+/* 店铺信息卡片 */
+.shop-info-card {
+  background-color: #fff;
+  border-radius: 16rpx;
+  padding: 24rpx;
+  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.05);
+}
+
+.shop-info-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20rpx;
+}
+
+.shop-name {
+  font-size: 36rpx;
+  font-weight: bold;
+  color: #333;
+}
+
+.shop-status {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  font-size: 24rpx;
+  padding: 6rpx 16rpx;
+  border-radius: 16rpx;
+}
+
+.shop-status.open {
+  color: #4CAF50;
+  background-color: #E8F5E8;
+}
+
+.shop-status.closed {
+  color: #F44336;
+  background-color: #FFEBEE;
+}
+
+.status-indicator {
+  width: 12rpx;
+  height: 12rpx;
+  border-radius: 50%;
+}
+
+.status-indicator.open {
+  background-color: #4CAF50;
+}
+
+.status-indicator.closed {
+  background-color: #F44336;
+}
+
+.shop-info-details {
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+}
+
+.info-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12rpx;
+}
+
+.info-label {
+  font-size: 24rpx;
+  color: #666;
+  width: 120rpx;
+  flex-shrink: 0;
+}
+
+.info-value {
+  font-size: 24rpx;
+  color: #333;
+  flex: 1;
+  line-height: 1.4;
+}
+
+/* 数据统计区块 */
+.stats-section {
+  background-color: #fff;
+  border-radius: 16rpx;
+  padding: 24rpx;
+  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.05);
+}
+
+.stats-title {
+  font-size: 32rpx;
+  font-weight: bold;
+  color: #333;
+  margin-bottom: 20rpx;
+}
+
+.stats-cards {
+  display: flex;
+  gap: 16rpx;
+}
+
+.stat-card {
+  flex: 1;
+  background-color: #f9f9f9;
+  border-radius: 12rpx;
+  padding: 20rpx;
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  transition: all 0.3s ease;
+}
+
+.stat-card:hover {
+  transform: translateY(-4rpx);
+  box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.1);
+}
+
+.stat-icon {
+  font-size: 48rpx;
+  width: 80rpx;
+  height: 80rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #f0f0f0;
+  border-radius: 12rpx;
+}
+
+.goods-icon {
+  background-color: #E3F2FD;
+}
+
+.order-icon {
+  background-color: #FFF3E0;
+}
+
+.today-icon {
+  background-color: #E8F5E8;
+}
+
+.stat-content {
+  flex: 1;
+}
+
+.stat-value {
+  font-size: 36rpx;
+  font-weight: bold;
+  color: #333;
+  margin-bottom: 4rpx;
+}
+
+.stat-label {
+  font-size: 20rpx;
+  color: #666;
+}
+
+/* 功能入口区块 */
+.function-section {
+  background-color: #fff;
+  border-radius: 16rpx;
+  padding: 24rpx;
+  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.05);
+}
+
+.function-title {
+  font-size: 32rpx;
+  font-weight: bold;
+  color: #333;
+  margin-bottom: 20rpx;
+}
+
+.function-buttons {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16rpx;
+}
+
+.function-btn {
+  background-color: #f9f9f9;
+  border-radius: 12rpx;
+  padding: 32rpx 16rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12rpx;
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+
+.function-btn:hover {
+  transform: translateY(-4rpx);
+  box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.1);
+  background-color: #f0f0f0;
+}
+
+.function-btn:active {
+  transform: translateY(0);
+}
+
+.btn-icon {
+  font-size: 48rpx;
+  margin-bottom: 8rpx;
+}
+
+.btn-text {
+  font-size: 24rpx;
+  color: #333;
+  text-align: center;
+}
+
+/* 响应式设计 */
+@media (max-width: 750rpx) {
+  .stats-cards {
+    flex-direction: column;
+  }
+  
+  .stat-card {
+    flex-direction: row;
+  }
+  
+  .function-buttons {
+    grid-template-columns: 1fr;
+  }
+  
+  .function-btn {
+    flex-direction: row;
+    justify-content: flex-start;
+    padding: 24rpx;
+  }
+  
+  .btn-icon {
+    margin-bottom: 0;
+    margin-right: 16rpx;
+  }
+}
