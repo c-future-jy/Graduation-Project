@@ -59,7 +59,7 @@ Page({
       
       const res = await getAdminUserList(params);
       
-      const users = res.data.list.map(user => ({
+      const users = res.data.users.map(user => ({
         id: user.id,
         nickname: user.nickname,
         phone: user.phone,
@@ -70,7 +70,7 @@ Page({
         createdAt: user.created_at
       }));
       
-      const total = res.data.total;
+      const total = res.data.pagination.total;
       const hasMore = this.data.page * this.data.pageSize < total;
       
       this.setData({

@@ -88,6 +88,56 @@ exports.deleteMerchant = async (req, res, next) => {
   }
 };
 
+// 申请成为商家
+exports.applyMerchant = async (req, res, next) => {
+  try {
+    const { nickname, phone } = req.body;
+    const user_id = req.user.id;
+    const adminId = 1; // 假设管理员ID为1
+    
+    // 验证参数
+    if (!nickname) {
+      return res.status(400).json({ success: false, message: '缺少必要参数' });
+    }
+    
+    // 检查用户是否已经是商家
+    const [existingUsers] = await pool.query('SELECT role FROM user WHERE id = ?', [user_id]);
+    if (existingUsers.length === 0) {
+      return res.status(404).json({ success: false, message: '用户不存在' });
+    }
+    
+    if (existingUsers[0].role === 2) {
+      return res.status(400).json({ success: false, message: '您已经是商家' });
+    }
+    
+    // 检查是否已有未处理的商家记录
+    const [existingMerchants] = await pool.query('SELECT id FROM merchant WHERE owner_user_id = ?', [user_id]);
+    
+    if (existingMerchants.length > 0) {
+      return res.status(400).json({ success: false, message: '您已经提交了申请，正在审核中' });
+    }
+    
+    // 创建商家记录（待审核状态）
+    const [result] = await pool.query(
+      'INSERT INTO merchant (owner_user_id, name, status, audit_status, created_at, updated_at) VALUES (?, ?, ?, ?, NOW(), NOW())',
+      [user_id, nickname, 0, 0]
+    );
+    
+    // 记录操作日志
+    await pool.query(
+      'INSERT INTO admin_operation_log (admin_id, operation, target_user_id, created_at) VALUES (?, ?, ?, NOW())',
+      [adminId, '用户申请成为商家', user_id]
+    );
+    
+    res.json({ success: true, message: '申请提交成功，等待管理员审核' });
+  } catch (error) {
+    console.error('申请成为商家失败:', error);
+    res.status(500).json({ success: false, message: '服务器内部错误' });
+  }
+};
+
+
+
 /**
  * 获取商家列表（管理员）
  * GET /api/admin/merchants
@@ -283,6 +333,22 @@ exports.auditMerchant = async (req, res, next) => {
         'UPDATE merchant SET status = 1 WHERE id = ?',
         [id]
       );
+      
+      // 获取商家店主ID
+      const [merchants] = await pool.query('SELECT owner_user_id FROM merchant WHERE id = ?', [id]);
+      if (merchants.length > 0) {
+        const ownerUserId = merchants[0].owner_user_id;
+        // 更新用户角色为商家
+        await pool.query(
+          'UPDATE user SET role = 2, merchant_id = ? WHERE id = ?',
+          [id, ownerUserId]
+        );
+        // 通知商家审核通过
+        await pool.query(
+          'INSERT INTO notification (user_id, title, content, created_at) VALUES (?, ?, ?, NOW())',
+          [ownerUserId, '商家审核结果', '您的商家审核已通过，现在可以登录商家后台管理您的店铺']
+        );
+      }
     }
     
     // 记录操作日志

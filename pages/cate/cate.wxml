@@ -33,12 +33,12 @@
       </scroll-view>
     </view>
 
-    <!-- 拼单引导 -->
+    <!-- 拼单引导 
     <view wx:if="{{showGroupBuy}}" class="group-buy-container">
       <image class="group-buy-icon" src="../../assets/images/message.jpg" mode="aspectFit" />
       <text class="group-buy-text">同宿舍正在拼单，一起凑单更划算！</text>
       <button class="group-buy-btn" bindtap="goToGroupBuy">查看详情</button>
-    </view>
+    </view>-->
 
     <!-- 内容区域 -->
     <scroll-view scroll-y="true" class="content-scroll">

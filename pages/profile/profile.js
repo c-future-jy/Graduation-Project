@@ -16,7 +16,8 @@ Page({
     },
     pendingPayCount: 0,           // 待支付订单数量
     pendingDeliverCount: 0,       // 待发货订单数量
-    unreadNoticeCount: 0          // 未读消息数量
+    unreadNoticeCount: 0,         // 未读消息数量
+    submitting: false             // 防止重复提交
   },
 
   /**
@@ -281,5 +282,76 @@ Page({
       return false;
     }
     return true;
+  },
+
+  /**
+   * 申请成为商家
+   */
+  applyMerchant() {
+    if (!this.checkAuth()) return;
+    
+    // 弹出确认弹窗
+    wx.showModal({
+      title: '申请成为商家',
+      content: '是否确定申请成为商家？',
+      success: (res) => {
+        if (res.confirm) {
+          // 用户点击确认，提交申请
+          this.submitMerchantApplication();
+        }
+      }
+    });
+  },
+
+  /**
+   * 提交商家申请
+   */
+  submitMerchantApplication() {
+    // 防止重复提交
+    if (this.data.submitting) return;
+    
+    this.setData({ submitting: true });
+    wx.showLoading({ title: '提交申请中...' });
+    
+    const token = wx.getStorageSync('token');
+    const userInfo = wx.getStorageSync('userInfo');
+    wx.request({
+      url: 'http://localhost:3000/api/merchants/apply',
+      method: 'POST',
+      header: {
+        'Authorization': 'Bearer ' + token,
+        'Content-Type': 'application/json'
+      },
+      data: {
+        user_id: userInfo.id || this.data.userInfo.id,
+        nickname: userInfo.nickname || userInfo.nickName || this.data.userInfo.nickName,
+        phone: userInfo.phone || this.data.userInfo.phone
+      },
+      success: (res) => {
+        this.setData({ submitting: false });
+        wx.hideLoading();
+        if (res.statusCode === 200 && res.data.success) {
+          wx.showToast({
+            title: '申请提交成功，等待管理员审核',
+            icon: 'success',
+            duration: 2000
+          });
+        } else {
+          wx.showToast({
+            title: res.data.message || '申请提交失败',
+            icon: 'none'
+          });
+        }
+      },
+      fail: (err) => {
+        this.setData({ submitting: false });
+        wx.hideLoading();
+        wx.showToast({
+          title: '网络错误，请重试',
+          icon: 'none'
+        });
+        console.error('提交商家申请失败:', err);
+      }
+    });
   }
 });

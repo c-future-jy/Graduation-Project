@@ -1,2 +1,31 @@
 <!--pages/notice/notice.wxml-->
-<text>pages/notice/notice.wxml</text>
+<view class="notice-container">
+  <!-- 页面标题 -->
+  <view class="page-header">
+    <text class="page-title">消息通知</text>
+  </view>
+  
+  <!-- 通知列表 -->
+  <view class="notice-list">
+    <view wx:if="{{loading}}" class="loading">
+      <text>加载中...</text>
+    </view>
+    
+    <view wx:else>
+      <view wx:if="{{notifications.length === 0}}" class="empty">
+        <image src="/assets/images/empty.png" mode="aspectFit" class="empty-icon" />
+        <text class="empty-text">暂无通知</text>
+      </view>
+      
+      <view wx:else>
+        <view wx:for="{{notifications}}" wx:key="id" class="notice-item">
+          <view class="notice-header">
+            <text class="notice-title">{{item.title}}</text>
+            <text class="notice-time">{{item.created_at}}</text>
+          </view>
+          <text class="notice-content">{{item.content}}</text>
+        </view>
+      </view>
+    </view>
+  </view>
+</view>

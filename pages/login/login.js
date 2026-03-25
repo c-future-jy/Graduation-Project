@@ -217,8 +217,13 @@ Page({
             wx.redirectTo({
               url: '/pages/admin/index'
             });
+          } else if (user.role === 2) {
+            // 商家跳转到商家中心
+            wx.redirectTo({
+              url: '/pages/merchant/index/index'
+            });
           } else {
-            // 学生和商家跳转到首页
+            // 学生跳转到首页
             wx.switchTab({
               url: '/pages/index/index'
             });

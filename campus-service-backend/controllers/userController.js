@@ -440,7 +440,8 @@ exports.getProfile = async (req, res, next) => {
     const userId = req.user.id;
     
     const [users] = await pool.query(
-      'SELECT id, openid, nickname, avatar_url, phone, role, created_at FROM user WHERE id = ?',
+      // 构建查询语句
+      'SELECT id, openid, nickname, avatar_url, phone, role, status, created_at FROM user WHERE id = ?',
       [userId]
     );
     
@@ -471,6 +472,7 @@ exports.updateProfile = async (req, res, next) => {
     const userId = req.user.id;
     const { nickname, avatarUrl } = req.body;
     
+    // 构建更新语句
     await pool.query(
       'UPDATE user SET nickname = ?, avatar_url = ?, updated_at = NOW() WHERE id = ?',
       [nickname, avatarUrl, userId]
@@ -494,7 +496,8 @@ exports.getUserList = async (req, res, next) => {
     const { page = 1, limit = 10, role } = req.query;
     const offset = (page - 1) * limit;
     
-    let query = 'SELECT id, openid, nickname, phone, role, created_at FROM user';
+    // 构建查询语句
+    let query = 'SELECT id, openid, nickname, phone, role, status, created_at FROM user';
     let countQuery = 'SELECT COUNT(*) as total FROM user';
     let queryParams = [];
     
