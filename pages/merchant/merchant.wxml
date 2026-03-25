@@ -1,2 +1,41 @@
 <!--pages/merchant/merchant.wxml-->
-<text>pages/merchant/merchant.wxml</text>
+<view class="merchant-detail">
+  <!-- 店铺信息头部 -->
+  <view class="shop-header" wx:if="{{shopInfo}}">
+    <view class="shop-basic-info">
+      <view class="shop-logo">
+        <image src="{{shopInfo.logo || '../../../assets/default-shop.png'}}" mode="aspectFill"></image>
+      </view>
+      <view class="shop-info">
+        <view class="shop-name">{{shopInfo.name}}</view>
+        <view class="shop-status {{shopInfo.status === 1 ? 'open' : 'closed'}}">
+          {{shopInfo.status === 1 ? '营业中' : '休息中'}}
+        </view>
+        <view class="shop-address">{{shopInfo.address}}</view>
+        <view class="shop-phone">{{shopInfo.phone}}</view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 商品列表 -->
+  <view class="products-section">
+    <view class="section-title">店铺商品</view>
+    <view class="products-list" wx:if="{{products.length > 0}}">
+      <view class="product-item" wx:for="{{products}}" wx:key="{{item.id}}" bindtap="goToProductDetail" data-id="{{item.id}}">
+        <view class="product-image">
+          <image src="{{item.image || '../../../assets/default-product.png'}}" mode="aspectFill"></image>
+        </view>
+        <view class="product-info">
+          <view class="product-name">{{item.name}}</view>
+          <view class="product-price">¥{{item.price}}</view>
+          <view class="product-stock" wx:if="{{item.stock < 10}}">
+            库存紧张: {{item.stock}}件
+          </view>
+        </view>
+      </view>
+    </view>
+    <view class="no-products" wx:else>
+      暂无商品
+    </view>
+  </view>
+</view>

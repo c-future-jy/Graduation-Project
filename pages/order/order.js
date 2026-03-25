@@ -237,7 +237,9 @@ Page({
    * 去评价
    */
   goToReview(orderId) {
-    wx.navigateTo({ url: `/pages/review/review?orderId=${orderId}` });
+    wx.navigateTo({
+      url: `/pages/feedback/feedback?order_id=${orderId}`
+    });
   },
 
   /**

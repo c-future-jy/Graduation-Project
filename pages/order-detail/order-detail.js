@@ -249,7 +249,10 @@ Page({
    * 去评价
    */
   goToReview() {
-    wx.navigateTo({ url: `/pages/review/review?orderId=${this.data.order.orderId}` });
+    const { orderInfo } = this.data;
+    wx.navigateTo({
+      url: `/pages/feedback/feedback?order_id=${orderInfo.id}&merchant_id=${orderInfo.merchant_id}`
+    });
   },
 
   /**

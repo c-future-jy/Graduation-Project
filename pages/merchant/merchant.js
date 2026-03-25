@@ -1,66 +1,97 @@
 // pages/merchant/merchant.js
+const { request } = require('../../utils/api');
+
 Page({
-
-  /**
-   * 页面的初始数据
-   */
   data: {
-
+    shopInfo: null,
+    products: [],
+    loading: true,
+    merchantId: null
   },
 
-  /**
-   * 生命周期函数--监听页面加载
-   */
-  onLoad(options) {
-
+  onLoad: function (options) {
+    // 从URL参数获取商家ID
+    this.setData({
+      merchantId: options.id
+    });
+    this.loadMerchantData();
   },
 
-  /**
-   * 生命周期函数--监听页面初次渲染完成
-   */
-  onReady() {
+  // 加载商家数据
+  loadMerchantData: function () {
+    const { merchantId } = this.data;
+    
+    if (!merchantId) {
+      wx.showToast({ title: '商家ID错误', icon: 'none' });
+      this.setData({ loading: false });
+      return;
+    }
 
+    wx.showLoading({ title: '加载中...' });
+    
+    Promise.all([
+      this.getMerchantInfo(merchantId),
+      this.getMerchantProducts(merchantId)
+    ]).then(() => {
+      this.setData({ loading: false });
+      wx.hideLoading();
+    }).catch(err => {
+      console.error('加载商家数据失败:', err);
+      wx.hideLoading();
+      wx.showToast({ title: '加载失败', icon: 'none' });
+      this.setData({ loading: false });
+    });
   },
 
-  /**
-   * 生命周期函数--监听页面显示
-   */
-  onShow() {
-
+  // 获取商家信息
+  getMerchantInfo: function (merchantId) {
+    return new Promise((resolve, reject) => {
+      request({
+        url: `/merchants/${merchantId}`,
+        method: 'GET'
+      }).then(res => {
+        if (res.success) {
+          this.setData({
+            shopInfo: res.data.merchant
+          });
+          resolve();
+        } else {
+          reject(res.message);
+        }
+      }).catch(reject);
+    });
   },
 
-  /**
-   * 生命周期函数--监听页面隐藏
-   */
-  onHide() {
-
+  // 获取商家商品列表
+  getMerchantProducts: function (merchantId) {
+    return new Promise((resolve, reject) => {
+      request({
+        url: '/products',
+        method: 'GET',
+        data: { merchant_id: merchantId, status: 1 }
+      }).then(res => {
+        if (res.success) {
+          this.setData({
+            products: res.data.products || []
+          });
+        }
+        resolve();
+      }).catch(reject);
+    });
   },
 
-  /**
-   * 生命周期函数--监听页面卸载
-   */
-  onUnload() {
-
+  // 跳转到商品详情
+  goToProductDetail: function (e) {
+    const productId = e.currentTarget.dataset.id;
+    wx.navigateTo({
+      url: `/pages/detail/detail?id=${productId}`
+    });
   },
 
-  /**
-   * 页面相关事件处理函数--监听用户下拉动作
-   */
-  onPullDownRefresh() {
-
-  },
-
-  /**
-   * 页面上拉触底事件的处理函数
-   */
-  onReachBottom() {
-
-  },
-
-  /**
-   * 用户点击右上角分享
-   */
-  onShareAppMessage() {
-
+  // 下拉刷新
+  onPullDownRefresh: function () {
+    this.loadMerchantData().then(() => {
+      wx.stopPullDownRefresh();
+    });
   }
-})
+});

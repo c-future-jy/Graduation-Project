@@ -17,6 +17,9 @@ router.get('/counts', orderController.getOrderCounts); // 获取订单数量统�
 
 // 商家订单接口
 router.get('/merchant/orders', checkRole([2]), orderController.getMerchantOrders); // 商家获取订单列表
+router.get('/merchant/orders/:id', checkRole([2]), orderController.getMerchantOrderById); // 商家获取订单详情
+router.post('/merchant/orders/:id/ship', checkRole([2]), orderController.shipOrder); // 商家发货
+router.post('/merchant/orders/:id/cancel', checkRole([2]), orderController.merchantCancelOrder); // 商家取消订单
 
 // 管理员订单接口
 router.get('/admin/orders', checkRole([3]), orderController.getAdminOrders); // 管理员获取订单列表

@@ -1,2 +1,199 @@
 <!--pages/merchant/dashboard/dashboard.wxml-->
-<text>pages/merchant/dashboard/dashboard.wxml</text>
+<view class="dashboard-container">
+  <!-- 顶部标题 -->
+  <view class="header">
+    <text class="title">商家后台</text>
+    <text class="subtitle">欢迎回来，{{merchantName}}</text>
+    <view class="refresh-btn" bindtap="refreshData">
+      <text class="refresh-icon">🔄</text>
+      <text class="refresh-text">刷新</text>
+    </view>
+  </view>
+
+  <!-- 时间范围选择 -->
+  <view class="time-range-section">
+    <view class="time-tabs">
+      <view class="tab-item {{timeRange === 'today' ? 'active' : ''}}" bindtap="switchTimeRange" data-range="today">今日</view>
+      <view class="tab-item {{timeRange === 'yesterday' ? 'active' : ''}}" bindtap="switchTimeRange" data-range="yesterday">昨日</view>
+      <view class="tab-item {{timeRange === '7' ? 'active' : ''}}" bindtap="switchTimeRange" data-range="7">7天</view>
+      <view class="tab-item {{timeRange === '30' ? 'active' : ''}}" bindtap="switchTimeRange" data-range="30">30天</view>
+      <view class="tab-item {{timeRange === 'custom' ? 'active' : ''}}" bindtap="showDatePicker">自定义</view>
+    </view>
+    <view wx:if="timeRange === 'custom'" class="custom-date-range">
+      <text>{{startDate}} 至 {{endDate}}</text>
+    </view>
+  </view>
+
+  <!-- 核心数据统计区域 -->
+  <view class="stats-section">
+    <view class="section-title">今日数据</view>
+    <view class="stats-grid">
+      <view class="stat-item">
+        <text class="stat-value">{{todayOrders}}</text>
+        <text class="stat-label">今日订单</text>
+      </view>
+      <view class="stat-item">
+        <text class="stat-value">¥{{todaySales}}</text>
+        <text class="stat-label">今日营业额</text>
+      </view>
+      <view class="stat-item">
+        <text class="stat-value">¥{{todayAvgOrder}}</text>
+        <text class="stat-label">订单均价</text>
+      </view>
+      <view class="stat-item">
+        <text class="stat-value">{{pendingOrders}}</text>
+        <text class="stat-label">待发货</text>
+      </view>
+    </view>
+
+    <view class="section-title">本月数据</view>
+    <view class="stats-grid">
+      <view class="stat-item">
+        <text class="stat-value">{{monthOrders}}</text>
+        <text class="stat-label">本月订单</text>
+      </view>
+      <view class="stat-item">
+        <text class="stat-value">¥{{monthSales}}</text>
+        <text class="stat-label">本月营业额</text>
+      </view>
+      <view class="stat-item">
+        <text class="stat-value">{{totalProducts}}</text>
+        <text class="stat-label">上架商品</text>
+      </view>
+      <view class="stat-item">
+        <text class="stat-value">{{lowStockProducts}}</text>
+        <text class="stat-label">库存预警</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 快捷操作入口 -->
+  <view class="quick-actions">
+    <view class="section-title">快捷操作</view>
+    <view class="action-grid">
+      <view class="action-item" bindtap="goToAddProduct">
+        <view class="action-icon">+</view>
+        <text class="action-text">发布新商品</text>
+      </view>
+      <view class="action-item" bindtap="goToProcessOrders">
+        <view class="action-icon">📦</view>
+        <text class="action-text">处理订单</text>
+      </view>
+      <view class="action-item" bindtap="goToInventory">
+        <view class="action-icon">📋</view>
+        <text class="action-text">库存管理</text>
+      </view>
+      <view class="action-item" bindtap="goToFeedbacks">
+        <view class="action-icon">⭐</view>
+        <text class="action-text">查看评价</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 数据趋势图表展示 -->
+  <view class="charts-section">
+    <view class="section-title">数据趋势</view>
+    
+    <!-- 订单趋势 -->
+    <view class="chart-container">
+      <text class="chart-title">订单趋势</text>
+      <view class="chart-wrapper">
+        <canvas id="orderTrendChart" canvas-id="orderTrendChart" style="width: 100%; height: 200rpx;"></canvas>
+      </view>
+    </view>
+    
+    <!-- 营业额趋势 -->
+    <view class="chart-container">
+      <text class="chart-title">营业额趋势</text>
+      <view class="chart-wrapper">
+        <canvas id="salesTrendChart" canvas-id="salesTrendChart" style="width: 100%; height: 200rpx;"></canvas>
+      </view>
+    </view>
+    
+    <!-- 商品销量排行 -->
+    <view class="chart-container">
+      <text class="chart-title">
+        商品销量排行
+        <view class="rank-tabs">
+          <view class="tab-item {{rankLimit === '5' ? 'active' : ''}}" bindtap="switchRankLimit" data-limit="5">5个</view>
+          <view class="tab-item {{rankLimit === '10' ? 'active' : ''}}" bindtap="switchRankLimit" data-limit="10">10个</view>
+        </view>
+      </text>
+      <view class="rank-list">
+        <view wx:for="{{topProducts}}" wx:key="id" class="rank-item">
+          <text class="rank-number">{{index + 1}}</text>
+          <text class="rank-product">{{item.name}}</text>
+          <text class="rank-sales">{{item.sales}}件</text>
+        </view>
+        <view wx:if="topProducts.length === 0" class="empty-state">
+          <text>暂无销售数据</text>
+        </view>
+      </view>
+    </view>
+    
+    <!-- 订单状态分布 -->
+    <view class="chart-container">
+      <text class="chart-title">订单状态分布</text>
+      <view class="chart-wrapper">
+        <canvas id="orderStatusChart" canvas-id="orderStatusChart" style="width: 100%; height: 200rpx;"></canvas>
+      </view>
+    </view>
+  </view>
+
+  <!-- 最近订单列表 -->
+  <view class="orders-section">
+    <view class="section-title">
+      <text>最近订单</text>
+      <text class="view-more" bindtap="goToOrders">查看全部</text>
+    </view>
+    <view class="order-list">
+      <view wx:for="{{recentOrders}}" wx:key="id" class="order-item" bindtap="goToOrderDetail" data-id="{{item.id}}">
+        <view class="order-header">
+          <text class="order-no">订单号: {{item.orderNo}}</text>
+          <text class="order-status" style="color: {{getStatusColor(item.status)}}">{{getStatusText(item.status)}}</text>
+        </view>
+        <view class="order-body">
+          <text class="order-time">{{item.createdAt}}</text>
+          <text class="order-amount">¥{{item.amount}}</text>
+        </view>
+      </view>
+      <view wx:if="recentOrders.length === 0" class="empty-state">
+        <text>暂无订单</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 库存预警提醒 -->
+  <view class="inventory-section">
+    <view class="section-title">
+      <text>库存预警</text>
+      <text class="view-more" bindtap="goToInventory">查看全部</text>
+    </view>
+    <view class="inventory-list">
+      <view wx:for="{{lowStockItems}}" wx:key="id" class="inventory-item">
+        <view class="inventory-info">
+          <text class="inventory-name">{{item.name}}</text>
+          <text class="inventory-stock">库存: {{item.stock}}件</text>
+        </view>
+        <button class="restock-btn" bindtap="remindRestock" data-id="{{item.id}}">提醒补货</button>
+      </view>
+      <view wx:if="lowStockItems.length === 0" class="empty-state">
+        <text>暂无库存预警</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 日期选择器 -->
+  <picker-view wx:if="showDatePicker" class="date-picker" bindchange="bindDateChange">
+    <picker-view-column>
+      <view wx:for="{{years}}" wx:key="year">{{item}}年</view>
+    </picker-view-column>
+    <picker-view-column>
+      <view wx:for="{{months}}" wx:key="month">{{item}}月</view>
+    </picker-view-column>
+    <picker-view-column>
+      <view wx:for="{{days}}" wx:key="day">{{item}}日</view>
+    </picker-view-column>
+  </picker-view>
+  <view wx:if="showDatePicker" class="date-picker-mask" bindtap="hideDatePicker"></view>
+</view>

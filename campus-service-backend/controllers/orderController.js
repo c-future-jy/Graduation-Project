@@ -467,7 +467,7 @@ exports.deleteOrder = async (req, res, next) => {
 exports.getMerchantOrders = async (req, res, next) => {
   try {
     const merchantId = req.user.merchant_id;
-    const { status, page = 1, limit = 10 } = req.query;
+    const { status, page = 1, limit = 10, keyword } = req.query;
     const offset = (page - 1) * limit;
     
     // 验证商家身份
@@ -476,24 +476,58 @@ exports.getMerchantOrders = async (req, res, next) => {
     }
     
     // 构建查询语句
-    let query = 'SELECT * FROM `order` WHERE merchant_id = ?';
-    let countQuery = 'SELECT COUNT(*) as total FROM `order` WHERE merchant_id = ?';
+    let query = `
+      SELECT 
+        o.*, 
+        u.nickname as user_nickname, 
+        u.avatar as user_avatar, 
+        u.phone as user_phone
+      FROM 
+        order o
+      LEFT JOIN 
+        user u ON o.user_id = u.id
+      WHERE 
+        o.merchant_id = ?
+    `;
+    let countQuery = `
+      SELECT 
+        COUNT(*) as total 
+      FROM 
+        order o
+      LEFT JOIN 
+        user u ON o.user_id = u.id
+      WHERE 
+        o.merchant_id = ?
+    `;
     let params = [merchantId];
     
     // 状态筛选
     if (status) {
-      query += ' AND status = ?';
-      countQuery += ' AND status = ?';
+      query += ' AND o.status = ?';
+      countQuery += ' AND o.status = ?';
       params.push(status);
     }
     
+    // 关键词搜索
+    if (keyword) {
+      query += ' AND (o.order_no LIKE ? OR u.nickname LIKE ?)';
+      countQuery += ' AND (o.order_no LIKE ? OR u.nickname LIKE ?)';
+      params.push(`%${keyword}%`, `%${keyword}%`);
+    }
+    
     // 分页和排序
-    query += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
+    query += ' ORDER BY o.created_at DESC LIMIT ? OFFSET ?';
     params.push(parseInt(limit), parseInt(offset));
     
     // 执行查询
     const [orders] = await pool.query(query, params);
     const [countResult] = await pool.query(countQuery, params.slice(0, -2));
+    
+    // 获取每个订单的商品信息
+    for (const order of orders) {
+      const [items] = await pool.query('SELECT * FROM order_item WHERE order_id = ?', [order.id]);
+      order.products = items;
+    }
     
     successResponse(res, {
       orders,
@@ -506,6 +540,185 @@ exports.getMerchantOrders = async (req, res, next) => {
     });
   } catch (error) {
     console.error('获取商家订单列表失败:', error);
+    errorResponse(res, 500, '服务器内部错误');
+  }
+};
+
+// 商家获取订单详情
+exports.getMerchantOrderById = async (req, res, next) => {
+  try {
+    const merchantId = req.user.merchant_id;
+    const orderId = req.params.id;
+    
+    // 验证商家身份
+    if (!merchantId) {
+      return errorResponse(res, 403, '商家身份验证失败');
+    }
+    
+    // 查询订单信息
+    const [orders] = await pool.query(
+      `
+        SELECT 
+          o.*, 
+          u.nickname as user_nickname, 
+          u.avatar as user_avatar, 
+          u.phone as user_phone
+        FROM 
+          order o
+        LEFT JOIN 
+          user u ON o.user_id = u.id
+        WHERE 
+          o.id = ? AND o.merchant_id = ?
+      `,
+      [orderId, merchantId]
+    );
+    
+    if (orders.length === 0) {
+      return errorResponse(res, 404, '订单不存在');
+    }
+    
+    const order = orders[0];
+    
+    // 查询订单详情
+    const [items] = await pool.query('SELECT * FROM order_item WHERE order_id = ?', [orderId]);
+    order.products = items;
+    
+    successResponse(res, {
+      order
+    });
+  } catch (error) {
+    console.error('获取订单详情失败:', error);
+    errorResponse(res, 500, '服务器内部错误');
+  }
+};
+
+// 商家发货
+exports.shipOrder = async (req, res, next) => {
+  try {
+    const merchantId = req.user.merchant_id;
+    const orderId = req.params.id;
+    
+    // 验证商家身份
+    if (!merchantId) {
+      return errorResponse(res, 403, '商家身份验证失败');
+    }
+    
+    // 检查订单是否存在
+    const [orders] = await pool.query(
+      'SELECT status, user_id FROM `order` WHERE id = ? AND merchant_id = ?',
+      [orderId, merchantId]
+    );
+    
+    if (orders.length === 0) {
+      return errorResponse(res, 404, '订单不存在');
+    }
+    
+    const order = orders[0];
+    
+    // 检查订单状态
+    if (order.status !== 1) {
+      return errorResponse(res, 400, '该订单状态不允许发货');
+    }
+    
+    // 开始事务
+    await pool.query('START TRANSACTION');
+    
+    try {
+      // 更新订单状态
+      await pool.query(
+        'UPDATE `order` SET status = 2, delivery_time = NOW(), updated_at = NOW() WHERE id = ? AND merchant_id = ?',
+        [orderId, merchantId]
+      );
+      
+      // 插入发货通知
+      await pool.query(
+        'INSERT INTO notification (user_id, title, content, created_at) VALUES (?, ?, ?, NOW())',
+        [order.user_id, '订单已发货', '您的订单已发货，请注意查收']
+      );
+      
+      // 提交事务
+      await pool.query('COMMIT');
+      
+      successResponse(res, null, '发货成功');
+    } catch (transactionError) {
+      // 回滚事务
+      await pool.query('ROLLBACK');
+      console.error('发货失败:', transactionError);
+      errorResponse(res, 500, '发货失败');
+    }
+  } catch (error) {
+    console.error('发货失败:', error);
+    errorResponse(res, 500, '服务器内部错误');
+  }
+};
+
+// 商家取消订单
+exports.merchantCancelOrder = async (req, res, next) => {
+  try {
+    const merchantId = req.user.merchant_id;
+    const orderId = req.params.id;
+    const { reason } = req.body;
+    
+    // 验证商家身份
+    if (!merchantId) {
+      return errorResponse(res, 403, '商家身份验证失败');
+    }
+    
+    // 检查订单是否存在
+    const [orders] = await pool.query(
+      'SELECT status, user_id FROM `order` WHERE id = ? AND merchant_id = ?',
+      [orderId, merchantId]
+    );
+    
+    if (orders.length === 0) {
+      return errorResponse(res, 404, '订单不存在');
+    }
+    
+    const order = orders[0];
+    
+    // 检查订单状态
+    if (order.status !== 1) {
+      return errorResponse(res, 400, '该订单状态不允许取消');
+    }
+    
+    // 开始事务
+    await pool.query('START TRANSACTION');
+    
+    try {
+      // 更新订单状态
+      await pool.query(
+        'UPDATE `order` SET status = 4, cancel_reason = ?, updated_at = NOW() WHERE id = ? AND merchant_id = ?',
+        [reason, orderId, merchantId]
+      );
+      
+      // 恢复商品库存
+      const [items] = await pool.query('SELECT product_id, quantity FROM order_item WHERE order_id = ?', [orderId]);
+      
+      for (const item of items) {
+        await pool.query(
+          'UPDATE product SET stock = stock + ? WHERE id = ?',
+          [item.quantity, item.product_id]
+        );
+      }
+      
+      // 插入取消通知
+      await pool.query(
+        'INSERT INTO notification (user_id, title, content, created_at) VALUES (?, ?, ?, NOW())',
+        [order.user_id, '订单已取消', `您的订单已被商家取消，原因：${reason || '无'}`]
+      );
+      
+      // 提交事务
+      await pool.query('COMMIT');
+      
+      successResponse(res, null, '订单已取消');
+    } catch (transactionError) {
+      // 回滚事务
+      await pool.query('ROLLBACK');
+      console.error('取消订单失败:', transactionError);
+      errorResponse(res, 500, '取消订单失败');
+    }
+  } catch (error) {
+    console.error('取消订单失败:', error);
     errorResponse(res, 500, '服务器内部错误');
   }
 };

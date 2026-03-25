@@ -1,4 +1,6 @@
 {
-  "component": true,
-  "usingComponents": {}
+  "usingComponents": {},
+  "navigationBarTitleText": "商家后台",
+  "navigationBarBackgroundColor": "#f3514f",
+  "navigationBarTextStyle": "white"
 }
