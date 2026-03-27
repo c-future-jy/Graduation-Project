@@ -153,7 +153,7 @@ Page({
   viewFeedback: function () {
     const { orderId } = this.data;
     wx.navigateTo({
-      url: `/pages/merchant/feedback/feedback?order_id=${orderId}`
+      url: `/pages/feedback/feedback?order_id=${orderId}`
     });
   },
 

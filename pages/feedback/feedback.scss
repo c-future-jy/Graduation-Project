@@ -17,6 +17,91 @@
     }
   }
 
+  .type-section {
+    background-color: #fff;
+    padding: 20rpx;
+    border-radius: 8rpx;
+    margin-bottom: 20rpx;
+
+    .type-label {
+      font-size: 28rpx;
+      color: #333;
+      margin-bottom: 20rpx;
+      display: block;
+
+      .required {
+        color: #ff3b30;
+        margin-left: 5rpx;
+      }
+    }
+
+    .type-options {
+      display: flex;
+      gap: 20rpx;
+      flex-wrap: wrap;
+
+      .type-option {
+        flex: 1;
+        min-width: 150rpx;
+        padding: 15rpx;
+        border: 1rpx solid #e5e5e5;
+        border-radius: 8rpx;
+        text-align: center;
+        font-size: 24rpx;
+        color: #333;
+        transition: all 0.3s ease;
+
+        &:hover {
+          border-color: #f3514f;
+        }
+
+        &.active {
+          background-color: #f3514f;
+          color: #fff;
+          border-color: #f3514f;
+        }
+      }
+    }
+  }
+
+  .order-section,
+  .merchant-section {
+    background-color: #fff;
+    padding: 20rpx;
+    border-radius: 8rpx;
+    margin-bottom: 20rpx;
+
+    .order-label,
+    .merchant-label {
+      font-size: 28rpx;
+      color: #333;
+      margin-bottom: 20rpx;
+      display: block;
+
+      .required {
+        color: #ff3b30;
+        margin-left: 5rpx;
+      }
+    }
+
+    .order-picker,
+    .merchant-picker {
+      width: 100%;
+
+      .picker-view {
+        padding: 15rpx;
+        border: 1rpx solid #e5e5e5;
+        border-radius: 8rpx;
+        background-color: #f9f9f9;
+
+        .picker-text {
+          font-size: 24rpx;
+          color: #333;
+        }
+      }
+    }
+  }
+
   .rating-section {
     background-color: #fff;
     padding: 20rpx;
@@ -28,15 +113,36 @@
       color: #333;
       margin-bottom: 20rpx;
       display: block;
+
+      .required {
+        color: #ff3b30;
+        margin-left: 5rpx;
+      }
     }
 
-    .rating-stars {
+    .rating-input {
       display: flex;
+      align-items: center;
       gap: 20rpx;
 
-      .star {
-        width: 60rpx;
-        height: 60rpx;
+      .rating-input-field {
+        flex: 1;
+        padding: 15rpx;
+        border: 1rpx solid #e5e5e5;
+        border-radius: 8rpx;
+        font-size: 24rpx;
+        color: #333;
+        text-align: center;
+
+        &:focus {
+          border-color: #f3514f;
+          outline: none;
+        }
+      }
+
+      .rating-hint {
+        font-size: 20rpx;
+        color: #999;
       }
     }
   }
@@ -52,17 +158,23 @@
       color: #333;
       margin-bottom: 20rpx;
       display: block;
+
+      .required {
+        color: #ff3b30;
+        margin-left: 5rpx;
+      }
     }
 
     .content-input {
       width: 100%;
-      height: 200rpx;
+      min-height: 200rpx;
       border: 1rpx solid #e5e5e5;
       border-radius: 8rpx;
       padding: 15rpx;
       font-size: 24rpx;
       color: #333;
       resize: none;
+      line-height: 1.5;
     }
 
     .content-count {
@@ -70,6 +182,11 @@
       color: #999;
       text-align: right;
       margin-top: 10rpx;
+      transition: color 0.3s ease;
+
+      &.over-limit {
+        color: #ff3b30;
+      }
     }
   }
 
@@ -99,6 +216,11 @@
         display: flex;
         justify-content: center;
         align-items: center;
+        transition: all 0.3s ease;
+
+        &:hover {
+          border-color: #ff9500;
+        }
 
         .upload-icon {
           font-size: 48rpx;
@@ -112,6 +234,7 @@
         height: 120rpx;
         border-radius: 8rpx;
         overflow: hidden;
+        animation: fadeIn 0.3s ease;
 
         .uploaded-image {
           width: 100%;
@@ -129,6 +252,11 @@
           display: flex;
           justify-content: center;
           align-items: center;
+          transition: all 0.3s ease;
+
+          &:hover {
+            background-color: rgba(255, 59, 48, 0.8);
+          }
 
           text {
             color: #fff;
@@ -151,6 +279,23 @@
       border-radius: 8rpx;
       font-size: 28rpx;
       font-weight: bold;
+      transition: all 0.3s ease;
+
+      &:disabled {
+        background-color: #ccc;
+      }
     }
+  }
+}
+
+/* 动画效果 */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
   }
 }

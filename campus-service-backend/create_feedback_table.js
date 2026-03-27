@@ -2,30 +2,33 @@ const { pool } = require('./config/db');
 
 async function createFeedbackTable() {
   try {
-    // 创建评价表
+    // 创建反馈表
     await pool.query(`
       CREATE TABLE IF NOT EXISTS feedback (
         id INT AUTO_INCREMENT PRIMARY KEY,
-        order_id INT NOT NULL,
+        type TINYINT NOT NULL COMMENT '1-订单评价, 2-商家评价, 3-平台反馈',
         user_id INT NOT NULL,
-        merchant_id INT NOT NULL,
-        product_id INT NOT NULL,
-        rating TINYINT NOT NULL COMMENT '1-5星',
-        content VARCHAR(500),
-        image VARCHAR(255),
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (order_id) REFERENCES \`order\`(id) ON DELETE CASCADE,
+        order_id INT NULL COMMENT '订单ID，当type=1时必填',
+        merchant_id INT NULL COMMENT '商家ID，当type=2时必填',
+        rating TINYINT NULL COMMENT '1-5星，可为null',
+        content VARCHAR(500) NOT NULL,
+        create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+        reply VARCHAR(500) NULL,
+        reply_time DATETIME NULL,
+        reply_user_id INT NULL,
+        status TINYINT DEFAULT 0 COMMENT '0-未处理, 1-已回复',
         FOREIGN KEY (user_id) REFERENCES user(id) ON DELETE CASCADE,
-        FOREIGN KEY (merchant_id) REFERENCES merchant(id) ON DELETE CASCADE,
-        FOREIGN KEY (product_id) REFERENCES product(id) ON DELETE CASCADE
+        FOREIGN KEY (order_id) REFERENCES \`order\`(id) ON DELETE SET NULL,
+        FOREIGN KEY (merchant_id) REFERENCES merchant(id) ON DELETE SET NULL,
+        FOREIGN KEY (reply_user_id) REFERENCES user(id) ON DELETE SET NULL
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
 
     // 索引会在表创建时自动添加外键索引
 
-    console.log('评价表创建成功');
+    console.log('反馈表创建成功');
   } catch (error) {
-    console.error('创建评价表失败:', error);
+    console.error('创建反馈表失败:', error);
   } finally {
     pool.end();
   }

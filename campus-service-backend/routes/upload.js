@@ -43,4 +43,7 @@ const upload = multer({
 // 上传头像
 router.post('/avatar', auth, upload.single('avatar'), uploadController.uploadAvatar);
 
+// 通用文件上传
+router.post('/', upload.single('file'), uploadController.uploadFile);
+
 module.exports = router;

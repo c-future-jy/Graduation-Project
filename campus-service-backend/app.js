@@ -31,6 +31,8 @@ app.use('/uploads', express.static('uploads'));
 // 请求日志中间件
 app.use((req, res, next) => {
   console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
+  console.log('Request body:', req.body);
+  console.log('Request headers:', req.headers);
   next();
 });
 

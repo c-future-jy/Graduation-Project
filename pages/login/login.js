@@ -62,16 +62,16 @@ Page({
           // 提供头像获取选项
           wx.showActionSheet({
             itemList: ['使用微信头像', '从相册选择头像'],
-            success: (res) => {
+            success: (actionRes) => {
               wx.showLoading({
                 title: '登录中...'
               });
 
               // 1. 调用微信登录接口获取code
               wx.login({
-                success: (res) => {
-                  if (res.code) {
-                    if (res.tapIndex === 1) {
+                success: (loginRes) => {
+                  if (loginRes.code) {
+                    if (actionRes.tapIndex === 1) {
                       // 从相册选择头像
                       wx.chooseMedia({
                         count: 1,
@@ -80,7 +80,7 @@ Page({
                         success: (avatarRes) => {
                           const avatarUrl = avatarRes.tempFiles[0].tempFilePath;
                           // 2. 调用后端API进行登录
-                          this.wechatAuth(res.code, '', avatarUrl);
+                          this.wechatAuth(loginRes.code, '', avatarUrl);
                         },
                         fail: () => {
                           wx.hideLoading();
@@ -91,9 +91,19 @@ Page({
                         }
                       });
                     } else {
-                      // 使用微信头像
-                      // 2. 调用后端API进行登录
-                      this.wechatAuth(res.code);
+                      // 使用微信头像，先获取用户信息
+                      wx.getUserProfile({
+                        desc: '用于完善个人资料',
+                        success: (userInfoRes) => {
+                          const { nickname, avatarUrl } = userInfoRes.userInfo;
+                          // 2. 调用后端API进行登录
+                          this.wechatAuth(loginRes.code, nickname, avatarUrl);
+                        },
+                        fail: () => {
+                          // 如果用户拒绝授权，仍然可以登录，只是没有昵称和头像
+                          this.wechatAuth(loginRes.code, '', '');
+                        }
+                      });
                     }
                   } else {
                     wx.hideLoading();
@@ -109,6 +119,7 @@ Page({
                     title: '登录失败，请重试',
                     icon: 'none'
                   });
+                  console.error('微信登录失败:', err);
                 }
               });
             }
@@ -121,9 +132,9 @@ Page({
   /**
    * 微信授权登录
    */
-  wechatAuth(code, avatarUrl) {
+  wechatAuth(code, nickname, avatarUrl) {
     // 3. 调用后端API进行登录
-    login(code, '', avatarUrl, 1) // 默认学生角色
+    login(code, nickname, avatarUrl, 1) // 默认学生角色
       .then(res => {
         wx.hideLoading();
         if (res.success) {
@@ -152,16 +163,19 @@ Page({
         } else {
           wx.showToast({
             title: res.message || '登录失败',
-            icon: 'none'
+            icon: 'none',
+            duration: 2000
           });
         }
       })
       .catch(err => {
         wx.hideLoading();
         wx.showToast({
-          title: '登录失败，请重试',
-          icon: 'none'
+          title: '网络连接失败，请检查网络后重试',
+          icon: 'none',
+          duration: 2000
         });
+        console.error('微信登录失败:', err);
       });
   },
 

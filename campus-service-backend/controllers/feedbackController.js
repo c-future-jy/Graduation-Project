@@ -29,8 +29,8 @@ exports.replyFeedback = async (req, res, next) => {
   try {
     const { reply } = req.body;
     await pool.query(
-      'UPDATE feedback SET reply = ?, reply_time = NOW() WHERE id = ?',
-      [reply, req.params.id]
+      'UPDATE feedback SET reply = ?, reply_time = NOW(), reply_user_id = ?, status = 1 WHERE id = ?',
+      [reply, req.user.id, req.params.id]
     );
     res.json({ success: true, message: '回复成功' });
   } catch (error) {
@@ -52,8 +52,7 @@ exports.getAdminFeedbackList = async (req, res, next) => {
         f.*,
         u.nickname as user_name,
         m.name as merchant_name,
-        o.order_no as order_no,
-        CASE WHEN f.reply IS NULL THEN 0 ELSE 1 END as reply_status
+        o.order_no as order_no
       FROM 
         feedback f
       LEFT JOIN 
@@ -84,12 +83,9 @@ exports.getAdminFeedbackList = async (req, res, next) => {
       queryParams.push(type);
     }
     
-    if (status !== undefined) {
-      if (status == 0) {
-        whereClause.push('f.reply IS NULL');
-      } else if (status == 1) {
-        whereClause.push('f.reply IS NOT NULL');
-      }
+    if (status !== undefined && status !== null) {
+      whereClause.push('f.status = ?');
+      queryParams.push(parseInt(status));
     }
     
     if (user_id) {
@@ -127,7 +123,7 @@ exports.getAdminFeedbackList = async (req, res, next) => {
     
     // 获取评分统计
     const [ratingStats] = await pool.query(
-      'SELECT AVG(rating) as avg_rating, COUNT(*) as total_feedbacks FROM feedback'
+      'SELECT AVG(rating) as avg_rating, COUNT(*) as total_feedbacks FROM feedback WHERE rating IS NOT NULL'
     );
     
     const total = countResult[0].total;
@@ -228,6 +224,10 @@ exports.replyAdminFeedback = async (req, res, next) => {
       return res.status(400).json({ success: false, message: '回复内容不能为空' });
     }
     
+    if (reply.length > 500) {
+      return res.status(400).json({ success: false, message: '回复内容不能超过500字符' });
+    }
+    
     // 检查反馈是否存在
     const [feedbacks] = await pool.query('SELECT user_id FROM feedback WHERE id = ?', [id]);
     
@@ -243,20 +243,20 @@ exports.replyAdminFeedback = async (req, res, next) => {
     try {
       // 更新反馈回复
       await pool.query(
-        'UPDATE feedback SET reply = ?, reply_time = NOW(), reply_admin_id = ? WHERE id = ?',
+        'UPDATE feedback SET reply = ?, reply_time = NOW(), reply_user_id = ?, status = 1 WHERE id = ?',
         [reply, adminId, id]
       );
       
       // 记录操作日志
       await pool.query(
-        'INSERT INTO admin_operation_log (admin_id, operation, target_feedback_id, created_at) VALUES (?, ?, ?, NOW())',
-        [adminId, '回复反馈', id]
+        'INSERT INTO admin_operation_log (admin_id, operation, target_user_id, created_at) VALUES (?, ?, ?, NOW())',
+        [adminId, '回复反馈', feedback.user_id]
       );
       
       // 通知用户
       await pool.query(
-        'INSERT INTO notification (user_id, title, content, created_at) VALUES (?, ?, ?, NOW())',
-        [feedback.user_id, '反馈已回复', '您的反馈已收到回复，请查看']
+        'INSERT INTO notification (user_id, title, content, type, created_at) VALUES (?, ?, ?, ?, NOW())',
+        [feedback.user_id, '反馈已回复', '您的反馈已收到回复，请查看', 'feedback']
       );
       
       // 提交事务
@@ -267,10 +267,94 @@ exports.replyAdminFeedback = async (req, res, next) => {
       // 回滚事务
       await pool.query('ROLLBACK');
       console.error('回复反馈失败:', transactionError);
-      res.status(500).json({ success: false, message: '回复反馈失败' });
+      res.status(500).json({ 
+        success: false, 
+        message: '回复反馈失败',
+        error: transactionError.message 
+      });
     }
   } catch (error) {
     console.error('回复反馈失败:', error);
     res.status(500).json({ success: false, message: '服务器内部错误' });
+  }
+};
+
+/**
+ * 驳回反馈（管理员）
+ * PUT /api/admin/feedbacks/:id/reject
+ */
+exports.rejectAdminFeedback = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { reason } = req.body;
+    const adminId = req.user.id;
+    
+    console.log('Reject feedback request:', { id, reason, adminId, body: req.body });
+    
+    if (!reason) {
+      console.log('Reject reason is empty');
+      return res.status(400).json({ success: false, message: '驳回原因不能为空' });
+    }
+    
+    if (reason.length > 500) {
+      return res.status(400).json({ success: false, message: '驳回原因不能超过500字符' });
+    }
+    
+    // 检查反馈是否存在
+    const [feedbacks] = await pool.query('SELECT user_id FROM feedback WHERE id = ?', [id]);
+    
+    if (feedbacks.length === 0) {
+      return res.status(404).json({ success: false, message: '反馈不存在' });
+    }
+    
+    const feedback = feedbacks[0];
+    
+    // 开始事务
+    await pool.query('START TRANSACTION');
+    
+    try {
+      // 更新反馈状态为驳回
+      await pool.query(
+        'UPDATE feedback SET reject_reason = ?, reply_time = NOW(), reply_user_id = ?, status = 2 WHERE id = ?',
+        [reason, adminId, id]
+      );
+      
+      // 记录操作日志
+      await pool.query(
+        'INSERT INTO admin_operation_log (admin_id, operation, target_user_id, created_at) VALUES (?, ?, ?, NOW())',
+        [adminId, '驳回反馈', feedback.user_id]
+      );
+      
+      // 通知用户
+      await pool.query(
+        'INSERT INTO notification (user_id, title, content, type, created_at) VALUES (?, ?, ?, ?, NOW())',
+        [feedback.user_id, '反馈已驳回', '您的反馈已被驳回，请查看详情', 1]
+      );
+      
+      // 提交事务
+      await pool.query('COMMIT');
+      
+      res.json({ success: true, message: '驳回成功' });
+    } catch (transactionError) {
+      // 回滚事务
+      await pool.query('ROLLBACK');
+      console.error('驳回反馈事务错误:', transactionError);
+      console.error('错误堆栈:', transactionError.stack);
+      res.status(500).json({ 
+        success: false, 
+        message: '驳回反馈失败',
+        error: transactionError.message,
+        stack: transactionError.stack 
+      });
+    }
+  } catch (error) {
+    console.error('驳回反馈外层错误:', error);
+    console.error('错误堆栈:', error.stack);
+    res.status(500).json({ 
+      success: false, 
+      message: '服务器内部错误',
+      error: error.message,
+      stack: error.stack 
+    });
   }
 };

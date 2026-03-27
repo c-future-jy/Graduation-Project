@@ -3,27 +3,92 @@ const { request } = require('../../utils/api');
 
 Page({
   data: {
+    feedbackType: 1, // 1-订单评价, 2-商家评价, 3-平台反馈
     rating: 0,
     content: '',
     images: [],
     loading: false,
     orderId: null,
-    merchantId: null
+    merchantId: null,
+    orders: [],
+    merchants: []
   },
 
   onLoad: function (options) {
     // 获取订单ID和商家ID
     if (options.order_id) {
-      this.setData({ orderId: options.order_id });
+      this.setData({ orderId: options.order_id, feedbackType: 1 });
     }
     if (options.merchant_id) {
-      this.setData({ merchantId: options.merchant_id });
+      this.setData({ merchantId: options.merchant_id, feedbackType: 2 });
     }
+    // 加载订单和商家列表
+    this.loadOrders();
+    this.loadMerchants();
   },
 
-  // 设置评分
-  setRating: function (e) {
-    const rating = e.currentTarget.dataset.rating;
+  // 加载用户订单列表
+  loadOrders: function () {
+    request({
+      url: '/orders',
+      method: 'GET'
+    }).then(res => {
+      if (res.success) {
+        // 只显示已完成的订单
+        const completedOrders = res.data.orders.filter(order => order.status === 4);
+        this.setData({ orders: completedOrders });
+      }
+    }).catch(err => {
+      console.error('加载订单失败:', err);
+    });
+  },
+
+  // 加载商家列表
+  loadMerchants: function () {
+    request({
+      url: '/merchants',
+      method: 'GET'
+    }).then(res => {
+      if (res.success) {
+        this.setData({ merchants: res.data.merchants });
+      }
+    }).catch(err => {
+      console.error('加载商家失败:', err);
+    });
+  },
+
+  // 选择反馈类型
+  selectFeedbackType: function (e) {
+    const type = parseInt(e.currentTarget.dataset.type);
+    this.setData({ feedbackType: type });
+  },
+
+  // 选择订单
+  bindOrderChange: function (e) {
+    const orderId = this.data.orders[e.detail.value].id;
+    this.setData({ orderId: orderId });
+  },
+
+  // 选择商家
+  bindMerchantChange: function (e) {
+    const merchantId = this.data.merchants[e.detail.value].id;
+    this.setData({ merchantId: merchantId });
+  },
+
+  // 处理评分输入
+  onRatingInput: function (e) {
+    const value = e.detail.value;
+    // 只允许输入数字
+    const numericValue = value.replace(/[^0-9]/g, '');
+    let rating = parseInt(numericValue);
+    // 限制评分范围在1-5之间
+    if (isNaN(rating)) {
+      rating = '';
+    } else if (rating < 1) {
+      rating = 1;
+    } else if (rating > 5) {
+      rating = 5;
+    }
     this.setData({ rating: rating });
   },
 
@@ -35,7 +100,7 @@ Page({
   // 选择图片
   chooseImage: function () {
     const { images } = this.data;
-    const remaining = 5 - images.length;
+    const remaining = 4 - images.length;
 
     wx.chooseImage({
       count: remaining,
@@ -67,18 +132,40 @@ Page({
     this.setData({ images: images });
   },
 
-  // 提交评价
+  // 提交反馈
   submitFeedback: function () {
-    const { rating, content, images, orderId, merchantId, loading } = this.data;
+    const { feedbackType, rating, content, images, orderId, merchantId, loading } = this.data;
 
     // 表单验证
-    if (!rating) {
-      wx.showToast({ title: '请选择评分', icon: 'none' });
+    if (!content) {
+      wx.showToast({ title: '请输入反馈内容', icon: 'none' });
       return;
     }
 
-    if (!content) {
-      wx.showToast({ title: '请输入评价内容', icon: 'none' });
+    if (content.length < 5) {
+      wx.showToast({ title: '反馈内容至少5个字', icon: 'none' });
+      return;
+    }
+
+    if (feedbackType === 1 || feedbackType === 2) {
+      if (!rating) {
+        wx.showToast({ title: '请给出您的评分', icon: 'none' });
+        return;
+      }
+
+      if (rating < 1 || rating > 5) {
+        wx.showToast({ title: '评分必须在1-5星之间', icon: 'none' });
+        return;
+      }
+    }
+
+    if (feedbackType === 1 && !orderId) {
+      wx.showToast({ title: '请选择订单', icon: 'none' });
+      return;
+    }
+
+    if (feedbackType === 2 && !merchantId) {
+      wx.showToast({ title: '请选择商家', icon: 'none' });
       return;
     }
 
@@ -88,12 +175,19 @@ Page({
 
     // 构建请求数据
     const data = {
-      order_id: orderId,
-      merchant_id: merchantId,
-      type: 'product',
-      rating: rating,
+      type: feedbackType,
       content: content
     };
+
+    if (feedbackType === 1) {
+      data.order_id = orderId;
+    } else if (feedbackType === 2) {
+      data.merchant_id = merchantId;
+    }
+
+    if (rating) {
+      data.rating = rating;
+    }
 
     // 上传图片（如果有）
     if (images.length > 0) {
@@ -115,29 +209,43 @@ Page({
     return new Promise((resolve, reject) => {
       const uploadedImages = [];
       let uploadedCount = 0;
+      let hasError = false;
+      const BASE_URL = 'http://localhost:3000/api';
 
       images.forEach((image, index) => {
         wx.uploadFile({
-          url: 'http://localhost:3000/api/upload',
+          url: BASE_URL + '/upload',
           filePath: image,
           name: 'file',
+          header: {
+            'Authorization': wx.getStorageSync('token') ? `Bearer ${wx.getStorageSync('token')}` : ''
+          },
           success: (res) => {
             try {
               const result = JSON.parse(res.data);
               if (result.success) {
                 uploadedImages.push(result.data.url);
+              } else {
+                console.error('上传图片失败:', result.message);
+                hasError = true;
               }
             } catch (e) {
               console.error('解析上传结果失败:', e);
+              hasError = true;
             }
           },
           fail: (err) => {
             console.error('上传图片失败:', err);
+            hasError = true;
           },
           complete: () => {
             uploadedCount++;
             if (uploadedCount === images.length) {
-              resolve(uploadedImages);
+              if (hasError) {
+                reject(new Error('图片上传失败'));
+              } else {
+                resolve(uploadedImages);
+              }
             }
           }
         });
@@ -145,24 +253,28 @@ Page({
     });
   },
 
-  // 发送评价
+  // 发送反馈
   sendFeedback: function (data) {
     request({
-      url: '/feedbacks',
+      url: '/feedback',
       method: 'POST',
       data: data
     }).then(res => {
       this.setData({ loading: false });
       if (res.success) {
-        wx.showToast({ title: '评价成功', icon: 'success' });
+        wx.showToast({ 
+          title: '反馈提交成功', 
+          icon: 'success',
+          duration: 2000
+        });
         setTimeout(() => {
           wx.navigateBack();
-        }, 1500);
+        }, 2000);
       } else {
-        wx.showToast({ title: res.message || '评价失败', icon: 'none' });
+        wx.showToast({ title: res.message || '反馈提交失败', icon: 'none' });
       }
     }).catch(err => {
-      console.error('提交评价失败:', err);
+      console.error('提交反馈失败:', err);
       this.setData({ loading: false });
       wx.showToast({ title: '网络错误', icon: 'none' });
     });

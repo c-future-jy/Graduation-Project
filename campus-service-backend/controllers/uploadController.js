@@ -47,3 +47,43 @@ exports.uploadAvatar = async (req, res, next) => {
     next(error);
   }
 };
+
+/**
+ * 通用文件上传
+ * POST /api/upload
+ */
+exports.uploadFile = async (req, res, next) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: '请选择要上传的文件'
+      });
+    }
+    
+    // 确保上传目录存在
+    const uploadDir = path.join(__dirname, '../uploads/files');
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+    
+    // 生成新的文件名
+    const filename = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}${path.extname(req.file.originalname)}`;
+    const filePath = path.join(uploadDir, filename);
+    
+    // 移动文件
+    fs.renameSync(req.file.path, filePath);
+    
+    // 生成访问URL
+    const fileUrl = `/uploads/files/${filename}`;
+    
+    res.json({
+      success: true,
+      data: {
+        url: fileUrl
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};

@@ -1,4 +1,8 @@
 // pages/order/order.js
+const { getOrders, cancelOrder, completeOrder } = require('../../utils/api');
+const { handleOrderAction, getStatusText, getStatusClass } = require('../../utils/orderUtils');
+const { showLoading, hideLoading, showError, showSuccess, handlePullDownRefresh, handleReachBottom, handlePagination } = require('../../utils/pageUtils');
+
 Page({
 
   /**
@@ -39,10 +43,10 @@ Page({
   /**
    * 加载订单列表
    */
-  loadOrders() {
+  async loadOrders() {
     if (this.data.loading) return;
     
-    this.setData({ loading: true });
+    showLoading('加载中...');
     
     // 构建请求参数
     const params = {
@@ -51,30 +55,19 @@ Page({
       pageSize: this.data.pageSize
     };
     
-    const token = wx.getStorageSync('token');
-    wx.request({
-      url: 'http://localhost:3000/api/orders',
-      method: 'GET',
-      header: { 'Authorization': 'Bearer ' + token },
-      data: params,
-      success: (res) => {
-        this.setData({ loading: false });
-        if (res.statusCode === 200 && res.data.success) {
-          const orders = res.data.data.orders || [];
-          // 按时间倒序排列
-          const sortedOrders = orders.sort((a, b) => {
-            return new Date(b.createTime) - new Date(a.createTime);
-          });
-          this.setData({
-            orders: this.data.page === 1 ? sortedOrders : [...this.data.orders, ...sortedOrders],
-            hasMore: sortedOrders.length === this.data.pageSize
-          });
-        }
-      },
-      fail: (err) => {
-        this.setData({ loading: false });
-      }
-    });
+    try {
+      const res = await getOrders(params);
+      const orders = res.data.orders || [];
+      // 按时间倒序排列
+      const sortedOrders = orders.sort((a, b) => {
+        return new Date(b.createTime) - new Date(a.createTime);
+      });
+      handlePagination(this, sortedOrders, false, 'orders', this.data.pageSize);
+    } catch (error) {
+      hideLoading();
+      showError('加载失败');
+      console.error('加载订单失败:', error);
+    }
   },
 
   /**
@@ -96,67 +89,40 @@ Page({
   handleAction(e) {
     const { orderId, action } = e.currentTarget.dataset;
     
-    // 根据不同的操作执行不同的逻辑
-    switch (action) {
-      case 'cancel':
-        // 取消订单
-        this.cancelOrder(orderId);
-        break;
-      case 'pay':
-        // 去支付
-        this.goToPay(orderId);
-        break;
-      case 'logistics':
-        // 查看物流
-        this.viewLogistics(orderId);
-        break;
-      case 'confirm':
-        // 确认收货
-        this.confirmReceipt(orderId);
-        break;
-      case 'buyAgain':
-        // 再次购买
-        this.buyAgain(orderId);
-        break;
-      case 'review':
-        // 评价
-        this.goToReview(orderId);
-        break;
-      case 'delete':
-        // 删除订单
-        this.deleteOrder(orderId);
-        break;
-    }
+    handleOrderAction({
+      action,
+      orderId,
+      onCancel: (id) => this.cancelOrder(id),
+      onPay: (id) => this.goToPay(id),
+      onLogistics: (id) => this.viewLogistics(id),
+      onConfirm: (id) => this.confirmReceipt(id),
+      onBuyAgain: (id) => this.buyAgain(id),
+      onReview: (id) => this.goToReview(id),
+      onDelete: (id) => this.deleteOrder(id)
+    });
   },
 
   /**
    * 取消订单
    */
-  cancelOrder(orderId) {
+  async cancelOrder(orderId) {
     wx.showModal({
       title: '取消订单',
       content: '确定要取消该订单吗？',
-      success: (res) => {
+      success: async (res) => {
         if (res.confirm) {
-          const token = wx.getStorageSync('token');
-          wx.request({
-            url: `http://localhost:3000/api/orders/${orderId}/cancel`,
-            method: 'PUT',
-            header: { 'Authorization': 'Bearer ' + token },
-            success: (res) => {
-              if (res.statusCode === 200 && res.data.success) {
-                wx.showToast({ title: '订单已取消' });
-                // 刷新订单列表
-                this.loadOrders();
-              } else {
-                wx.showToast({ title: res.data.message || '取消订单失败', icon: 'none' });
-              }
-            },
-            fail: (err) => {
-              wx.showToast({ title: '网络错误，请重试', icon: 'none' });
-              console.error('取消订单失败:', err);
-            }
-          });
+          showLoading('处理中...');
+          try {
+            await cancelOrder(orderId);
+            hideLoading();
+            showSuccess('订单已取消');
+            // 刷新订单列表
+            this.loadOrders();
+          } catch (error) {
+            hideLoading();
+            showError('取消订单失败');
+            console.error('取消订单失败:', error);
+          }
         }
       }
     });
@@ -179,31 +145,24 @@ Page({
   /**
    * 确认收货
    */
-  confirmReceipt(orderId) {
+  async confirmReceipt(orderId) {
     wx.showModal({
       title: '确认收货',
       content: '确定已收到商品吗？',
-      success: (res) => {
+      success: async (res) => {
         if (res.confirm) {
-          const token = wx.getStorageSync('token');
-          wx.request({
-            url: `http://localhost:3000/api/orders/${orderId}/complete`,
-            method: 'PUT',
-            header: { 'Authorization': 'Bearer ' + token },
-            success: (res) => {
-              if (res.statusCode === 200 && res.data.success) {
-                wx.showToast({ title: '已确认收货' });
-                // 刷新订单列表
-                this.loadOrders();
-              } else {
-                wx.showToast({ title: res.data.message || '确认收货失败', icon: 'none' });
-              }
-            },
-            fail: (err) => {
-              wx.showToast({ title: '网络错误，请重试', icon: 'none' });
-              console.error('确认收货失败:', err);
-            }
-          });
+          showLoading('处理中...');
+          try {
+            await completeOrder(orderId);
+            hideLoading();
+            showSuccess('已确认收货');
+            // 刷新订单列表
+            this.loadOrders();
+          } catch (error) {
+            hideLoading();
+            showError('确认收货失败');
+            console.error('确认收货失败:', error);
+          }
         }
       }
     });
@@ -212,25 +171,27 @@ Page({
   /**
    * 再次购买
    */
-  buyAgain(orderId) {
-    const token = wx.getStorageSync('token');
-    wx.request({
-      url: `http://localhost:3000/api/orders/${orderId}/buy-again`,
-      method: 'POST',
-      header: { 'Authorization': 'Bearer ' + token },
-      success: (res) => {
-        if (res.statusCode === 200 && res.data.success) {
-          wx.showToast({ title: '商品已加入购物车' });
-          wx.switchTab({ url: '/pages/cart/cart' });
-        } else {
-          wx.showToast({ title: res.data.message || '操作失败', icon: 'none' });
-        }
-      },
-      fail: (err) => {
-        wx.showToast({ title: '网络错误，请重试', icon: 'none' });
-        console.error('再次购买失败:', err);
+  async buyAgain(orderId) {
+    showLoading('处理中...');
+    try {
+      const res = await wx.request({
+        url: `http://localhost:3000/api/orders/${orderId}/buy-again`,
+        method: 'POST',
+        header: { 'Authorization': 'Bearer ' + wx.getStorageSync('token') }
+      });
+      if (res.statusCode === 200 && res.data.success) {
+        hideLoading();
+        showSuccess('商品已加入购物车');
+        wx.switchTab({ url: '/pages/cart/cart' });
+      } else {
+        hideLoading();
+        showError(res.data.message || '操作失败');
       }
-    });
+    } catch (error) {
+      hideLoading();
+      showError('网络错误，请重试');
+      console.error('再次购买失败:', error);
+    }
   },
 
   /**
@@ -245,31 +206,33 @@ Page({
   /**
    * 删除订单
    */
-  deleteOrder(orderId) {
+  async deleteOrder(orderId) {
     wx.showModal({
       title: '删除订单',
       content: '确定要删除该订单吗？',
-      success: (res) => {
+      success: async (res) => {
         if (res.confirm) {
-          const token = wx.getStorageSync('token');
-          wx.request({
-            url: `http://localhost:3000/api/orders/${orderId}`,
-            method: 'DELETE',
-            header: { 'Authorization': 'Bearer ' + token },
-            success: (res) => {
-              if (res.statusCode === 200 && res.data.success) {
-                wx.showToast({ title: '订单已删除' });
-                // 刷新订单列表
-                this.loadOrders();
-              } else {
-                wx.showToast({ title: res.data.message || '删除订单失败', icon: 'none' });
-              }
-            },
-            fail: (err) => {
-              wx.showToast({ title: '网络错误，请重试', icon: 'none' });
-              console.error('删除订单失败:', err);
+          showLoading('处理中...');
+          try {
+            const res = await wx.request({
+              url: `http://localhost:3000/api/orders/${orderId}`,
+              method: 'DELETE',
+              header: { 'Authorization': 'Bearer ' + wx.getStorageSync('token') }
+            });
+            if (res.statusCode === 200 && res.data.success) {
+              hideLoading();
+              showSuccess('订单已删除');
+              // 刷新订单列表
+              this.loadOrders();
+            } else {
+              hideLoading();
+              showError(res.data.message || '删除订单失败');
             }
-          });
+          } catch (error) {
+            hideLoading();
+            showError('网络错误，请重试');
+            console.error('删除订单失败:', error);
+          }
         }
       }
     });
@@ -295,24 +258,23 @@ Page({
    * 去逛逛
    */
   goShopping() {
-    wx.switchTab({ url: '/pages/home/home' });
+    wx.switchTab({ url: '/pages/index/index' });
   },
 
   /**
    * 页面相关事件处理函数--监听用户下拉动作
    */
-  onPullDownRefresh() {
-    this.setData({ page: 1, orders: [] });
-    this.loadOrders();
-    wx.stopPullDownRefresh();
+  async onPullDownRefresh() {
+    await handlePullDownRefresh(this, () => {
+      this.setData({ orders: [] });
+      return this.loadOrders();
+    });
   },
 
   /**
    * 页面上拉触底事件的处理函数
    */
   onReachBottom() {
-    if (this.data.loading || !this.data.hasMore) return;
-    this.setData({ page: this.data.page + 1 });
-    this.loadOrders();
+    handleReachBottom(this, () => this.loadOrders());
   }
 })

@@ -1,5 +1,7 @@
 // pages/merchant/orders/orders.js
 const { request } = require('../../../utils/api');
+const { getStatusText, getStatusClass } = require('../../../utils/orderUtils');
+const { showLoading, hideLoading, showError, showSuccess, debounce, handlePullDownRefresh, handleReachBottom } = require('../../../utils/pageUtils');
 
 Page({
   data: {
@@ -23,12 +25,12 @@ Page({
   },
 
   // 加载订单数据
-  loadOrders: function (isLoadMore = false) {
+  async loadOrders(isLoadMore = false) {
     const { activeTab, searchKeyword, pageNum, pageSize, merchantId, loading } = this.data;
 
     if (loading) return;
 
-    this.setData({ loading: true });
+    showLoading('加载中...');
 
     // 构建请求参数
     const params = {
@@ -57,11 +59,12 @@ Page({
       params.keyword = searchKeyword;
     }
 
-    request({
-      url: '/orders/merchant/orders',
-      method: 'GET',
-      data: params
-    }).then(res => {
+    try {
+      const res = await request({
+        url: '/orders/merchant/orders',
+        method: 'GET',
+        data: params
+      });
       if (res.success) {
         const orders = res.data.orders || [];
         const newPageNum = isLoadMore ? pageNum + 1 : 1;
@@ -74,14 +77,14 @@ Page({
           loading: false
         });
       } else {
-        wx.showToast({ title: res.message || '加载失败', icon: 'none' });
-        this.setData({ loading: false });
+        hideLoading();
+        showError(res.message || '加载失败');
       }
-    }).catch(err => {
+    } catch (err) {
+      hideLoading();
+      showError('网络错误');
       console.error('加载订单失败:', err);
-      wx.showToast({ title: '网络错误', icon: 'none' });
-      this.setData({ loading: false });
-    });
+    }
   },
 
   // 切换标签
@@ -99,18 +102,13 @@ Page({
   },
 
   // 搜索输入
-  onSearchInput: function (e) {
+  onSearchInput: debounce(function (e) {
     this.setData({ searchKeyword: e.detail.value });
-    // 防抖处理
-    clearTimeout(this.searchTimer);
-    this.searchTimer = setTimeout(() => {
-      this.loadOrders();
-    }, 500);
-  },
+    this.loadOrders();
+  }, 500),
 
   // 搜索确认
   onSearchConfirm: function () {
-    clearTimeout(this.searchTimer);
     this.setData({ pageNum: 1, orders: [], hasMore: true });
     this.loadOrders();
   },
@@ -152,26 +150,27 @@ Page({
   },
 
   // 执行发货
-  shipOrder: function (orderId) {
-    wx.showLoading({ title: '发货中...' });
+  async shipOrder(orderId) {
+    showLoading('发货中...');
 
-    request({
-      url: `/orders/merchant/orders/${orderId}/ship`,
-      method: 'POST'
-    }).then(res => {
-      wx.hideLoading();
+    try {
+      const res = await request({
+        url: `/orders/merchant/orders/${orderId}/ship`,
+        method: 'POST'
+      });
+      hideLoading();
       if (res.success) {
-        wx.showToast({ title: '发货成功', icon: 'success' });
+        showSuccess('发货成功');
         // 刷新订单列表
         this.loadOrders();
       } else {
-        wx.showToast({ title: res.message || '发货失败', icon: 'none' });
+        showError(res.message || '发货失败');
       }
-    }).catch(err => {
+    } catch (err) {
+      hideLoading();
+      showError('网络错误');
       console.error('发货失败:', err);
-      wx.hideLoading();
-      wx.showToast({ title: '网络错误', icon: 'none' });
-    });
+    }
   },
 
   // 刷新订单
@@ -188,31 +187,20 @@ Page({
   },
 
   // 下拉刷新
-  onPullDownRefresh: function () {
-    this.setData({ pageNum: 1, orders: [], hasMore: true });
-    this.loadOrders().then(() => {
-      wx.stopPullDownRefresh();
+  async onPullDownRefresh() {
+    await handlePullDownRefresh(this, async () => {
+      this.setData({ pageNum: 1, orders: [], hasMore: true });
+      await this.loadOrders();
     });
   },
 
   // 获取订单状态文本
   getStatusText: function (status) {
-    switch (status) {
-      case 1:
-        return '待发货';
-      case 2:
-        return '已发货';
-      case 3:
-        return '已完成';
-      case 4:
-        return '已取消';
-      default:
-        return '未知状态';
-    }
+    return getStatusText(status);
   },
 
   // 获取订单状态样式
   getStatusClass: function (status) {
-    return `status-${status}`;
+    return getStatusClass(status);
   }
 });

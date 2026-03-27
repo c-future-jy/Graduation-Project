@@ -1,0 +1,77 @@
+<view class="container">
+  <view class="header">
+    <button class="back-btn" bindtap="goBack">返回</button>
+    <text class="title">反馈详情</text>
+  </view>
+  
+  <view class="content" wx:if="{{!loading && feedback}}">
+    <view class="detail-item">
+      <text class="label">反馈ID：</text>
+      <text class="value">{{feedback.id}}</text>
+    </view>
+    
+    <view class="detail-item">
+      <text class="label">用户：</text>
+      <text class="value">{{feedback.userName}}</text>
+    </view>
+    
+    <view class="detail-item">
+      <text class="label">类型：</text>
+      <view class="type-tag" style="background-color: {{getTypeColor(feedback.type)}}">
+        {{getTypeText(feedback.type)}}
+      </view>
+    </view>
+    
+    <view class="detail-item">
+      <text class="label">内容：</text>
+      <text class="value content">{{feedback.content}}</text>
+    </view>
+    
+    <view class="detail-item">
+      <text class="label">评分：</text>
+      <text class="value rating-number">{{feedback.rating}}分</text>
+    </view>
+    
+    <view class="detail-item">
+      <text class="label">状态：</text>
+      <view class="status-tag" style="background-color: {{getStatusColor(feedback.status)}}">
+        {{getStatusText(feedback.status)}}
+      </view>
+    </view>
+    
+    <view class="detail-item">
+      <text class="label">提交时间：</text>
+      <text class="value">{{feedback.createdAt}}</text>
+    </view>
+    
+    <!-- 回复/驳回内容展示 -->
+    <view class="action-content" wx:if="{{feedback.status === 'replied' || feedback.status === 'rejected'}}">
+      <view class="action-content-header">
+        <text class="action-label">{{feedback.status === 'replied' ? '回复内容' : '驳回原因'}}</text>
+        <text class="action-toggle" bindtap="toggleActionContent">{{feedback.showFullContent ? '收起' : '展开'}}</text>
+      </view>
+      <view class="action-content-body">
+        <text class="action-text" style="display: {{feedback.showFullContent ? 'block' : '-webkit-box'}}">{{feedback.actionContent}}</text>
+      </view>
+    </view>
+    
+    <!-- 操作按钮 -->
+    <view class="action-buttons" wx:if="{{feedback.status !== 'replied' && feedback.status !== 'rejected'}}">
+      <button class="action-btn primary" bindtap="showActionInput" data-action="reply">回复</button>
+      <button class="action-btn secondary" bindtap="showActionInput" data-action="reject">驳回</button>
+    </view>
+    
+    <!-- 操作输入框 -->
+    <view class="action-input" wx:if="{{showInput}}">
+      <textarea placeholder="{{currentAction === 'reply' ? '请输入回复内容' : '请输入驳回原因'}}" value="{{actionContent}}" bindinput="bindActionContent" class="action-textarea" />
+      <view class="action-input-buttons">
+        <button class="action-input-btn cancel" bindtap="cancelActionInput">取消</button>
+        <button class="action-input-btn submit" bindtap="submitActionInput">{{currentAction === 'reply' ? '提交回复' : '提交驳回'}}</button>
+      </view>
+    </view>
+  </view>
+  
+  <view class="loading" wx:if="{{loading}}">
+    <text>加载中...</text>
+  </view>
+</view>

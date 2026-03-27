@@ -1,4 +1,6 @@
 // 管理后台首页逻辑
+const { getAdminDashboardStats, getAdminOrderTrend, getAdminMerchantCategories } = require('../../../utils/api');
+
 Page({
   /**
    * 页面的初始数据
@@ -9,21 +11,21 @@ Page({
     },
     currentDate: '',
     currentTime: '',
-    unreadNotifications: 3,
+    unreadNotifications: 0,
     stats: {
-      todayOrders: 128,
-      totalUsers: 1250,
-      totalMerchants: 56,
-      totalProducts: 890,
-      orderTrend: 12,
-      userTrend: 5,
-      merchantTrend: 3,
-      productTrend: 8
+      todayOrders: 0,
+      totalUsers: 0,
+      totalMerchants: 0,
+      totalProducts: 0,
+      orderTrend: 0,
+      userTrend: 0,
+      merchantTrend: 0,
+      productTrend: 0
     },
     pendingTasks: {
-      pendingMerchants: 8,
-      pendingOrders: 15,
-      pendingFeedbacks: 6
+      pendingMerchants: 0,
+      pendingOrders: 0,
+      pendingFeedbacks: 0
     },
     chartType: 'orders'
   },
@@ -71,17 +73,41 @@ Page({
   /**
    * 加载仪表盘数据
    */
-  loadDashboardData() {
-    // 这里可以调用后端API获取真实数据
-    // 目前使用模拟数据
+  async loadDashboardData() {
     wx.showLoading({
       title: '加载数据中...'
     });
     
-    setTimeout(() => {
+    try {
+      // 调用真实API获取数据
+      const statsRes = await getAdminDashboardStats();
+      
+      if (statsRes && statsRes.data) {
+        this.setData({
+          stats: {
+            todayOrders: statsRes.data.todayOrders || 0,
+            totalUsers: statsRes.data.totalUsers || 0,
+            totalMerchants: statsRes.data.totalMerchants || 0,
+            totalProducts: statsRes.data.totalProducts || 0,
+            orderTrend: statsRes.data.orderTrend || 0,
+            userTrend: statsRes.data.userTrend || 0,
+            merchantTrend: statsRes.data.merchantTrend || 0,
+            productTrend: statsRes.data.productTrend || 0
+          },
+          pendingTasks: {
+            pendingMerchants: statsRes.data.pendingMerchants || 0,
+            pendingOrders: statsRes.data.pendingOrders || 0,
+            pendingFeedbacks: statsRes.data.pendingFeedbacks || 0
+          },
+          unreadNotifications: statsRes.data.unreadNotifications || 0
+        });
+      }
+    } catch (error) {
+      console.error('加载仪表盘数据失败:', error);
+      wx.showToast({ title: '数据加载失败', icon: 'none' });
+    } finally {
       wx.hideLoading();
-      // 模拟数据已在data中设置
-    }, 1000);
+    }
   },
 
   /**

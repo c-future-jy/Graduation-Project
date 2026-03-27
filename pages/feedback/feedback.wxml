@@ -1,30 +1,99 @@
 <!--pages/feedback/feedback.wxml-->
 <view class="feedback-page">
   <view class="feedback-header">
-    <text class="feedback-title">商品评价</text>
+    <text class="feedback-title">意见反馈</text>
   </view>
   
-  <!-- 评分组件 -->
-  <view class="rating-section">
-    <text class="rating-label">商品评分</text>
-    <view class="rating-stars">
-      <image 
-        wx:for="[1,2,3,4,5]" 
-        wx:key="{{index}}"
-        class="star {{rating >= index + 1 ? 'active' : ''}}"
-        src="{{rating >= index + 1 ? '../../../assets/star-active.png' : '../../../assets/star-inactive.png'}}"
-        bindtap="setRating"
-        data-rating="{{index + 1}}"
-      ></image>
+  <!-- 反馈类型选择 -->
+  <view class="type-section">
+    <text class="type-label">反馈类型<text class="required">*</text></text>
+    <view class="type-options">
+      <view 
+        class="type-option {{feedbackType === 1 ? 'active' : ''}}"
+        bindtap="selectFeedbackType"
+        data-type="1"
+      >
+        <text>订单评价</text>
+      </view>
+      <view 
+        class="type-option {{feedbackType === 2 ? 'active' : ''}}"
+        bindtap="selectFeedbackType"
+        data-type="2"
+      >
+        <text>商家评价</text>
+      </view>
+      <view 
+        class="type-option {{feedbackType === 3 ? 'active' : ''}}"
+        bindtap="selectFeedbackType"
+        data-type="3"
+      >
+        <text>平台反馈</text>
+      </view>
+    </view>
+  </view>
+  
+  <!-- 订单选择（订单评价时显示） -->
+  <view class="order-section" wx:if="{{feedbackType === 1}}">
+    <text class="order-label">选择订单<text class="required">*</text></text>
+    <picker bindchange="bindOrderChange" value="{{orderIndex}}" range="{{orders}}" range-key="orderNo" class="order-picker">
+      <view class="picker-view">
+        <text class="picker-text">{{orders.length > 0 ? '请选择订单' : '暂无可用订单'}}</text>
+      </view>
+    </picker>
+  </view>
+  
+  <!-- 商家选择（商家评价时显示） -->
+  <view class="merchant-section" wx:if="{{feedbackType === 2}}">
+    <text class="merchant-label">选择商家<text class="required">*</text></text>
+    <picker bindchange="bindMerchantChange" value="{{merchantIndex}}" range="{{merchants}}" range-key="name" class="merchant-picker">
+      <view class="picker-view">
+        <text class="picker-text">{{merchants.length > 0 ? '请选择商家' : '暂无可用商家'}}</text>
+      </view>
+    </picker>
+  </view>
+  
+  <!-- 评分组件（订单评价和商家评价时显示） -->
+  <view class="rating-section" wx:if="{{feedbackType === 1 || feedbackType === 2}}">
+    <text class="rating-label">评分<text class="required">*</text></text>
+    <view class="rating-input">
+      <input 
+        type="number" 
+        class="rating-input-field" 
+        placeholder="请输入1-5分"
+        value="{{rating}}"
+        bindinput="onRatingInput"
+        min="1"
+        max="5"
+        step="1"
+      ></input>
+      <text class="rating-hint">1-5分</text>
+    </view>
+  </view>
+  
+  <!-- 评分组件（平台反馈时显示，可选） -->
+  <view class="rating-section" wx:if="{{feedbackType === 3}}">
+    <text class="rating-label">评分（可选）</text>
+    <view class="rating-input">
+      <input 
+        type="number" 
+        class="rating-input-field" 
+        placeholder="请输入1-5分（可选）"
+        value="{{rating}}"
+        bindinput="onRatingInput"
+        min="1"
+        max="5"
+        step="1"
+      ></input>
+      <text class="rating-hint">1-5分</text>
     </view>
   </view>
   
   <!-- 评价内容 -->
   <view class="content-section">
-    <text class="content-label">评价内容</text>
+    <text class="content-label">反馈内容<text class="required">*</text></text>
     <textarea 
       class="content-input" 
-      placeholder="请输入您的评价..." 
+      placeholder="请描述您的反馈内容..." 
       value="{{content}}"
       bindinput="onContentInput"
       maxlength="500"
@@ -34,11 +103,11 @@
   
   <!-- 图片上传 -->
   <view class="image-section">
-    <text class="image-label">上传图片</text>
+    <text class="image-label">上传图片（可选）</text>
     <view class="image-uploader">
       <view 
         class="upload-btn" 
-        wx:if="{{images.length < 5}}"
+        wx:if="{{images.length < 4}}"
         bindtap="chooseImage"
       >
         <text class="upload-icon">+</text>
@@ -72,8 +141,8 @@
       class="submit-btn" 
       bindtap="submitFeedback"
       loading="{{loading}}"
-      disabled="{{loading || !rating || !content}}">
-      提交评价
+      disabled="{{loading}}">
+      提交反馈
     </button>
   </view>
 </view>

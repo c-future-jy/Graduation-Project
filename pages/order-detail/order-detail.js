@@ -1,5 +1,7 @@
 // pages/order-detail/order-detail.js
 const { getOrderById, cancelOrder, completeOrder } = require('../../utils/api');
+const { getOrderActions, getStatusIcon, getStatusDesc, handleOrderAction } = require('../../utils/orderUtils');
+const { showLoading, hideLoading, showError, showSuccess } = require('../../utils/pageUtils');
 
 Page({
 
@@ -23,91 +25,27 @@ Page({
    * 加载订单详情
    */
   async loadOrderDetail(orderId) {
-    wx.showLoading({ title: '加载中...' });
+    showLoading('加载中...');
     
     try {
       const res = await getOrderById(orderId);
       const order = res.data.order;
       
       // 设置订单操作按钮
-      order.actions = this.getOrderActions(order.status);
+      order.actions = getOrderActions(order.status);
       
       // 设置订单状态信息
-      order.statusIcon = this.getStatusIcon(order.status);
-      order.statusDesc = this.getStatusDesc(order.status);
+      order.statusIcon = getStatusIcon(order.status);
+      order.statusDesc = getStatusDesc(order.status);
       
-      wx.hideLoading();
+      hideLoading();
       this.setData({
         order: order
       });
     } catch (error) {
-      wx.hideLoading();
-      wx.showToast({ title: '加载失败', icon: 'none' });
+      hideLoading();
+      showError('加载失败');
       console.error('加载订单详情失败:', error);
-    }
-  },
-
-  /**
-   * 获取订单操作按钮
-   */
-  getOrderActions(status) {
-    switch (status) {
-      case '0':
-        return [
-          { text: '取消订单', action: 'cancel', type: 'default' },
-          { text: '去支付', action: 'pay', type: 'primary' }
-        ];
-      case '1':
-        return [
-          { text: '查看物流', action: 'logistics', type: 'default' },
-          { text: '取消订单', action: 'cancel', type: 'primary' }
-        ];
-      case '2':
-        return [
-          { text: '查看物流', action: 'logistics', type: 'default' },
-          { text: '确认收货', action: 'confirm', type: 'primary' }
-        ];
-      case '3':
-        return [
-          { text: '评价', action: 'review', type: 'primary' },
-          { text: '删除订单', action: 'delete', type: 'default' },
-          { text: '再次购买', action: 'buyAgain', type: 'default' }
-        ];
-      case '4':
-        return [
-          { text: '删除订单', action: 'delete', type: 'default' },
-          { text: '再次购买', action: 'buyAgain', type: 'primary' }
-        ];
-      default:
-        return [];
-    }
-  },
-
-  /**
-   * 获取状态图标
-   */
-  getStatusIcon(status) {
-    switch (status) {
-      case '0': return '💳';
-      case '1': return '📦';
-      case '2': return '🚚';
-      case '3': return '✅';
-      case '4': return '❌';
-      default: return '📋';
-    }
-  },
-
-  /**
-   * 获取状态描述
-   */
-  getStatusDesc(status) {
-    switch (status) {
-      case '0': return '请在30分钟内完成支付';
-      case '1': return '商家正在准备商品';
-      case '2': return '商品正在配送中';
-      case '3': return '订单已完成';
-      case '4': return '订单已取消';
-      default: return '订单处理中';
     }
   },
 
@@ -134,37 +72,17 @@ Page({
     const action = e.currentTarget.dataset.action;
     console.log('订单操作:', action);
     
-    // 根据不同的操作执行不同的逻辑
-    switch (action) {
-      case 'cancel':
-        // 取消订单
-        this.cancelOrder();
-        break;
-      case 'pay':
-        // 去支付
-        this.goToPay();
-        break;
-      case 'logistics':
-        // 查看物流
-        this.viewLogistics();
-        break;
-      case 'confirm':
-        // 确认收货
-        this.confirmReceipt();
-        break;
-      case 'buyAgain':
-        // 再次购买
-        this.buyAgain();
-        break;
-      case 'review':
-        // 评价
-        this.goToReview();
-        break;
-      case 'delete':
-        // 删除订单
-        this.deleteOrder();
-        break;
-    }
+    handleOrderAction({
+      action,
+      orderId: this.data.order.orderId,
+      onCancel: () => this.cancelOrder(),
+      onPay: () => this.goToPay(),
+      onLogistics: () => this.viewLogistics(),
+      onConfirm: () => this.confirmReceipt(),
+      onBuyAgain: () => this.buyAgain(),
+      onReview: () => this.goToReview(),
+      onDelete: () => this.deleteOrder()
+    });
   },
 
   /**
@@ -176,16 +94,16 @@ Page({
       content: '确定要取消该订单吗？',
       success: async (res) => {
         if (res.confirm) {
-          wx.showLoading({ title: '处理中...' });
+          showLoading('处理中...');
           try {
             await cancelOrder(this.data.order.orderId);
-            wx.hideLoading();
-            wx.showToast({ title: '订单已取消' });
+            hideLoading();
+            showSuccess('订单已取消');
             // 刷新订单详情
             this.loadOrderDetail(this.data.order.orderId);
           } catch (error) {
-            wx.hideLoading();
-            wx.showToast({ title: '取消失败', icon: 'none' });
+            hideLoading();
+            showError('取消失败');
             console.error('取消订单失败:', error);
           }
         }
@@ -216,16 +134,16 @@ Page({
       content: '确定已收到商品吗？',
       success: async (res) => {
         if (res.confirm) {
-          wx.showLoading({ title: '处理中...' });
+          showLoading('处理中...');
           try {
             await completeOrder(this.data.order.orderId);
-            wx.hideLoading();
-            wx.showToast({ title: '已确认收货' });
+            hideLoading();
+            showSuccess('已确认收货');
             // 刷新订单详情
             this.loadOrderDetail(this.data.order.orderId);
           } catch (error) {
-            wx.hideLoading();
-            wx.showToast({ title: '确认失败', icon: 'none' });
+            hideLoading();
+            showError('确认失败');
             console.error('确认收货失败:', error);
           }
         }
@@ -249,9 +167,9 @@ Page({
    * 去评价
    */
   goToReview() {
-    const { orderInfo } = this.data;
+    const { order } = this.data;
     wx.navigateTo({
-      url: `/pages/feedback/feedback?order_id=${orderInfo.id}&merchant_id=${orderInfo.merchant_id}`
+      url: `/pages/feedback/feedback?order_id=${order.orderId}&merchant_id=${order.merchantId}`
     });
   },
 
@@ -264,18 +182,18 @@ Page({
       content: '确定要删除该订单吗？',
       success: async (res) => {
         if (res.confirm) {
-          wx.showLoading({ title: '处理中...' });
+          showLoading('处理中...');
           try {
             await deleteOrder(this.data.order.orderId);
-            wx.hideLoading();
-            wx.showToast({ title: '订单已删除' });
+            hideLoading();
+            showSuccess('订单已删除');
             // 跳回订单列表页
             setTimeout(() => {
               wx.navigateBack();
             }, 1000);
           } catch (error) {
-            wx.hideLoading();
-            wx.showToast({ title: '删除失败', icon: 'none' });
+            hideLoading();
+            showError('删除失败');
             console.error('删除订单失败:', error);
           }
         }

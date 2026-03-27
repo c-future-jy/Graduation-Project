@@ -5,21 +5,20 @@
   
   <!-- 搜索和筛选 -->
   <view class="search-filter">
-    <view class="search-bar">
-      <input type="text" placeholder="用户/内容关键词" bindinput="bindSearchInput" value="{{searchKeyword}}" />
-      <button class="search-btn" bindtap="searchFeedbacks">搜索</button>
-    </view>
+    <text class="filter-title">筛选条件</text>
     <view class="filter-row">
+      <input type="text" placeholder="用户/内容关键词" bindinput="bindSearchInput" value="{{searchKeyword}}" bindconfirm="searchFeedbacks" />
       <picker mode="selector" range="{{feedbackTypes}}" range-key="label" value="{{selectedType}}" bindchange="bindTypeChange">
         <view class="picker">
-          <text>类型：{{feedbackTypes[selectedType].label}}</text>
+          <text>{{feedbackTypes[selectedType].label}}</text>
         </view>
       </picker>
       <picker mode="selector" range="{{feedbackStatuses}}" range-key="label" value="{{selectedStatus}}" bindchange="bindStatusChange">
         <view class="picker">
-          <text>状态：{{feedbackStatuses[selectedStatus].label}}</text>
+          <text>{{feedbackStatuses[selectedStatus].label}}</text>
         </view>
       </picker>
+      <button class="search-btn" bindtap="searchFeedbacks">搜索</button>
     </view>
   </view>
   
@@ -27,79 +26,102 @@
   <view class="batch-operations" wx:if="{{selectedFeedbacks.length > 0}}">
     <text>已选择 {{selectedFeedbacks.length}} 个反馈</text>
     <button class="batch-btn" bindtap="clearSelection">取消选择</button>
+    <button class="batch-btn primary" bindtap="batchProcess">批量处理</button>
   </view>
   
   <!-- 反馈列表 -->
   <view class="feedback-list">
-    <view class="table-container">
-      <table class="feedback-table">
-        <tr class="table-header">
-          <th class="checkbox-col">
-            <checkbox value="" checked="{{selectAll}}" bindchange="toggleSelectAll" />
-          </th>
-          <th>ID</th>
-          <th>用户</th>
-          <th>类型</th>
-          <th>内容</th>
-          <th>评分</th>
-          <th>状态</th>
-          <th>提交时间</th>
-          <th>操作</th>
-        </tr>
-        <tr wx:for="{{feedbacks}}" wx:key="id" class="table-row">
-          <td class="checkbox-col">
-            <checkbox value="{{item.id}}" checked="{{selectedFeedbacks.indexOf(item.id) > -1}}" bindchange="toggleFeedbackSelection" data-id="{{item.id}}" />
-          </td>
-          <td>{{item.id}}</td>
-          <td>{{item.userName}}</td>
-          <td>
-            <view class="type-tag" style="background-color: {{getTypeColor(item.type)}}">
-              {{getTypeText(item.type)}}
-            </view>
-          </td>
-          <td class="content-col">{{item.content}}</td>
-          <td class="rating-col">
-            <view class="rating">
-              <text wx:for="[1, 2, 3, 4, 5]" wx:key="index" class="star {{index < item.rating ? 'active' : ''}}">★</text>
-            </view>
-          </td>
-          <td>
+    <!-- 卡片式布局 -->
+    <view wx:for="{{feedbacks}}" wx:key="id" class="feedback-card">
+      <view class="card-header">
+        <view class="checkbox-wrapper">
+          <checkbox value="{{item.id}}" checked="{{selectedFeedbacks.indexOf(item.id) > -1}}" bindchange="toggleFeedbackSelection" data-id="{{item.id}}" />
+        </view>
+        <view class="user-info">
+          <text class="user-name">{{item.userName}}</text>
+          <view class="type-tag" style="background-color: {{getTypeColor(item.type)}}">
+            {{getTypeText(item.type)}}
+          </view>
+        </view>
+        <view class="header-actions">
+          <button class="action-btn small" bindtap="showActionInput" data-id="{{item.id}}" data-action="reply" wx:if="{{item.status !== 'replied' && item.status !== 'rejected'}}">回复</button>
+          <button class="action-btn small secondary" bindtap="showActionInput" data-id="{{item.id}}" data-action="reject" wx:if="{{item.status !== 'replied' && item.status !== 'rejected'}}">驳回</button>
+          <view class="status-info">
             <view class="status-tag" style="background-color: {{getStatusColor(item.status)}}">
               {{getStatusText(item.status)}}
             </view>
-          </td>
-          <td>{{item.createdAt}}</td>
-          <td class="action-col">
-            <button class="action-btn" bindtap="viewFeedbackDetail" data-id="{{item.id}}">查看详情</button>
-            <button class="action-btn" bindtap="replyFeedback" data-id="{{item.id}}" wx:if="{{item.status !== 'replied'}}">回复</button>
-          </td>
-        </tr>
-      </table>
+          </view>
+        </view>
+      </view>
+      
+      <view class="card-body">
+        <view class="rating-status-info">
+          <view class="rating-info">
+            <text class="rating-number">{{item.rating}}分</text>
+          </view>
+          <view class="status-info-card">
+            <view class="status-tag" style="background-color: {{getStatusColor(item.status)}}">
+              {{getStatusText(item.status)}}
+            </view>
+          </view>
+        </view>
+        <view class="content-preview">
+          <text class="content-text">{{item.content}}</text>
+        </view>
+        
+        <!-- 回复/驳回内容展示 -->
+        <view class="action-content" wx:if="{{item.status === 'replied' || item.status === 'rejected'}}">
+          <view class="action-content-header">
+            <text class="action-label">{{item.status === 'replied' ? '回复内容' : '驳回原因'}}</text>
+            <text class="action-toggle" bindtap="toggleActionContent" data-id="{{item.id}}">{{item.showFullContent ? '收起' : '展开'}}</text>
+          </view>
+          <view class="action-content-body">
+            <text class="action-text" style="display: {{item.showFullContent ? 'block' : '-webkit-box'}}">{{item.actionContent}}</text>
+          </view>
+        </view>
+      </view>
+      
+      <view class="card-footer">
+        <text class="time-info" data-time="{{item.createdAt}}">{{item.formattedTime}}</text>
+        <button class="action-btn primary" bindtap="viewFeedbackDetail" data-id="{{item.id}}">查看详情</button>
+      </view>
+      
+      <!-- 操作输入框 -->
+      <view class="action-input" wx:if="{{showInput && currentFeedbackId === item.id}}">
+        <textarea placeholder="{{item.currentAction === 'reply' ? '请输入回复内容' : '请输入驳回原因'}}" value="{{actionContent}}" bindinput="bindActionContent" class="action-textarea" />
+        <view class="action-input-buttons">
+          <button class="action-input-btn cancel" bindtap="cancelActionInput">取消</button>
+          <button class="action-input-btn submit" bindtap="submitActionInput" data-id="{{item.id}}" data-action="{{item.currentAction}}">{{item.currentAction === 'reply' ? '提交回复' : '提交驳回'}}</button>
+        </view>
+      </view>
     </view>
     
     <!-- 空状态 -->
     <view class="empty-state" wx:if="{{feedbacks.length === 0}}">
       <image src="../../assets/images/empty.png" mode="aspectFit" class="empty-image" />
       <text class="empty-text">未找到相关反馈</text>
+      <text class="empty-subtext">尝试调整筛选条件或重新加载</text>
       <button class="reload-btn" bindtap="loadFeedbacks">重新加载</button>
     </view>
   </view>
   
   <!-- 分页 -->
   <view class="pagination" wx:if="{{feedbacks.length > 0}}">
+    <text class="total-count">共 {{totalCount}} 条数据</text>
     <button class="page-btn" bindtap="prevPage" disabled="{{currentPage === 1}}">上一页</button>
-    <text>第 {{currentPage}} 页，共 {{totalPages}} 页</text>
-    <button class="page-btn" bindtap="nextPage" disabled="{{currentPage === totalPages}}">下一页</button>
+    <button class="page-btn" bindtap="nextPage" wx:if="{{currentPage < totalPages}}">下一页</button>
   </view>
 </view>
 
-<!-- 回复弹窗 -->
-<modal class="reply-modal" wx:if="{{showReplyModal}}" hidden="{{!showReplyModal}}" bindconfirm="confirmReply" bindcancel="cancelReply">
+<!-- 批量处理弹窗 -->
+<modal class="batch-modal" wx:if="{{showBatchModal}}" hidden="{{!showBatchModal}}" bindconfirm="confirmBatchProcess" bindcancel="cancelBatchProcess">
   <view class="modal-content">
-    <text class="modal-title">回复反馈</text>
-    <text class="feedback-info">用户：{{currentFeedback.userName}}</text>
-    <text class="feedback-info">类型：{{getTypeText(currentFeedback.type)}}</text>
-    <text class="feedback-content">反馈内容：{{currentFeedback.content}}</text>
-    <textarea placeholder="请输入回复内容" value="{{replyContent}}" bindinput="bindReplyContent" class="reply-textarea" />
+    <text class="modal-title">批量处理</text>
+    <text class="modal-info">您选择了 {{selectedFeedbacks.length}} 个反馈</text>
+    <picker mode="selector" range="{{batchActions}}" value="{{selectedBatchAction}}" bindchange="bindBatchActionChange">
+      <view class="picker">
+        <text>{{batchActions[selectedBatchAction]}}</text>
+      </view>
+    </picker>
   </view>
 </modal>

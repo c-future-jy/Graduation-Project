@@ -17,8 +17,9 @@ function request(options) {
         'Authorization': token ? `Bearer ${token}` : ''
       },
       success: (res) => {
+        console.log('API response:', res.statusCode, res.data);
         // 成功响应
-        if (res.statusCode === 200 && res.data.success) {
+        if ((res.statusCode === 200 || res.statusCode === 201) && res.data.success) {
           resolve(res.data);
         } 
         // 401 未授权，只在非登录/注册接口时跳转登录
@@ -30,6 +31,15 @@ function request(options) {
           });
           reject({ message: '请先登录' });
         } 
+        // 500 服务器错误
+        else if (res.statusCode === 500) {
+          console.error('Server error:', res.data);
+          reject({ 
+            message: res.data.message || '服务器内部错误',
+            error: res.data.error,
+            stack: res.data.stack
+          });
+        }
         // 其他错误
         else {
           // 登录/注册接口的错误不显示toast，由调用方处理
@@ -526,6 +536,43 @@ function getAdminFeedbackList(params) {
 }
 
 /**
+ * 回复反馈
+ * @param {Number} id 反馈ID
+ * @param {String} reply 回复内容
+ */
+function replyFeedback(id, reply) {
+  return request({
+    url: `/admin/feedbacks/${id}/reply`,
+    method: 'PUT',
+    data: { reply }
+  });
+}
+
+/**
+ * 驳回反馈
+ * @param {Number} id 反馈ID
+ * @param {String} reason 驳回原因
+ */
+function rejectFeedback(id, reason) {
+  return request({
+    url: `/admin/feedbacks/${id}/reject`,
+    method: 'PUT',
+    data: { reason }
+  });
+}
+
+/**
+ * 获取反馈详情（管理员）
+ * @param {Number} id 反馈ID
+ */
+function getAdminFeedbackDetail(id) {
+  return request({
+    url: `/admin/feedbacks/${id}`,
+    method: 'GET'
+  });
+}
+
+/**
  * 获取管理员通知列表
  * @param {Object} params 查询参数 (page, pageSize, type, user_id, is_read, startTime, endTime)
  */
@@ -622,6 +669,9 @@ module.exports = {
   getAdminProductList,
   getAdminOrderList,
   getAdminFeedbackList,
+  replyFeedback,
+  rejectFeedback,
+  getAdminFeedbackDetail,
   getAdminNotificationList,
   getAdminDashboardStats,
   getAdminOrderTrend,

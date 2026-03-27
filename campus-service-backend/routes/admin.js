@@ -37,6 +37,7 @@ router.post('/orders/:id/force-cancel', auth, checkRole([3]), orderController.fo
 router.get('/feedbacks', auth, checkRole([3]), feedbackController.getAdminFeedbackList);
 router.get('/feedbacks/:id', auth, checkRole([3]), feedbackController.getAdminFeedbackDetail);
 router.put('/feedbacks/:id/reply', auth, checkRole([3]), feedbackController.replyAdminFeedback);
+router.put('/feedbacks/:id/reject', auth, checkRole([3]), feedbackController.rejectAdminFeedback);
 
 // 通知管理路由
 router.get('/notifications', auth, checkRole([3]), notificationController.getAdminNotificationList);

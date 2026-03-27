@@ -1,0 +1,260 @@
+.container {
+  background-color: #f5f5f5;
+  min-height: 100vh;
+  padding: 20rpx;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 20rpx;
+}
+
+.back-btn {
+  width: 80rpx;
+  height: 60rpx;
+  line-height: 60rpx;
+  text-align: center;
+  font-size: 28rpx;
+  color: #1890ff;
+  background-color: transparent;
+  border: none;
+  margin-right: 20rpx;
+}
+
+.title {
+  font-size: 32rpx;
+  font-weight: bold;
+  color: #333;
+  flex: 1;
+}
+
+.content {
+  background-color: #fff;
+  border-radius: 8rpx;
+  box-shadow: 0 2rpx 4rpx rgba(0, 0, 0, 0.1);
+  padding: 20rpx;
+}
+
+.detail-item {
+  display: flex;
+  margin-bottom: 20rpx;
+  align-items: flex-start;
+}
+
+.label {
+  width: 120rpx;
+  font-size: 28rpx;
+  color: #666;
+  margin-right: 20rpx;
+}
+
+.value {
+  flex: 1;
+  font-size: 28rpx;
+  color: #333;
+  word-break: break-word;
+}
+
+.content {
+  line-height: 1.5;
+}
+
+.type-tag, .status-tag {
+  display: inline-block;
+  padding: 4rpx 12rpx;
+  border-radius: 16rpx;
+  font-size: 24rpx;
+  color: #fff;
+}
+
+.rating {
+  display: flex;
+  align-items: center;
+}
+
+.star {
+  font-size: 24rpx;
+  color: #d9d9d9;
+  margin-right: 4rpx;
+}
+
+.star.active {
+  color: #faad14;
+}
+
+.reply-label {
+  margin-bottom: 10rpx;
+}
+
+.reply-content {
+  background-color: #f5f5f5;
+  padding: 20rpx;
+  border-radius: 8rpx;
+  line-height: 1.5;
+}
+
+.loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 400rpx;
+  font-size: 28rpx;
+  color: #999;
+}
+
+/* 操作内容展示 */
+.action-content {
+  margin-top: 30rpx;
+  padding: 24rpx;
+  background-color: #f8f9fa;
+  border-radius: 8rpx;
+}
+
+.action-content-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16rpx;
+}
+
+.action-label {
+  font-size: 28rpx;
+  font-weight: bold;
+  color: #333;
+}
+
+.action-toggle {
+  font-size: 24rpx;
+  color: #1890ff;
+  cursor: pointer;
+}
+
+.action-content-body {
+  margin-top: 16rpx;
+}
+
+.action-text {
+  font-size: 26rpx;
+  color: #666;
+  line-height: 1.5;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 操作按钮 */
+.action-buttons {
+  display: flex;
+  gap: 16rpx;
+  margin-top: 40rpx;
+  padding-top: 24rpx;
+  border-top: 1rpx solid #f0f0f0;
+}
+
+.action-btn {
+  flex: 1;
+  height: 68rpx;
+  line-height: 68rpx;
+  padding: 0 24rpx;
+  border: 2rpx solid #1890ff;
+  border-radius: 8rpx;
+  font-size: 28rpx;
+  color: #1890ff;
+  background-color: #fff;
+  transition: all 0.2s;
+}
+
+.action-btn:hover {
+  background-color: #e6f7ff;
+}
+
+.action-btn.primary {
+  background-color: #1890ff;
+  color: #fff;
+}
+
+.action-btn.primary:hover {
+  background-color: #40a9ff;
+}
+
+.action-btn.secondary {
+  background-color: #fff;
+  color: #666;
+  border-color: #d9d9d9;
+}
+
+.action-btn.secondary:hover {
+  background-color: #f5f5f5;
+  border-color: #1890ff;
+  color: #1890ff;
+}
+
+/* 操作输入框 */
+.action-input {
+  margin-top: 30rpx;
+  padding: 24rpx;
+  background-color: #f0f2f5;
+  border-radius: 8rpx;
+  border-top: 1rpx solid #e8e8e8;
+  position: relative;
+  z-index: 10;
+}
+
+.action-textarea {
+  width: 100%;
+  height: 180rpx;
+  border: 2rpx solid #e8e8e8;
+  border-radius: 8rpx;
+  padding: 20rpx;
+  font-size: 26rpx;
+  margin-bottom: 24rpx;
+  resize: none;
+  background-color: #fff;
+}
+
+.action-input-buttons {
+  display: flex;
+  gap: 16rpx;
+  justify-content: flex-end;
+}
+
+.action-input-btn {
+  height: 60rpx;
+  line-height: 60rpx;
+  padding: 0 32rpx;
+  border-radius: 8rpx;
+  font-size: 26rpx;
+  transition: all 0.2s;
+}
+
+.action-input-btn.cancel {
+  background-color: #fff;
+  color: #666;
+  border: 2rpx solid #d9d9d9;
+}
+
+.action-input-btn.cancel:hover {
+  background-color: #f5f5f5;
+  border-color: #1890ff;
+  color: #1890ff;
+}
+
+.action-input-btn.submit {
+  background-color: #1890ff;
+  color: #fff;
+  border: none;
+}
+
+.action-input-btn.submit:hover {
+  background-color: #40a9ff;
+}
+
+/* 评分数字 */
+.rating-number {
+  font-size: 32rpx;
+  font-weight: bold;
+  color: #faad14;
+}
+

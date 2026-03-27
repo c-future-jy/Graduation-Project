@@ -30,6 +30,24 @@ exports.getDashboardStats = async (req, res, next) => {
     const [pendingFeedbackResult] = await pool.query('SELECT COUNT(*) as count FROM feedback WHERE reply IS NULL');
     const pendingFeedback = pendingFeedbackResult[0].count;
 
+    // 待审核商家数
+    const [pendingMerchantsResult] = await pool.query('SELECT COUNT(*) as count FROM merchant WHERE audit_status = 1');
+    const pendingMerchants = pendingMerchantsResult[0].count;
+
+    // 待处理订单数
+    const [pendingOrdersResult] = await pool.query('SELECT COUNT(*) as count FROM `order` WHERE status IN (0, 1)');
+    const pendingOrders = pendingOrdersResult[0].count;
+
+    // 未读通知数
+    const [unreadNotificationsResult] = await pool.query('SELECT COUNT(*) as count FROM notification WHERE is_read = 0');
+    const unreadNotifications = unreadNotificationsResult[0].count;
+
+    // 计算趋势数据（这里使用简单的模拟值，实际项目中可以根据历史数据计算）
+    const orderTrend = 12;
+    const userTrend = 5;
+    const merchantTrend = 3;
+    const productTrend = 8;
+
     res.json({
       success: true,
       data: {
@@ -38,7 +56,14 @@ exports.getDashboardStats = async (req, res, next) => {
         totalProducts,
         totalOrders,
         todayOrders,
-        pendingFeedback
+        pendingFeedback,
+        pendingMerchants,
+        pendingOrders,
+        unreadNotifications,
+        orderTrend,
+        userTrend,
+        merchantTrend,
+        productTrend
       }
     });
   } catch (error) {

@@ -119,8 +119,8 @@ exports.applyMerchant = async (req, res, next) => {
     
     // 创建商家记录（待审核状态）
     const [result] = await pool.query(
-      'INSERT INTO merchant (owner_user_id, name, status, audit_status, created_at, updated_at) VALUES (?, ?, ?, ?, NOW(), NOW())',
-      [user_id, nickname, 0, 0]
+      'INSERT INTO merchant (owner_user_id, name, status, created_at, updated_at) VALUES (?, ?, ?, NOW(), NOW())',
+      [user_id, nickname, 0]
     );
     
     // 记录操作日志

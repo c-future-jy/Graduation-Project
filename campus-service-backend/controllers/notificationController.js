@@ -45,21 +45,19 @@ exports.markAllAsRead = async (req, res, next) => {
  */
 exports.getAdminNotificationList = async (req, res, next) => {
   try {
-    const { page = 1, pageSize = 10, type, user_id, is_read, startTime, endTime } = req.query;
+    const { page = 1, pageSize = 10, type, user_id, is_read, startTime, endTime, keyword } = req.query;
     const offset = (page - 1) * pageSize;
     
     let query = `
       SELECT 
         n.*,
         u.nickname as user_name,
-        (SELECT COUNT(*) FROM notification WHERE original_id = n.id OR id = n.id) as total_count,
-        (SELECT COUNT(*) FROM notification WHERE (original_id = n.id OR id = n.id) AND is_read = 1) as read_count
+        (SELECT COUNT(*) FROM notification WHERE id = n.id) as total_count,
+        (SELECT COUNT(*) FROM notification WHERE id = n.id AND is_read = 1) as read_count
       FROM 
         notification n
       LEFT JOIN 
         user u ON n.user_id = u.id
-      WHERE 
-        n.deleted_at IS NULL
     `;
     let countQuery = `
       SELECT 
@@ -68,8 +66,6 @@ exports.getAdminNotificationList = async (req, res, next) => {
         notification n
       LEFT JOIN 
         user u ON n.user_id = u.id
-      WHERE 
-        n.deleted_at IS NULL
     `;
     let queryParams = [];
     let whereClause = [];
@@ -85,7 +81,7 @@ exports.getAdminNotificationList = async (req, res, next) => {
       queryParams.push(user_id);
     }
     
-    if (is_read !== undefined) {
+    if (is_read !== undefined && is_read !== '') {
       whereClause.push('n.is_read = ?');
       queryParams.push(is_read);
     }
@@ -100,10 +96,15 @@ exports.getAdminNotificationList = async (req, res, next) => {
       queryParams.push(endTime);
     }
     
+    if (keyword) {
+      whereClause.push('(n.title LIKE ? OR n.content LIKE ?)');
+      queryParams.push(`%${keyword}%`, `%${keyword}%`);
+    }
+    
     // 添加WHERE子句
     if (whereClause.length > 0) {
-      query += ' AND ' + whereClause.join(' AND ');
-      countQuery += ' AND ' + whereClause.join(' AND ');
+      query += ' WHERE ' + whereClause.join(' AND ');
+      countQuery += ' WHERE ' + whereClause.join(' AND ');
     }
     
     // 添加排序和分页
@@ -115,7 +116,7 @@ exports.getAdminNotificationList = async (req, res, next) => {
     
     // 计算已读/未读数量
     const [readStats] = await pool.query(
-      'SELECT COUNT(*) as total, SUM(is_read) as read_count FROM notification WHERE deleted_at IS NULL'
+      'SELECT COUNT(*) as total, SUM(is_read) as read_count FROM notification'
     );
     
     const total = countResult[0].total;

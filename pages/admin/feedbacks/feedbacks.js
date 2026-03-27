@@ -1,3 +1,23 @@
+const { getAdminFeedbackList, replyFeedback, rejectFeedback } = require('../../../utils/api');
+
+// 格式化时间函数
+function formatTime(timeStr) {
+  const date = new Date(timeStr);
+  const now = new Date();
+  const diff = now - date;
+  const minutes = Math.floor(diff / 60000);
+  const hours = Math.floor(diff / 3600000);
+  const days = Math.floor(diff / 86400000);
+  
+  if (minutes < 1) return '刚刚';
+  if (minutes < 60) return `${minutes}分钟前`;
+  if (hours < 24) return `${hours}小时前`;
+  if (days < 7) return `${days}天前`;
+  
+  // 格式化日期为 YYYY-MM-DD HH:MM
+  return date.toISOString().slice(0, 16).replace('T', ' ');
+}
+
 Page({
   data: {
     feedbacks: [],
@@ -9,9 +29,14 @@ Page({
     currentPage: 1,
     pageSize: 10,
     totalPages: 1,
-    showReplyModal: false,
-    currentFeedback: null,
-    replyContent: '',
+    totalCount: 0,
+    showInput: false,
+    currentFeedbackId: null,
+    currentAction: '',
+    actionContent: '',
+    showBatchModal: false,
+    selectedBatchAction: 0,
+    batchActions: ['标记为已处理', '标记为已回复', '批量删除'],
     feedbackTypes: [
       { value: '', label: '全部类型' },
       { value: 'order', label: '订单' },
@@ -22,7 +47,8 @@ Page({
       { value: '', label: '全部状态' },
       { value: 'pending', label: '待处理' },
       { value: 'processing', label: '处理中' },
-      { value: 'replied', label: '已回复' }
+      { value: 'replied', label: '已回复' },
+      { value: 'rejected', label: '已驳回' }
     ]
   },
 
@@ -43,63 +69,58 @@ Page({
   },
 
   loadFeedbacks: function () {
-    // 模拟API调用
-    const mockFeedbacks = [
-      {
-        id: 1,
-        userId: 101,
-        userName: '张三',
-        type: 'order',
-        content: '订单配送太慢了，等了两个小时才送到',
-        rating: 2,
-        status: 'pending',
-        createdAt: '2024-01-15 10:30:00'
-      },
-      {
-        id: 2,
-        userId: 102,
-        userName: '李四',
-        type: 'merchant',
-        content: '商家服务态度很好，食物也很美味',
-        rating: 5,
-        status: 'replied',
-        createdAt: '2024-01-15 09:15:00'
-      },
-      {
-        id: 3,
-        userId: 103,
-        userName: '王五',
-        type: 'platform',
-        content: '希望平台能增加更多的商家选择',
-        rating: 3,
-        status: 'processing',
-        createdAt: '2024-01-14 16:45:00'
-      },
-      {
-        id: 4,
-        userId: 104,
-        userName: '赵六',
-        type: 'order',
-        content: '订单商品与描述不符，失望',
-        rating: 1,
-        status: 'pending',
-        createdAt: '2024-01-14 14:20:00'
-      },
-      {
-        id: 5,
-        userId: 105,
-        userName: '孙七',
-        type: 'merchant',
-        content: '商家环境干净整洁，服务周到',
-        rating: 4,
-        status: 'replied',
-        createdAt: '2024-01-13 11:10:00'
+    const { currentPage, pageSize, selectedType, selectedStatus, searchKeyword } = this.data;
+    
+    wx.showLoading({ title: '加载中...' });
+    
+    // 将前端状态值转换为后端数值
+    const statusValue = this.data.feedbackStatuses[selectedStatus].value;
+    let statusNum = null;
+    if (statusValue === 'pending') {
+      statusNum = 0;
+    } else if (statusValue === 'replied') {
+      statusNum = 1;
+    } else if (statusValue === 'rejected') {
+      statusNum = 2;
+    }
+    
+    getAdminFeedbackList({
+      page: currentPage,
+      pageSize: pageSize,
+      type: this.data.feedbackTypes[selectedType].value,
+      status: statusNum,
+      keyword: searchKeyword
+    }).then(res => {
+      wx.hideLoading();
+      if (res.success) {
+        // 转换数据格式，适配前端显示
+        const feedbacks = res.data.feedbacks.map(item => ({
+          id: item.id,
+          userId: item.user_id,
+          userName: item.user_name,
+          type: item.type === 1 ? 'order' : item.type === 2 ? 'merchant' : 'platform',
+          content: item.content,
+          rating: item.rating,
+          status: item.status === 0 ? 'pending' : item.status === 1 ? 'replied' : 'rejected',
+          actionContent: item.reply || item.reject_reason || '',
+          showFullContent: false,
+          currentAction: '',
+          createdAt: item.created_at,
+          formattedTime: formatTime(item.created_at)
+        }));
+        
+        this.setData({
+          feedbacks: feedbacks,
+          totalPages: res.data.pagination.totalPages,
+          totalCount: res.data.pagination.total
+        });
+      } else {
+        wx.showToast({ title: res.message || '加载失败', icon: 'none' });
       }
-    ];
-
-    this.setData({
-      feedbacks: mockFeedbacks,
-      totalPages: 1
+    }).catch(err => {
+      wx.hideLoading();
+      console.error('加载反馈列表失败:', err);
+      wx.showToast({ title: '网络错误', icon: 'none' });
     });
   },
 
@@ -110,7 +131,7 @@ Page({
   },
 
   searchFeedbacks: function () {
-    // 模拟搜索功能
+    this.setData({ currentPage: 1 });
     this.loadFeedbacks();
   },
 
@@ -158,63 +179,169 @@ Page({
   },
 
   viewFeedbackDetail: function (e) {
+    console.log('查看详情按钮被点击', e);
     const id = e.currentTarget.dataset.id;
+    console.log('获取到的反馈ID:', id);
     wx.navigateTo({
-      url: `/pages/admin/feedbacks/detail?id=${id}`
+      url: `/pages/admin/feedbacks/detail?id=${id}`,
+      success: function(res) {
+        console.log('跳转成功', res);
+      },
+      fail: function(res) {
+        console.log('跳转失败', res);
+      }
     });
   },
 
-  replyFeedback: function (e) {
+  // 显示操作输入框
+  showActionInput: function (e) {
     const id = e.currentTarget.dataset.id;
-    const feedback = this.data.feedbacks.find(item => item.id === id);
+    const action = e.currentTarget.dataset.action;
+    
+    // 更新对应卡片的currentAction字段
+    const feedbacks = [...this.data.feedbacks];
+    const index = feedbacks.findIndex(item => item.id === id);
+    if (index > -1) {
+      feedbacks[index].currentAction = action;
+    }
+    
     this.setData({
-      currentFeedback: feedback,
-      showReplyModal: true,
-      replyContent: ''
+      feedbacks: feedbacks,
+      showInput: true,
+      currentFeedbackId: id,
+      actionContent: ''
     });
   },
 
-  bindReplyContent: function (e) {
+  // 绑定操作内容输入
+  bindActionContent: function (e) {
     this.setData({
-      replyContent: e.detail.value
+      actionContent: e.detail.value
     });
   },
 
-  confirmReply: function () {
-    if (!this.data.replyContent.trim()) {
-      wx.showToast({
-        title: '请输入回复内容',
-        icon: 'none'
+  // 取消操作
+  cancelActionInput: function () {
+    const id = this.data.currentFeedbackId;
+    
+    // 清除对应卡片的currentAction字段
+    if (id) {
+      const feedbacks = [...this.data.feedbacks];
+      const index = feedbacks.findIndex(item => item.id === id);
+      if (index > -1) {
+        feedbacks[index].currentAction = '';
+      }
+      
+      this.setData({
+        feedbacks: feedbacks
       });
+    }
+    
+    this.setData({
+      showInput: false,
+      currentFeedbackId: null,
+      actionContent: ''
+    });
+  },
+
+  // 提交操作
+  submitActionInput: function (e) {
+    const id = e.currentTarget.dataset.id;
+    const action = e.currentTarget.dataset.action;
+    const content = this.data.actionContent;
+    
+    console.log('Submit action:', { id, action, content });
+    
+    if (!content || !content.trim()) {
+      wx.showToast({ title: action === 'reply' ? '请输入回复内容' : '请输入驳回原因', icon: 'none' });
       return;
     }
 
-    // 模拟回复操作
-    const updatedFeedbacks = this.data.feedbacks.map(item => {
-      if (item.id === this.data.currentFeedback.id) {
-        return { ...item, status: 'replied' };
+    wx.showLoading({ title: action === 'reply' ? '回复中...' : '驳回中...' });
+
+    // 调用实际API
+    const apiPromise = action === 'reply' ? replyFeedback(id, content) : rejectFeedback(id, content);
+    
+    console.log('API promise created:', apiPromise);
+    
+    apiPromise.then(res => {
+      wx.hideLoading();
+      if (res.success) {
+        // 重新加载反馈列表，确保数据与后端同步
+        this.loadFeedbacks();
+        
+        this.setData({
+          showInput: false,
+          currentFeedbackId: null,
+          actionContent: ''
+        });
+        
+        wx.showToast({ title: action === 'reply' ? '回复成功' : '驳回成功', icon: 'success' });
+      } else {
+        wx.showToast({ title: res.message || (action === 'reply' ? '回复失败' : '驳回失败'), icon: 'none' });
       }
-      return item;
-    });
-
-    this.setData({
-      feedbacks: updatedFeedbacks,
-      showReplyModal: false,
-      currentFeedback: null,
-      replyContent: ''
-    });
-
-    wx.showToast({
-      title: '回复成功',
-      icon: 'success'
+    }).catch(err => {
+      wx.hideLoading();
+      console.error(action === 'reply' ? '回复反馈失败:' : '驳回反馈失败:', err);
+      const errorMsg = err.message || err.error || '网络错误';
+      wx.showToast({ title: errorMsg, icon: 'none', duration: 3000 });
     });
   },
 
-  cancelReply: function () {
+  // 切换操作内容展开/收起
+  toggleActionContent: function (e) {
+    const id = e.currentTarget.dataset.id;
+    const feedbacks = [...this.data.feedbacks];
+    const index = feedbacks.findIndex(item => item.id === id);
+    if (index > -1) {
+      feedbacks[index].showFullContent = !feedbacks[index].showFullContent;
+      this.setData({ feedbacks: feedbacks });
+    }
+  },
+
+  // 批量处理
+  batchProcess: function () {
+    if (this.data.selectedFeedbacks.length === 0) {
+      wx.showToast({ title: '请选择要处理的反馈', icon: 'none' });
+      return;
+    }
     this.setData({
-      showReplyModal: false,
-      currentFeedback: null,
-      replyContent: ''
+      showBatchModal: true,
+      selectedBatchAction: 0
+    });
+  },
+
+  // 批量操作选择
+  bindBatchActionChange: function (e) {
+    this.setData({
+      selectedBatchAction: e.detail.value
+    });
+  },
+
+  // 确认批量处理
+  confirmBatchProcess: function () {
+    const action = this.data.selectedBatchAction;
+    const selectedIds = this.data.selectedFeedbacks;
+    
+    wx.showLoading({ title: '处理中...' });
+    
+    // 模拟批量处理操作
+    setTimeout(() => {
+      wx.hideLoading();
+      wx.showToast({ title: '处理成功', icon: 'success' });
+      this.setData({
+        showBatchModal: false,
+        selectedFeedbacks: [],
+        selectAll: false
+      });
+      this.loadFeedbacks();
+    }, 1000);
+  },
+
+  // 取消批量处理
+  cancelBatchProcess: function () {
+    this.setData({
+      showBatchModal: false
     });
   },
 
@@ -257,6 +384,8 @@ Page({
         return '#fa8c16';
       case 'replied':
         return '#52c41a';
+      case 'rejected':
+        return '#999';
       default:
         return '#999';
     }
@@ -265,11 +394,13 @@ Page({
   getStatusText: function (status) {
     switch (status) {
       case 'pending':
-        return '待处理';
+        return '待回复';
       case 'processing':
-        return '处理中';
+        return '待回复';
       case 'replied':
         return '已回复';
+      case 'rejected':
+        return '已驳回';
       default:
         return '未知';
     }

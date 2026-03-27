@@ -91,25 +91,21 @@ Page({
    * 加载订单数量
    */
   loadOrderCounts() {
-    const token = wx.getStorageSync('token');
-    wx.request({
-      url: 'http://localhost:3000/api/orders/counts',
-      method: 'GET',
-      header: { 'Authorization': 'Bearer ' + token },
-      success: (res) => {
-        if (res.statusCode === 200 && res.data.success) {
-          this.setData({
-            pendingPayCount: res.data.data.pendingPay || 0,
-            pendingDeliverCount: res.data.data.pendingDeliver || 0
-          });
-        }
-      },
-      fail: (err) => {
+    request({
+      url: '/orders/counts',
+      method: 'GET'
+    }).then(res => {
+      if (res.success) {
         this.setData({
-          pendingPayCount: 0,
-          pendingDeliverCount: 0
+          pendingPayCount: res.data.pendingPay || 0,
+          pendingDeliverCount: res.data.pendingDeliver || 0
         });
       }
+    }).catch(err => {
+      this.setData({
+        pendingPayCount: 0,
+        pendingDeliverCount: 0
+      });
     });
   },
 
