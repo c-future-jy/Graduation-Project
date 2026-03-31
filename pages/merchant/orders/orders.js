@@ -1,5 +1,5 @@
 // pages/merchant/orders/orders.js
-const { request } = require('../../../utils/api');
+const { request, getUserProfile } = require('../../../utils/api');
 const { getStatusText, getStatusClass } = require('../../../utils/orderUtils');
 const { showLoading, hideLoading, showError, showSuccess, debounce, handlePullDownRefresh, handleReachBottom } = require('../../../utils/pageUtils');
 
@@ -11,32 +11,31 @@ Page({
     loading: false,
     hasMore: true,
     pageNum: 1,
-    pageSize: 10,
-    merchantId: null
+    pageSize: 10
   },
 
   onLoad: function (options) {
-    // 从本地存储获取商家ID
-    const merchantId = wx.getStorageSync('merchantId') || 1;
-    this.setData({
-      merchantId: merchantId
-    });
-    this.loadOrders();
+    // 先拉取用户资料：若管理员刚审核通过，会下发新 token（utils/api.js 自动更新本地 token）
+    getUserProfile()
+      .catch(() => {})
+      .finally(() => {
+        this.loadOrders();
+      });
   },
 
   // 加载订单数据
   async loadOrders(isLoadMore = false) {
-    const { activeTab, searchKeyword, pageNum, pageSize, merchantId, loading } = this.data;
+    const { activeTab, searchKeyword, pageNum, pageSize, loading } = this.data;
 
     if (loading) return;
 
+    this.setData({ loading: true });
     showLoading('加载中...');
 
     // 构建请求参数
     const params = {
-      merchant_id: merchantId,
-      pageNum: isLoadMore ? pageNum + 1 : 1,
-      pageSize: pageSize
+      page: isLoadMore ? pageNum + 1 : 1,
+      limit: pageSize
     };
 
     // 根据标签筛选状态
@@ -77,13 +76,15 @@ Page({
           loading: false
         });
       } else {
-        hideLoading();
         showError(res.message || '加载失败');
       }
     } catch (err) {
-      hideLoading();
-      showError('网络错误');
+      const msg = (err && err.message) || '网络错误';
+      showError(msg);
       console.error('加载订单失败:', err);
+    } finally {
+      hideLoading();
+      this.setData({ loading: false });
     }
   },
 

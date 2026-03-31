@@ -254,9 +254,10 @@
 }
 
 .empty-icon {
-  font-size: 80rpx;
+  width: 200rpx;
+  height: 200rpx;
   display: block;
-  margin-bottom: 20rpx;
+  margin: 0 auto 20rpx;
 }
 
 .empty-text {

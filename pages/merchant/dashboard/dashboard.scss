@@ -403,6 +403,13 @@
   font-size: 20rpx;
 }
 
+.empty-image {
+  width: 120rpx;
+  height: 120rpx;
+  margin: 0 auto 12rpx;
+  display: block;
+}
+
 /* 订单状态颜色 */
 .status-0 {
   color: #ff9800;

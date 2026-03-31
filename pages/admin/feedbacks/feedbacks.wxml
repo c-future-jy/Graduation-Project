@@ -98,7 +98,7 @@
     
     <!-- 空状态 -->
     <view class="empty-state" wx:if="{{feedbacks.length === 0}}">
-      <image src="../../assets/images/empty.png" mode="aspectFit" class="empty-image" />
+      <image src="/assets/images/kong.jpg" mode="aspectFit" class="empty-image" />
       <text class="empty-text">未找到相关反馈</text>
       <text class="empty-subtext">尝试调整筛选条件或重新加载</text>
       <button class="reload-btn" bindtap="loadFeedbacks">重新加载</button>

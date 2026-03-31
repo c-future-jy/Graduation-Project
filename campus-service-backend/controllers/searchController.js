@@ -3,9 +3,9 @@ const { pool } = require('../config/db');
 // 搜索商家和商品
 exports.search = async (req, res, next) => {
   try {
-    const { keyword } = req.query;
+    const keyword = String(req.query.keyword ?? req.query.q ?? '').trim();
     
-    if (!keyword || keyword.trim() === '') {
+    if (!keyword) {
       return res.status(400).json({ success: false, message: '搜索关键词不能为空' });
     }
     

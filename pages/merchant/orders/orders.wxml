@@ -120,7 +120,7 @@
 
   <!-- 空状态 -->
   <view class="empty-state" wx:else>
-    <image class="empty-icon" src="../../../assets/empty-order.png"></image>
+    <image class="empty-icon" src="/assets/images/kong.jpg"></image>
     <text class="empty-text">暂无符合条件的订单</text>
     <button class="refresh-btn" bindtap="refreshOrders">刷新</button>
   </view>

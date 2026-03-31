@@ -6,6 +6,8 @@
 // 存储请求记录的对象
 const requestRecords = new Map();
 
+let cleanupTimerStarted = false;
+
 /**
  * 清理过期的请求记录
  */
@@ -16,6 +18,19 @@ const cleanupExpiredRecords = () => {
       requestRecords.delete(key);
     }
   }
+};
+
+const ensureCleanupTimer = () => {
+  if (cleanupTimerStarted) return;
+  cleanupTimerStarted = true;
+
+  // 测试环境下避免残留定时器导致 Jest 不退出
+  if (process.env.NODE_ENV === 'test') return;
+
+  // 每5分钟清理一次过期记录
+  const timer = setInterval(cleanupExpiredRecords, 5 * 60 * 1000);
+  // 不阻塞进程退出（例如在脚本/测试场景）
+  if (timer && typeof timer.unref === 'function') timer.unref();
 };
 
 /**
@@ -32,8 +47,7 @@ const loginRateLimit = (options = {}) => {
     message = '请求过于频繁，请稍后再试'
   } = options;
 
-  // 每5分钟清理一次过期记录
-  setInterval(cleanupExpiredRecords, 5 * 60 * 1000);
+  ensureCleanupTimer();
 
   return (req, res, next) => {
     // 获取客户端IP

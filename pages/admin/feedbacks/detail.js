@@ -10,6 +10,9 @@ Page({
   },
 
   onLoad: function (options) {
+    const initialTitle = this.safeDecodeURIComponent(options && options.title);
+    wx.setNavigationBarTitle({ title: initialTitle || '反馈详情' });
+
     const id = options.id;
     if (id) {
       this.loadFeedbackDetail(id);
@@ -19,25 +22,39 @@ Page({
     }
   },
 
+  safeDecodeURIComponent(value) {
+    if (!value) return '';
+    try {
+      return decodeURIComponent(value);
+    } catch (e) {
+      return value;
+    }
+  },
+
   loadFeedbackDetail: function (id) {
     wx.showLoading({ title: '加载中...' });
     
     getAdminFeedbackDetail(id).then(res => {
       wx.hideLoading();
       if (res.success) {
+        const raw = res.data.feedback || {};
+        const typeNum = typeof raw.type === 'string' ? parseInt(raw.type, 10) : raw.type;
+        const statusNum = typeof raw.status === 'string' ? parseInt(raw.status, 10) : raw.status;
+        const createdAt = raw.create_time || raw.created_at || raw.createdAt || raw.createTime;
+
         // 转换数据格式，适配前端显示
         const feedback = {
-          id: res.data.feedback.id,
-          userId: res.data.feedback.user_id,
-          userName: res.data.feedback.user_name,
-          type: res.data.feedback.type === 1 ? 'order' : res.data.feedback.type === 2 ? 'merchant' : 'platform',
-          content: res.data.feedback.content,
-          rating: res.data.feedback.rating,
-          status: res.data.feedback.status === 0 ? 'pending' : res.data.feedback.status === 1 ? 'replied' : 'rejected',
-          actionContent: res.data.feedback.reply || res.data.feedback.reject_reason || '',
+          id: raw.id,
+          userId: raw.user_id,
+          userName: raw.user_name,
+          type: typeNum === 1 ? 'order' : typeNum === 2 ? 'merchant' : 'platform',
+          content: raw.content,
+          rating: raw.rating,
+          status: statusNum === 0 ? 'pending' : statusNum === 1 ? 'replied' : 'rejected',
+          actionContent: raw.reply || raw.reject_reason || '',
           showFullContent: false,
-          replyTime: res.data.feedback.reply_time,
-          createdAt: res.data.feedback.created_at
+          replyTime: raw.reply_time,
+          createdAt
         };
         
         this.setData({

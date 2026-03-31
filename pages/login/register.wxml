@@ -1,14 +1,6 @@
 <!--pages/login/register.wxml-->
 <view class="container">
-  <!-- 头部导航 -->
-  <view class="nav-bar">
-    <view class="nav-left" bindtap="goBack">
-      <text class="nav-back">←</text>
-    </view>
-    <view class="nav-title">注册账号</view>
-    <view class="nav-right"></view>
-  </view>
-
+ 
   <!-- 注册表单 -->
   <view class="form-container">
     <!-- 用户名 -->
@@ -111,20 +103,6 @@
       </view>
     </view>
 
-    <!-- 协议勾选 -->
-    <view class="agreement-item">
-      <checkbox 
-        class="checkbox" 
-        checked="{{agreed}}" 
-        bindchange="onAgreementChange"
-      />
-      <text class="agreement-text">
-        我已阅读并同意
-        <text class="agreement-link" bindtap="goToAgreement">《用户协议》</text>
-        和
-        <text class="agreement-link" bindtap="goToPrivacy">《隐私政策》</text>
-      </text>
-    </view>
   </view>
 
   <!-- 注册按钮 -->
@@ -132,7 +110,6 @@
     <button 
       class="register-btn" 
       bindtap="register"
-      disabled="{{!canRegister}}"
     >
       注册
     </button>

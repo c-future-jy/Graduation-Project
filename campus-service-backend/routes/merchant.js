@@ -5,6 +5,8 @@ const { auth, checkRole } = require('../middleware/auth');
 
 // 公开路由
 router.get('/', merchantController.getMerchantList); // 获取商家列表
+// 当前登录用户的商家信息（用于商家端管理；不依赖 token 内的 role/merchant_id，避免审核后 token 未刷新导致 403）
+router.get('/me', auth, merchantController.getMyMerchant);
 router.get('/:id', merchantController.getMerchantById); // 获取商家详情
 
 // 需要认证的路由

@@ -34,9 +34,11 @@
           class="menu-item {{activeTab === item.id ? 'active' : ''}}"
           data-id="{{item.id}}"
           data-url="{{item.url}}"
+          data-title="{{item.name}}"
           bindtap="switchMenu"
         >
           <text class="menu-name">{{item.name}}</text>
+          <view wx:if="{{badgeMap[item.id]}}" class="menu-badge">{{badgeMap[item.id]}}</view>
         </view>
       </view>
       
@@ -59,22 +61,22 @@
       <view class="dashboard-preview">
         <text class="preview-title">管理概览</text>
         <view class="preview-cards">
-          <view class="preview-card" bindtap="goToPage" data-url="/pages/admin/users/users">
+          <view class="preview-card" bindtap="goToPage" data-url="/pages/admin/users/users" data-title="用户管理">
             <text class="card-icon">👥</text>
             <text class="card-title">用户管理</text>
             <text class="card-desc">管理平台用户账号</text>
           </view>
-          <view class="preview-card" bindtap="goToPage" data-url="/pages/admin/merchants/merchants">
+          <view class="preview-card" bindtap="goToPage" data-url="/pages/admin/merchants/merchants" data-title="商家管理">
             <text class="card-icon">🏪</text>
             <text class="card-title">商家管理</text>
             <text class="card-desc">审核和管理商家</text>
           </view>
-          <view class="preview-card" bindtap="goToPage" data-url="/pages/admin/products/products">
+          <view class="preview-card" bindtap="goToPage" data-url="/pages/admin/products/products" data-title="商品管理">
             <text class="card-icon">📦</text>
             <text class="card-title">商品管理</text>
             <text class="card-desc">管理平台商品</text>
           </view>
-          <view class="preview-card" bindtap="goToPage" data-url="/pages/admin/orders/orders">
+          <view class="preview-card" bindtap="goToPage" data-url="/pages/admin/orders/orders" data-title="订单管理">
             <text class="card-icon">📋</text>
             <text class="card-title">订单管理</text>
             <text class="card-desc">处理平台订单</text>

@@ -21,7 +21,7 @@
   <view class="products-section">
     <view class="section-title">店铺商品</view>
     <view class="products-list" wx:if="{{products.length > 0}}">
-      <view class="product-item" wx:for="{{products}}" wx:key="{{item.id}}" bindtap="goToProductDetail" data-id="{{item.id}}">
+      <view class="product-item" wx:for="{{products}}" wx:key="{{item.id}}" bindtap="goToProductDetail" data-id="{{item.id}}" data-name="{{item.name}}">
         <view class="product-image">
           <image src="{{item.image || '../../../assets/default-product.png'}}" mode="aspectFill"></image>
         </view>

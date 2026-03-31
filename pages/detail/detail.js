@@ -5,62 +5,30 @@ Page({
    * 页面的初始数据
    */
   data: {
-
+    productId: null
   },
 
   /**
    * 生命周期函数--监听页面加载
    */
   onLoad(options) {
+    if (options && options.id) {
+      this.setData({ productId: options.id });
+    }
 
+    // 支持从跳转参数动态设置导航栏标题：/pages/detail/detail?id=xx&title=xxx
+    const initialTitle = this.safeDecodeURIComponent(options && options.title);
+    if (initialTitle) {
+      wx.setNavigationBarTitle({ title: initialTitle });
+    }
   },
 
-  /**
-   * 生命周期函数--监听页面初次渲染完成
-   */
-  onReady() {
-
-  },
-
-  /**
-   * 生命周期函数--监听页面显示
-   */
-  onShow() {
-
-  },
-
-  /**
-   * 生命周期函数--监听页面隐藏
-   */
-  onHide() {
-
-  },
-
-  /**
-   * 生命周期函数--监听页面卸载
-   */
-  onUnload() {
-
-  },
-
-  /**
-   * 页面相关事件处理函数--监听用户下拉动作
-   */
-  onPullDownRefresh() {
-
-  },
-
-  /**
-   * 页面上拉触底事件的处理函数
-   */
-  onReachBottom() {
-
-  },
-
-  /**
-   * 用户点击右上角分享
-   */
-  onShareAppMessage() {
-
+  safeDecodeURIComponent(value) {
+    if (!value) return '';
+    try {
+      return decodeURIComponent(value);
+    } catch (e) {
+      return value;
+    }
   }
 })

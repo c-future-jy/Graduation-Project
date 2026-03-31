@@ -1,5 +1,5 @@
 // pages/merchant/index/index.js
-const { request } = require('../../../utils/api');
+const { request, getUserProfile, getMyMerchant, getMerchantDashboardStats } = require('../../../utils/api');
 
 Page({
   data: {
@@ -22,14 +22,25 @@ Page({
     this.loadData();
   },
 
+  onShow: function () {
+    // 返回该页时刷新一次店铺信息
+    if (!this.data.loading) {
+      this.getShopInfo().catch(() => {});
+    }
+  },
+
   // 加载数据
   loadData: function () {
     wx.showLoading({ title: '加载中...' });
-    
-    Promise.all([
-      this.getShopInfo(),
-      this.getStats()
-    ]).then(() => {
+
+    // 先拉取一次用户资料：若管理员刚审核通过，会下发新 token（utils/api.js 会自动更新本地 token）
+    getUserProfile()
+      .catch(() => {})
+      .finally(() => {
+        Promise.all([
+          this.getShopInfo(),
+          this.getStats()
+        ]).then(() => {
       this.setData({ loading: false });
       wx.hideLoading();
     }).catch(err => {
@@ -37,80 +48,50 @@ Page({
       wx.hideLoading();
       wx.showToast({ title: '加载失败', icon: 'none' });
     });
+      });
   },
 
   // 获取店铺信息
   getShopInfo: function () {
     return new Promise((resolve, reject) => {
-      // 假设从本地存储获取商家ID
-      const merchantId = wx.getStorageSync('merchantId') || 1;
-      
-      request({
-        url: `/merchants/${merchantId}`,
-        method: 'GET'
-      }).then(res => {
-        if (res.success) {
-          this.setData({
-            shopInfo: res.data.merchant
-          });
-          resolve();
-        } else {
-          reject(res.message);
-        }
-      }).catch(reject);
+      getMyMerchant()
+        .then(res => {
+          if (res.success && res.data && res.data.merchant) {
+            const merchant = res.data.merchant;
+            // 缓存 merchantId 供其它页面使用（如有需要）
+            if (merchant && merchant.id) {
+              wx.setStorageSync('merchantId', merchant.id);
+            }
+            this.setData({ shopInfo: merchant });
+            resolve();
+          } else {
+            reject((res && res.message) || '获取店铺信息失败');
+          }
+        })
+        .catch(reject);
     });
   },
 
   // 获取数据统计
   getStats: function () {
     return new Promise((resolve, reject) => {
-      // 假设从本地存储获取商家ID
-      const merchantId = wx.getStorageSync('merchantId') || 1;
-      
-      // 获取商品数量
-      request({
-        url: '/products',
-        method: 'GET',
-        data: { merchant_id: merchantId }
-      }).then(res => {
-        if (res.success) {
-          this.setData({
-            'stats.productCount': res.data.products.length
-          });
-        }
-        
-        // 获取订单数量
-        return request({
-          url: '/orders',
-          method: 'GET',
-          data: { merchant_id: merchantId }
-        });
-      }).then(res => {
-        if (res.success) {
-          this.setData({
-            'stats.orderCount': res.data.orders ? res.data.orders.length : 0
-          });
-        }
-        
-        // 获取今日订单数量
-        const today = new Date().toISOString().split('T')[0];
-        return request({
-          url: '/orders',
-          method: 'GET',
-          data: { 
-            merchant_id: merchantId,
-            start_date: today,
-            end_date: today
+      getMerchantDashboardStats()
+        .then((res) => {
+          if (res && res.success && res.data) {
+            this.setData({
+              'stats.productCount': res.data.totalProducts || 0,
+              // 后端未提供“总订单数”，这里用“本月订单数”近似展示
+              'stats.orderCount': res.data.monthOrders || 0,
+              'stats.todayOrderCount': res.data.todayOrders || 0
+            });
           }
+          resolve();
+        })
+        .catch((err) => {
+          // 统计不影响主流程
+          console.warn('merchant dashboard stats failed:', err);
+          resolve();
         });
-      }).then(res => {
-        if (res.success) {
-          this.setData({
-            'stats.todayOrderCount': res.data.orders ? res.data.orders.length : 0
-          });
-        }
-        resolve();
-      }).catch(reject);
     });
   },
 

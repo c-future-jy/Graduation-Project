@@ -206,7 +206,9 @@ Page({
    */
   goToMerchant(e) {
     const merchantId = e.currentTarget.dataset.merchantId;
-    wx.navigateTo({ url: `/pages/merchant/merchant?id=${merchantId}` });
+    const merchantName = e.currentTarget.dataset.name;
+    const titleParam = merchantName ? `&title=${encodeURIComponent(merchantName)}` : '';
+    wx.navigateTo({ url: `/pages/merchant/merchant?id=${merchantId}${titleParam}` });
   },
 
   /**

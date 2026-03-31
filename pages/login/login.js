@@ -1,5 +1,5 @@
 // pages/login/login.js
-const { login } = require('../../utils/api');
+const { login, accountLogin: apiAccountLogin } = require('../../utils/api');
 
 Page({
   /**
@@ -205,62 +205,33 @@ Page({
       title: '登录中...'
     });
 
-    // 调用后端API进行账号密码登录
-    wx.request({
-      url: 'http://localhost:3000/api/users/login/account',
-      method: 'POST',
-      header: {
-        'Content-Type': 'application/json'
-      },
-      data: {
-        phone: account, // 后端API期望的参数是phone
-        password,
-        role: 1 // 默认学生角色
-      },
-      success: (res) => {
+    apiAccountLogin({
+      phone: account,
+      password,
+      role: 1
+    })
+      .then((res) => {
         wx.hideLoading();
-        if (res.statusCode === 200 && res.data.success) {
-          // 存储token和用户信息
-          wx.setStorageSync('token', res.data.data.token);
-          wx.setStorageSync('userInfo', res.data.data.user);
-          
-          // 根据用户角色跳转到相应页面
-          const user = res.data.data.user;
+        if (res && res.success) {
+          wx.setStorageSync('token', res.data.token);
+          wx.setStorageSync('userInfo', res.data.user);
+
+          const user = res.data.user;
           if (user.role === 3) {
-            // 管理员跳转到管理后台
-            wx.redirectTo({
-              url: '/pages/admin/index'
-            });
+            wx.redirectTo({ url: '/pages/admin/index' });
           } else if (user.role === 2) {
-            // 商家跳转到商家中心
-            wx.redirectTo({
-              url: '/pages/merchant/index/index'
-            });
+            wx.redirectTo({ url: '/pages/merchant/index/index' });
           } else {
-            // 学生跳转到首页
-            wx.switchTab({
-              url: '/pages/index/index'
-            });
+            wx.switchTab({ url: '/pages/index/index' });
           }
         } else {
-          // 显示详细的错误信息
-          const errorMsg = res.data.message || `登录失败，状态码：${res.statusCode}`;
-          wx.showToast({
-            title: errorMsg,
-            icon: 'none',
-            duration: 3000
-          });
+          wx.showToast({ title: (res && res.message) || '登录失败', icon: 'none', duration: 3000 });
         }
-      },
-      fail: (err) => {
+      })
+      .catch((err) => {
         wx.hideLoading();
-        wx.showToast({
-          title: '网络连接失败，请检查网络',
-          icon: 'none',
-          duration: 3000
-        });
-      }
-    });
+        wx.showToast({ title: err.message || '网络连接失败，请检查网络', icon: 'none', duration: 3000 });
+      });
   },
 
   /**

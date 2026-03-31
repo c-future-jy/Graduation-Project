@@ -85,6 +85,7 @@
         wx:key="id" 
         class="merchant-item" 
         data-id="{{item.id}}" 
+        data-name="{{item.name}}"
         bindtap="goToMerchant"
       >
         <image src="{{item.logo || '/assets/images/morentouxiang.jpg'}}" mode="aspectFill" class="merchant-logo"/>

@@ -14,6 +14,7 @@ const uploadRoutes = require('./upload');
 const cartRoutes = require('./cart');
 const dashboardRoutes = require('./dashboard');
 const adminRoutes = require('./admin');
+const merchantDashboardRoutes = require('./merchantDashboard');
 const searchController = require('../controllers/searchController');
 
 // 注册路由
@@ -27,6 +28,7 @@ router.use('/feedback', feedbackRoutes);
 router.use('/notifications', notificationRoutes);
 router.use('/upload', uploadRoutes);
 router.use('/cart', cartRoutes);
+router.use('/merchant/dashboard', merchantDashboardRoutes);
 router.use('/admin/dashboard', dashboardRoutes);
 router.use('/admin', adminRoutes);
 

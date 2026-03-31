@@ -6,6 +6,25 @@ const { pool } = require('../config/db');
  */
 exports.getDashboardStats = async (req, res, next) => {
   try {
+    const columnExists = async (tableName, columnName) => {
+      const [rows] = await pool.query(
+        `SELECT COUNT(*) as cnt
+         FROM information_schema.columns
+         WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?`,
+        [tableName, columnName]
+      );
+      return (rows[0] && rows[0].cnt > 0) || false;
+    };
+
+    const calcPercentTrend = (todayValue, yesterdayValue) => {
+      const todayNum = Number(todayValue) || 0;
+      const yesterdayNum = Number(yesterdayValue) || 0;
+      if (yesterdayNum === 0) {
+        return todayNum === 0 ? 0 : 100;
+      }
+      return Math.round(((todayNum - yesterdayNum) / yesterdayNum) * 100);
+    };
+
     // 总用户数
     const [totalUsersResult] = await pool.query('SELECT COUNT(*) as count FROM user');
     const totalUsers = totalUsersResult[0].count;
@@ -26,13 +45,22 @@ exports.getDashboardStats = async (req, res, next) => {
     const [todayOrdersResult] = await pool.query('SELECT COUNT(*) as count FROM `order` WHERE DATE(created_at) = CURDATE()');
     const todayOrders = todayOrdersResult[0].count;
 
+    // 昨日订单数（用于趋势）
+    const [yesterdayOrdersResult] = await pool.query(
+      'SELECT COUNT(*) as count FROM `order` WHERE DATE(created_at) = DATE_SUB(CURDATE(), INTERVAL 1 DAY)'
+    );
+    const yesterdayOrders = yesterdayOrdersResult[0].count;
+
     // 待处理反馈数
     const [pendingFeedbackResult] = await pool.query('SELECT COUNT(*) as count FROM feedback WHERE reply IS NULL');
     const pendingFeedback = pendingFeedbackResult[0].count;
 
     // 待审核商家数
-    const [pendingMerchantsResult] = await pool.query('SELECT COUNT(*) as count FROM merchant WHERE audit_status = 1');
-    const pendingMerchants = pendingMerchantsResult[0].count;
+    let pendingMerchants = 0;
+    if (await columnExists('merchant', 'audit_status')) {
+      const [pendingMerchantsResult] = await pool.query('SELECT COUNT(*) as count FROM merchant WHERE audit_status = 1');
+      pendingMerchants = pendingMerchantsResult[0].count;
+    }
 
     // 待处理订单数
     const [pendingOrdersResult] = await pool.query('SELECT COUNT(*) as count FROM `order` WHERE status IN (0, 1)');
@@ -42,11 +70,42 @@ exports.getDashboardStats = async (req, res, next) => {
     const [unreadNotificationsResult] = await pool.query('SELECT COUNT(*) as count FROM notification WHERE is_read = 0');
     const unreadNotifications = unreadNotificationsResult[0].count;
 
-    // 计算趋势数据（这里使用简单的模拟值，实际项目中可以根据历史数据计算）
-    const orderTrend = 12;
-    const userTrend = 5;
-    const merchantTrend = 3;
-    const productTrend = 8;
+    // 计算趋势数据（较昨日，百分比）
+    const orderTrend = calcPercentTrend(todayOrders, yesterdayOrders);
+
+    let userTrend = 0;
+    let merchantTrend = 0;
+    let productTrend = 0;
+
+    if (await columnExists('user', 'created_at')) {
+      const [todayNewUsersResult] = await pool.query(
+        'SELECT COUNT(*) as count FROM user WHERE DATE(created_at) = CURDATE()'
+      );
+      const [yesterdayNewUsersResult] = await pool.query(
+        'SELECT COUNT(*) as count FROM user WHERE DATE(created_at) = DATE_SUB(CURDATE(), INTERVAL 1 DAY)'
+      );
+      userTrend = calcPercentTrend(todayNewUsersResult[0].count, yesterdayNewUsersResult[0].count);
+    }
+
+    if (await columnExists('merchant', 'created_at')) {
+      const [todayNewMerchantsResult] = await pool.query(
+        'SELECT COUNT(*) as count FROM merchant WHERE DATE(created_at) = CURDATE()'
+      );
+      const [yesterdayNewMerchantsResult] = await pool.query(
+        'SELECT COUNT(*) as count FROM merchant WHERE DATE(created_at) = DATE_SUB(CURDATE(), INTERVAL 1 DAY)'
+      );
+      merchantTrend = calcPercentTrend(todayNewMerchantsResult[0].count, yesterdayNewMerchantsResult[0].count);
+    }
+
+    if (await columnExists('product', 'created_at')) {
+      const [todayNewProductsResult] = await pool.query(
+        'SELECT COUNT(*) as count FROM product WHERE DATE(created_at) = CURDATE()'
+      );
+      const [yesterdayNewProductsResult] = await pool.query(
+        'SELECT COUNT(*) as count FROM product WHERE DATE(created_at) = DATE_SUB(CURDATE(), INTERVAL 1 DAY)'
+      );
+      productTrend = calcPercentTrend(todayNewProductsResult[0].count, yesterdayNewProductsResult[0].count);
+    }
 
     res.json({
       success: true,

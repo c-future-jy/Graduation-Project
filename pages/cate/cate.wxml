@@ -57,7 +57,7 @@
 
       <!-- 空状态 -->
       <view wx:elif="{{merchants.length === 0 && !loading}}" class="empty-container">
-        <image class="empty-icon" src="../../assets/images/shangpinliebiao.jpg" mode="aspectFit" />
+        <image class="empty-icon" src="/assets/images/kong.jpg" mode="aspectFit" />
         <text class="empty-text">暂无商家，看看其他分类吧</text>
         <button class="empty-btn" bindtap="goToRecommend">查看推荐</button>
       </view>
@@ -70,6 +70,7 @@
           class="merchant-card {{item.isClosed ? 'closed' : ''}}"
           bindtap="goToMerchant"
           data-id="{{item.id}}"
+          data-name="{{item.name}}"
         >
           <image class="merchant-image" src="{{item.image}}" mode="aspectFill" />
           <view wx:if="{{item.isClosed}}" class="closed-overlay">
@@ -77,22 +78,9 @@
           </view>
           <view class="merchant-info">
             <view class="merchant-name">{{item.name}}</view>
-            <view class="merchant-meta">
-              <text class="meta-item">{{item.distance}}</text>
-              <text class="meta-item">{{item.deliveryTime}}</text>
-              <text class="meta-item price">{{item.minPrice}}</text>
-            </view>
-            <view class="merchant-tags">
-              <view 
-                wx:for="{{item.tags}}" 
-                wx:key="{{index}}"
-                class="tag"
-              >
-                {{item}}
-              </view>
-            </view>
-            <view class="merchant-hot">
-              <text class="hot-text">热销: {{item.hotDish}}</text>
+            <view class="merchant-meta" wx:if="{{item.address || item.phone}}">
+              <text class="meta-item" wx:if="{{item.address}}">{{item.address}}</text>
+              <text class="meta-item" wx:if="{{item.phone}}">{{item.phone}}</text>
             </view>
           </view>
         </view>

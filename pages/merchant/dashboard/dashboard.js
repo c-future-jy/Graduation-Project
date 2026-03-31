@@ -1,21 +1,55 @@
 // pages/merchant/dashboard/dashboard.js
+const {
+  getMerchantDashboardStats,
+  getMerchantDashboardTrend,
+  getMerchantDashboardTopProducts,
+  getMerchantDashboardRecentOrders,
+  getMerchantDashboardLowStock,
+  getMerchantDashboardOrderStatus
+} = require('../../../utils/api');
+
+function toYmd(date) {
+  const d = new Date(date);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function toMd(ymd) {
+  const str = String(ymd || '');
+  const parts = str.split('-');
+  if (parts.length !== 3) return str;
+  return `${parseInt(parts[1], 10)}/${parseInt(parts[2], 10)}`;
+}
+
+function formatDateTime(value) {
+  if (!value) return '';
+  const s = String(value);
+  // 兼容 ISO 字符串
+  if (s.includes('T')) {
+    return s.replace('T', ' ').replace(/\.\d{3}Z$/, '').replace(/Z$/, '');
+  }
+  return s;
+}
+
 Page({
   /**
    * 页面的初始数据
    */
   data: {
     // 商家信息
-    merchantName: '校园便利店',
+    merchantName: '',
     
     // 核心数据统计
-    todayOrders: 12,
-    todaySales: 899.5,
-    todayAvgOrder: 74.96,
-    pendingOrders: 3,
-    monthOrders: 320,
-    monthSales: 25680.75,
-    totalProducts: 45,
-    lowStockProducts: 5,
+    todayOrders: 0,
+    todaySales: 0,
+    todayAvgOrder: 0,
+    pendingOrders: 0,
+    monthOrders: 0,
+    monthSales: 0,
+    totalProducts: 0,
+    lowStockProducts: 0,
     
     // 时间范围
     timeRange: 'today',
@@ -30,31 +64,13 @@ Page({
     days: [],
     
     // 商品销量排行
-    topProducts: [
-      { id: 1, name: '可口可乐', sales: 120 },
-      { id: 2, name: '康师傅方便面', sales: 98 },
-      { id: 3, name: '农夫山泉', sales: 85 },
-      { id: 4, name: '乐事薯片', sales: 76 },
-      { id: 5, name: '奥利奥饼干', sales: 65 }
-    ],
+    topProducts: [],
     
     // 最近订单
-    recentOrders: [
-      { id: 1, orderNo: 'ORD20260325001', status: 1, amount: 45.5, createdAt: '2026-03-25 14:30:25' },
-      { id: 2, orderNo: 'ORD20260325002', status: 2, amount: 68.0, createdAt: '2026-03-25 13:15:42' },
-      { id: 3, orderNo: 'ORD20260325003', status: 0, amount: 23.5, createdAt: '2026-03-25 11:20:18' },
-      { id: 4, orderNo: 'ORD20260325004', status: 3, amount: 89.0, createdAt: '2026-03-25 10:05:33' },
-      { id: 5, orderNo: 'ORD20260325005', status: 1, amount: 56.5, createdAt: '2026-03-25 09:45:12' }
-    ],
+    recentOrders: [],
     
     // 库存预警
-    lowStockItems: [
-      { id: 1, name: '雪碧', stock: 3 },
-      { id: 2, name: '旺仔牛奶', stock: 5 },
-      { id: 3, name: '火腿肠', stock: 7 },
-      { id: 4, name: '面包', stock: 2 },
-      { id: 5, name: '酸奶', stock: 4 }
-    ],
+    lowStockItems: [],
     
     // 图表数据
     orderTrendData: [],
@@ -73,6 +89,11 @@ Page({
    */
   onLoad(options) {
     this.initDatePicker();
+    const userInfo = wx.getStorageSync('userInfo') || {};
+    const merchantName = userInfo.merchant_name || userInfo.merchantName || userInfo.nickname || userInfo.username || '';
+    if (merchantName) {
+      this.setData({ merchantName });
+    }
     this.loadDashboardData();
     this.startAutoRefresh();
   },
@@ -127,112 +148,164 @@ Page({
   /**
    * 加载Dashboard数据
    */
-  loadDashboardData() {
+  async loadDashboardData() {
+    if (this._loadingPromise) return this._loadingPromise;
+
     this.setData({ loading: true });
-    
-    // 模拟API请求
-    setTimeout(() => {
-      // 实际项目中这里会调用聚合API获取所有数据
-      this.loadStatisticsData();
-      this.loadChartData();
-      this.loadRecentOrders();
-      this.loadLowStockItems();
-      
-      this.setData({ loading: false });
-    }, 1000);
+
+    this._loadingPromise = (async () => {
+      const rangeParams = this.getRangeParams();
+
+      const [statsRes, trendRes, statusRes, topRes, recentRes, lowStockRes] = await Promise.all([
+        getMerchantDashboardStats(),
+        getMerchantDashboardTrend(rangeParams),
+        getMerchantDashboardOrderStatus(rangeParams),
+        getMerchantDashboardTopProducts({ limit: parseInt(this.data.rankLimit, 10) || 5 }),
+        getMerchantDashboardRecentOrders({ limit: 5 }),
+        getMerchantDashboardLowStock({ threshold: 10, limit: 5 })
+      ]);
+
+      const stats = (statsRes && statsRes.data) || {};
+      const trend = ((trendRes && trendRes.data && trendRes.data.trend) || []).map((x) => ({
+        date: String(x.date),
+        orderCount: Number(x.orderCount) || 0,
+        sales: Number(x.sales) || 0
+      }));
+      const orderTrendData = trend.map((x) => ({ date: toMd(x.date), value: x.orderCount }));
+      const salesTrendData = trend.map((x) => ({ date: toMd(x.date), value: Math.round(x.sales) }));
+      const orderStatusData = ((statusRes && statusRes.data && statusRes.data.items) || []).map((x) => ({
+        status: x.status,
+        value: Number(x.value) || 0
+      }));
+
+      const topProducts = ((topRes && topRes.data && topRes.data.items) || []).map((x) => ({
+        id: x.id,
+        name: x.name,
+        sales: Number(x.sales) || 0
+      }));
+
+      const recentOrders = ((recentRes && recentRes.data && recentRes.data.orders) || []).map((o) => ({
+        ...o,
+        createdAt: formatDateTime(o.createdAt)
+      }));
+
+      const lowStockItems = ((lowStockRes && lowStockRes.data && lowStockRes.data.items) || []).map((x) => ({
+        id: x.id,
+        name: x.name,
+        stock: Number(x.stock) || 0
+      }));
+
+      await new Promise((resolve) => {
+        this.setData(
+          {
+            todayOrders: stats.todayOrders || 0,
+            todaySales: stats.todaySales || 0,
+            todayAvgOrder: stats.todayAvgOrder || 0,
+            pendingOrders: stats.pendingOrders || 0,
+            monthOrders: stats.monthOrders || 0,
+            monthSales: stats.monthSales || 0,
+            totalProducts: stats.totalProducts || 0,
+            lowStockProducts: stats.lowStockProducts || 0,
+            orderTrendData,
+            salesTrendData,
+            orderStatusData,
+            topProducts,
+            recentOrders,
+            lowStockItems
+          },
+          resolve
+        );
+      });
+
+      this.drawOrderTrendChart();
+      this.drawSalesTrendChart();
+      this.drawOrderStatusChart();
+    })()
+      .catch((e) => {
+        console.error('加载商家仪表盘失败:', e);
+      })
+      .finally(() => {
+        this.setData({ loading: false });
+        this._loadingPromise = null;
+      });
+
+    return this._loadingPromise;
   },
 
-  /**
-   * 加载统计数据
-   */
-  loadStatisticsData() {
-    // 模拟数据
-    this.setData({
-      todayOrders: 12,
-      todaySales: 899.5,
-      todayAvgOrder: 74.96,
-      pendingOrders: 3,
-      monthOrders: 320,
-      monthSales: 25680.75,
-      totalProducts: 45,
-      lowStockProducts: 5
-    });
-  },
-
-  /**
-   * 加载图表数据
-   */
-  loadChartData() {
-    // 模拟订单趋势数据
-    const orderTrendData = [];
-    const salesTrendData = [];
+  getRangeParams() {
+    const range = this.data.timeRange;
     const today = new Date();
-    
-    for (let i = 6; i >= 0; i--) {
-      const date = new Date(today);
-      date.setDate(date.getDate() - i);
-      const dateStr = date.getMonth() + 1 + '/' + date.getDate();
-      orderTrendData.push({
-        date: dateStr,
-        value: Math.floor(Math.random() * 20) + 5
-      });
-      salesTrendData.push({
-        date: dateStr,
-        value: Math.floor(Math.random() * 1000) + 500
-      });
+    today.setHours(0, 0, 0, 0);
+
+    if (range === 'today') {
+      const d = toYmd(today);
+      return { startDate: d, endDate: d };
     }
-    
-    // 模拟订单状态分布
-    const orderStatusData = [
-      { status: '待支付', value: 5 },
-      { status: '待发货', value: 12 },
-      { status: '已发货', value: 8 },
-      { status: '已完成', value: 35 },
-      { status: '已取消', value: 3 }
-    ];
-    
-    this.setData({
-      orderTrendData,
-      salesTrendData,
-      orderStatusData
-    });
-    
-    // 绘制图表
-    this.drawOrderTrendChart();
-    this.drawSalesTrendChart();
-    this.drawOrderStatusChart();
+
+    if (range === 'yesterday') {
+      const y = new Date(today);
+      y.setDate(y.getDate() - 1);
+      const d = toYmd(y);
+      return { startDate: d, endDate: d };
+    }
+
+    if (range === 'custom') {
+      if (this.data.startDate && this.data.endDate) {
+        return { startDate: this.data.startDate, endDate: this.data.endDate };
+      }
+      return { days: 7 };
+    }
+
+    const days = parseInt(range, 10);
+    if (Number.isFinite(days) && days > 0) {
+      return { days };
+    }
+
+    return { days: 7 };
   },
 
-  /**
-   * 加载最近订单
-   */
-  loadRecentOrders() {
-    // 模拟数据
-    this.setData({
-      recentOrders: [
-        { id: 1, orderNo: 'ORD20260325001', status: 1, amount: 45.5, createdAt: '2026-03-25 14:30:25' },
-        { id: 2, orderNo: 'ORD20260325002', status: 2, amount: 68.0, createdAt: '2026-03-25 13:15:42' },
-        { id: 3, orderNo: 'ORD20260325003', status: 0, amount: 23.5, createdAt: '2026-03-25 11:20:18' },
-        { id: 4, orderNo: 'ORD20260325004', status: 3, amount: 89.0, createdAt: '2026-03-25 10:05:33' },
-        { id: 5, orderNo: 'ORD20260325005', status: 1, amount: 56.5, createdAt: '2026-03-25 09:45:12' }
-      ]
-    });
+  async loadTrendAndStatus() {
+    const rangeParams = this.getRangeParams();
+    try {
+      const [trendRes, statusRes] = await Promise.all([
+        getMerchantDashboardTrend(rangeParams),
+        getMerchantDashboardOrderStatus(rangeParams)
+      ]);
+
+      const trend = ((trendRes && trendRes.data && trendRes.data.trend) || []).map((x) => ({
+        date: String(x.date),
+        orderCount: Number(x.orderCount) || 0,
+        sales: Number(x.sales) || 0
+      }));
+      const orderTrendData = trend.map((x) => ({ date: toMd(x.date), value: x.orderCount }));
+      const salesTrendData = trend.map((x) => ({ date: toMd(x.date), value: Math.round(x.sales) }));
+      const orderStatusData = ((statusRes && statusRes.data && statusRes.data.items) || []).map((x) => ({
+        status: x.status,
+        value: Number(x.value) || 0
+      }));
+
+      this.setData({ orderTrendData, salesTrendData, orderStatusData }, () => {
+        this.drawOrderTrendChart();
+        this.drawSalesTrendChart();
+        this.drawOrderStatusChart();
+      });
+    } catch (e) {
+      console.error('加载趋势/分布失败:', e);
+    }
   },
 
-  /**
-   * 加载库存预警
-   */
-  loadLowStockItems() {
-    // 模拟数据
-    this.setData({
-      lowStockItems: [
-        { id: 1, name: '雪碧', stock: 3 },
-        { id: 2, name: '旺仔牛奶', stock: 5 },
-        { id: 3, name: '火腿肠', stock: 7 },
-        { id: 4, name: '面包', stock: 2 },
-        { id: 5, name: '酸奶', stock: 4 }
-      ]
-    });
+  async loadTopProducts() {
+    try {
+      const res = await getMerchantDashboardTopProducts({ limit: parseInt(this.data.rankLimit, 10) || 5 });
+      const topProducts = ((res && res.data && res.data.items) || []).map((x) => ({
+        id: x.id,
+        name: x.name,
+        sales: Number(x.sales) || 0
+      }));
+      this.setData({ topProducts });
+    } catch (e) {
+      console.error('加载销量排行失败:', e);
+    }
   },
 
   /**
@@ -241,8 +314,7 @@ Page({
   switchTimeRange(e) {
     const range = e.currentTarget.dataset.range;
     this.setData({ timeRange: range });
-    // 实际项目中这里会根据时间范围重新加载数据
-    this.loadChartData();
+    this.loadTrendAndStatus();
     console.log('切换时间范围:', range);
   },
 
@@ -252,7 +324,7 @@ Page({
   switchRankLimit(e) {
     const limit = e.currentTarget.dataset.limit;
     this.setData({ rankLimit: limit });
-    // 实际项目中这里会根据数量重新加载数据
+    this.loadTopProducts();
     console.log('切换排行数量:', limit);
   },
 
@@ -291,9 +363,8 @@ Page({
       timeRange: 'custom',
       showDatePicker: false
     });
-    
-    // 实际项目中这里会根据选择的日期范围重新加载数据
-    this.loadChartData();
+
+    this.loadTrendAndStatus();
   },
 
   /**
@@ -301,10 +372,9 @@ Page({
    */
   refreshData() {
     wx.showToast({ title: '刷新中...', icon: 'loading' });
-    this.loadDashboardData();
-    setTimeout(() => {
+    this.loadDashboardData().then(() => {
       wx.showToast({ title: '刷新成功', icon: 'success' });
-    }, 1000);
+    });
   },
 
   /**

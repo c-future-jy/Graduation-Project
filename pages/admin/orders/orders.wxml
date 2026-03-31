@@ -77,7 +77,7 @@
 
   <!-- 空状态 -->
   <view wx:if="{{orders.length === 0 && !loading}}" class="empty-state">
-    <text class="empty-icon">📋</text>
+    <image class="empty-image" src="/assets/images/kong.jpg" mode="aspectFit" />
     <text class="empty-text">未找到相关订单</text>
   </view>
 

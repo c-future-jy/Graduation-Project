@@ -3,7 +3,10 @@ const { pool } = require('../config/db');
 // 获取商品列表
 exports.getProductList = async (req, res, next) => {
   try {
-    const { merchant_id, category_id, page = 1, limit = 10 } = req.query;
+    const { merchant_id, category_id } = req.query;
+    const keyword = String(req.query.keyword ?? req.query.q ?? '').trim();
+    const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+    const limit = Math.max(parseInt(req.query.limit, 10) || 10, 1);
     const offset = (page - 1) * limit;
     
     let query = 'SELECT * FROM product WHERE status = 1';
@@ -17,9 +20,15 @@ exports.getProductList = async (req, res, next) => {
       query += ' AND category_id = ?';
       params.push(category_id);
     }
+
+    // 关键词搜索（商品名/描述）
+    if (keyword) {
+      query += ' AND (name LIKE ? OR description LIKE ?)';
+      params.push(`%${keyword}%`, `%${keyword}%`);
+    }
     
     query += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
-    params.push(parseInt(limit), parseInt(offset));
+    params.push(limit, offset);
     
     const [products] = await pool.query(query, params);
     res.json({ success: true, data: { products } });
@@ -278,8 +287,8 @@ exports.updateProductStatus = async (req, res, next) => {
       const [products] = await pool.query('SELECT merchant_id FROM product WHERE id = ?', [id]);
       if (products.length > 0) {
         await pool.query(
-          'INSERT INTO notification (user_id, title, content, created_at) VALUES (?, ?, ?, NOW())',
-          [products[0].merchant_id, '商品下架通知', `您的商品已被管理员下架，原因：${offline_reason || '无'}`]
+          'INSERT INTO notification (user_id, title, content, type, created_at) VALUES (?, ?, ?, ?, NOW())',
+          [products[0].merchant_id, '商品下架通知', `您的商品已被管理员下架，原因：${offline_reason || '无'}`, 4]
         );
       }
       
@@ -350,8 +359,8 @@ exports.batchUpdateProducts = async (req, res, next) => {
             const [products] = await pool.query('SELECT merchant_id FROM product WHERE id = ?', [productId]);
             if (products.length > 0) {
               await pool.query(
-                'INSERT INTO notification (user_id, title, content, created_at) VALUES (?, ?, ?, NOW())',
-                [products[0].merchant_id, '商品下架通知', `您的商品已被管理员下架，原因：${offline_reason || '无'}`]
+                'INSERT INTO notification (user_id, title, content, type, created_at) VALUES (?, ?, ?, ?, NOW())',
+                [products[0].merchant_id, '商品下架通知', `您的商品已被管理员下架，原因：${offline_reason || '无'}`, 4]
               );
             }
             

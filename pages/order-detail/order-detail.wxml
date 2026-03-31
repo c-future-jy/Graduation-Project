@@ -55,7 +55,7 @@
   <!-- 商家信息 -->
   <view class="info-card">
     <view class="info-header">
-      <view class="merchant-info" bindtap="goToMerchant" data-merchantId="{{order.merchantId}}">
+      <view class="merchant-info" bindtap="goToMerchant" data-merchantId="{{order.merchantId}}" data-name="{{order.merchantName}}">
         <image class="merchant-logo" src="{{order.merchantLogo}}" mode="aspectFill"></image>
         <view class="merchant-name">{{order.merchantName}}</view>
         <view class="merchant-arrow">→</view>

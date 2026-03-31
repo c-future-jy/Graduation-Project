@@ -88,10 +88,24 @@ Page({
    * 生命周期函数--监听页面加载
    */
   onLoad(options) {
+    const initialTitle = this.safeDecodeURIComponent(options && options.title);
     const { id } = options;
+
+    const fallbackTitle = id ? '编辑地址' : '新增地址';
+    wx.setNavigationBarTitle({ title: initialTitle || fallbackTitle });
+
     if (id) {
       this.setData({ addressId: id });
       this.loadAddress(id);
+    }
+  },
+
+  safeDecodeURIComponent(value) {
+    if (!value) return '';
+    try {
+      return decodeURIComponent(value);
+    } catch (e) {
+      return value;
     }
   },
 

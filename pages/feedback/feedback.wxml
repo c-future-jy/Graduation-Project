@@ -1,8 +1,6 @@
 <!--pages/feedback/feedback.wxml-->
 <view class="feedback-page">
-  <view class="feedback-header">
-    <text class="feedback-title">意见反馈</text>
-  </view>
+  
   
   <!-- 反馈类型选择 -->
   <view class="type-section">

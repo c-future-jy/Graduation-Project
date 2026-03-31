@@ -1,9 +1,5 @@
 <!-- pages/admin/users/users.wxml -->
 <view class="users-container">
-  <!-- 页面标题 -->
-  <view class="page-header">
-    <text class="page-title">用户管理</text>
-  </view>
 
   <!-- 搜索和筛选 -->
   <view class="search-filter">
@@ -18,7 +14,7 @@
     <view class="filter-box">
       <picker class="filter-picker" bindchange="roleFilter">
         <view class="picker-text">
-          角色：{{roleFilter === '' ? '全部' : roleFilter === '0' ? '管理员' : roleFilter === '1' ? '学生' : '商家'}}
+          角色：{{roleFilter === '' ? '全部' : roleFilter === '3' ? '管理员' : roleFilter === '1' ? '学生' : '商家'}}
         </view>
       </picker>
       <picker class="filter-picker" bindchange="statusFilter">
@@ -44,46 +40,56 @@
 
   <!-- 用户列表 -->
   <view class="users-table">
-    <view class="table-header">
-      <view class="table-col select-col">选择</view>
-      <view class="table-col id-col">ID</view>
-      <view class="table-col name-col">昵称</view>
-      <view class="table-col phone-col">手机号</view>
-      <view class="table-col role-col">角色</view>
-      <view class="table-col status-col">状态</view>
-      <view class="table-col time-col">注册时间</view>
-      <view class="table-col action-col">操作</view>
-    </view>
-    <view class="table-body">
-      <view wx:for="{{users}}" wx:key="id" class="table-row">
-        <view class="table-col select-col">
-          <checkbox-group bindchange="selectUser" data-id="{{item.id}}">
-            <label class="checkbox-label">
-              <checkbox value="{{item.id}}" checked="{{selectedUsers.includes(item.id)}}" />
-            </label>
-          </checkbox-group>
-        </view>
-        <view class="table-col id-col">{{item.id}}</view>
-        <view class="table-col name-col">{{item.nickname}}</view>
-        <view class="table-col phone-col">{{item.phone}}</view>
-        <view class="table-col role-col">
-          <text class="role-tag {{item.role === 0 ? 'admin' : item.role === 1 ? 'student' : 'merchant'}}">{{item.roleText}}</text>
-        </view>
-        <view class="table-col status-col">
-          <text class="status-tag {{item.status === 1 ? 'normal' : 'disabled'}}">{{item.statusText}}</text>
-        </view>
-        <view class="table-col time-col">{{item.createdAt}}</view>
-        <view class="table-col action-col">
-          <button class="action-btn view" bindtap="viewUserDetail" data-id="{{item.id}}">查看</button>
-          <button 
-            class="action-btn {{item.status === 1 ? 'disable' : 'enable'}}" 
-            bindtap="toggleUserStatus" 
-            data-id="{{item.id}}" 
-            data-status="{{item.status}}"
-          >
-            {{item.status === 1 ? '禁用' : '启用'}}
-          </button>
-          <button class="action-btn reset" bindtap="resetPassword" data-id="{{item.id}}">重置密码</button>
+    <view class="table-scroll">
+      <view class="table-header">
+        <view class="table-col select-col">选择</view>
+        <view class="table-col id-col">ID</view>
+        <view class="table-col name-col">昵称</view>
+        <view class="table-col phone-col">手机号</view>
+        <view class="table-col role-col">角色</view>
+        <view class="table-col status-col">状态</view>
+        <view class="table-col time-col">注册时间</view>
+        <view class="table-col action-col">操作</view>
+      </view>
+      <view class="table-body">
+        <view wx:for="{{users}}" wx:key="id" class="table-row">
+          <view class="table-col select-col">
+            <checkbox-group bindchange="selectUser" data-id="{{item.id}}">
+              <label class="checkbox-label">
+                <checkbox value="{{item.id}}" checked="{{selectedUsers.includes(item.id)}}" />
+              </label>
+            </checkbox-group>
+          </view>
+          <view class="table-col id-col">
+            <text class="cell-ellipsis">{{item.id}}</text>
+          </view>
+          <view class="table-col name-col">
+            <text class="cell-ellipsis">{{item.nickname || '-'}}</text>
+          </view>
+          <view class="table-col phone-col">
+            <text class="cell-ellipsis">{{item.phone || '-'}}</text>
+          </view>
+          <view class="table-col role-col">
+            <text class="role-tag {{item.role === 3 ? 'admin' : item.role === 1 ? 'student' : 'merchant'}}">{{item.roleText}}</text>
+          </view>
+          <view class="table-col status-col">
+            <text class="status-tag {{item.status === 1 ? 'normal' : 'disabled'}}">{{item.statusText}}</text>
+          </view>
+          <view class="table-col time-col">
+            <text class="cell-ellipsis">{{item.createdAt || '-'}}</text>
+          </view>
+          <view class="table-col action-col">
+            <button class="action-btn view" bindtap="viewUserDetail" data-id="{{item.id}}">查看</button>
+            <button 
+              class="action-btn {{item.status === 1 ? 'disable' : 'enable'}}" 
+              bindtap="toggleUserStatus" 
+              data-id="{{item.id}}" 
+              data-status="{{item.status}}"
+            >
+              {{item.status === 1 ? '禁用' : '启用'}}
+            </button>
+            <button class="action-btn reset" bindtap="resetPassword" data-id="{{item.id}}">重置密码</button>
+          </view>
         </view>
       </view>
     </view>
@@ -91,7 +97,7 @@
 
   <!-- 空状态 -->
   <view wx:if="{{users.length === 0 && !loading}}" class="empty-state">
-    <text class="empty-icon">🔍</text>
+    <image class="empty-icon" src="/assets/images/kong.jpg" mode="aspectFit" />
     <text class="empty-text">未找到相关用户</text>
   </view>
 
@@ -104,5 +110,88 @@
   <view wx:if="{{users.length > 0}}" class="pagination">
     <text>共 {{total}} 条记录</text>
     <text wx:if="{{!hasMore}}" class="no-more">没有更多数据了</text>
+  </view>
+
+  <!-- 用户详情弹窗 -->
+  <view wx:if="{{detailVisible}}" class="detail-mask" bindtap="closeUserDetail">
+    <view class="detail-panel" bindtap="stopTap">
+      <view class="detail-header">
+        <text class="detail-title">用户详情</text>
+        <text class="detail-close" bindtap="closeUserDetail">×</text>
+      </view>
+
+      <view wx:if="{{detailLoading}}" class="detail-loading">
+        <text>加载中...</text>
+      </view>
+
+      <scroll-view wx:if="{{!detailLoading && detail}}" scroll-y class="detail-content">
+        <view class="detail-section">
+          <text class="section-title">基本信息</text>
+          <view class="detail-row">
+            <text class="detail-label">头像</text>
+            <view class="detail-value">
+              <image class="detail-avatar" mode="aspectFill" src="{{detail.basic.avatarUrl || ''}}" wx:if="{{detail.basic.avatarUrl}}" />
+              <view class="detail-avatar placeholder" wx:else></view>
+            </view>
+          </view>
+          <view class="detail-row">
+            <text class="detail-label">用户ID</text>
+            <text class="detail-value">{{detail.basic.id}}</text>
+          </view>
+          <view class="detail-row">
+            <text class="detail-label">昵称</text>
+            <text class="detail-value">{{detail.basic.nickname || '-'}}</text>
+          </view>
+          <view class="detail-row">
+            <text class="detail-label">手机号</text>
+            <text class="detail-value">{{detail.basic.phone || '-'}}</text>
+          </view>
+        </view>
+
+        <view class="detail-section">
+          <text class="section-title">账户信息</text>
+          <view class="detail-row">
+            <text class="detail-label">角色</text>
+            <text class="detail-value">{{detail.account.roleText}}</text>
+          </view>
+          <view class="detail-row">
+            <text class="detail-label">状态</text>
+            <text class="detail-value">{{detail.account.statusText}}</text>
+          </view>
+          <view class="detail-row">
+            <text class="detail-label">注册时间</text>
+            <text class="detail-value">{{detail.account.createdAt || '-'}}</text>
+          </view>
+        </view>
+
+        <view class="detail-section">
+          <text class="section-title">关联信息</text>
+          <view class="detail-row">
+            <text class="detail-label">订单数量</text>
+            <text class="detail-value">{{detail.related.orderCount}}</text>
+          </view>
+          <view class="detail-row">
+            <text class="detail-label">反馈数量</text>
+            <text class="detail-value">{{detail.related.feedbackCount}}</text>
+          </view>
+          <view class="detail-row">
+            <text class="detail-label">收藏数量</text>
+            <text class="detail-value">{{detail.related.favoriteCount}}</text>
+          </view>
+        </view>
+
+        <view class="detail-section" wx:if="{{detail.account.role === 2}}">
+          <text class="section-title">商家信息</text>
+          <view class="detail-row">
+            <text class="detail-label">店铺名称</text>
+            <text class="detail-value">{{detail.merchant && detail.merchant.name ? detail.merchant.name : '-'}}</text>
+          </view>
+          <view class="detail-row">
+            <text class="detail-label">店铺状态</text>
+            <text class="detail-value">{{detail.merchant && detail.merchant.statusText ? detail.merchant.statusText : '-'}}</text>
+          </view>
+        </view>
+      </scroll-view>
+    </view>
   </view>
 </view>

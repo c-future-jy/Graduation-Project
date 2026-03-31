@@ -38,10 +38,14 @@ router.get('/feedbacks', auth, checkRole([3]), feedbackController.getAdminFeedba
 router.get('/feedbacks/:id', auth, checkRole([3]), feedbackController.getAdminFeedbackDetail);
 router.put('/feedbacks/:id/reply', auth, checkRole([3]), feedbackController.replyAdminFeedback);
 router.put('/feedbacks/:id/reject', auth, checkRole([3]), feedbackController.rejectAdminFeedback);
+router.delete('/feedbacks/:id', auth, checkRole([3]), feedbackController.deleteAdminFeedback);
+router.post('/feedbacks/batch-delete', auth, checkRole([3]), feedbackController.batchDeleteAdminFeedbacks);
 
 // 通知管理路由
 router.get('/notifications', auth, checkRole([3]), notificationController.getAdminNotificationList);
 router.post('/notifications', auth, checkRole([3]), notificationController.createAdminNotification);
+router.put('/notifications/:id/read', auth, checkRole([3]), notificationController.markAdminNotificationAsRead);
+router.post('/notifications/batch-read', auth, checkRole([3]), notificationController.batchMarkAdminNotificationsAsRead);
 router.delete('/notifications/:id', auth, checkRole([3]), notificationController.deleteAdminNotification);
 router.post('/notifications/batch-delete', auth, checkRole([3]), notificationController.batchDeleteAdminNotifications);
 

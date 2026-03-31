@@ -123,7 +123,7 @@
         <text>{{item.formattedTime}}</text>
       </view>
       <view class="table-cell cell-operate">
-        <text class="btn-view" bindtap="viewNotificationDetail" data-id="{{item.id}}">查看</text>
+        <text class="btn-read" wx:if="{{!item.isRead}}" bindtap="markAsRead" data-id="{{item.id}}">标记已读</text>
         <text class="btn-delete" bindtap="deleteNotification" data-id="{{item.id}}">删除</text>
       </view>
     </view>
@@ -132,7 +132,7 @@
     
     <!-- 空状态 -->
     <view class="empty-state" wx:if="{{!loading && notifications.length === 0}}">
-      <view class="empty-icon">{{hasActiveFilters ? '🔍' : '📭'}}</view>
+      <image class="empty-icon" src="/assets/images/kong.jpg" mode="aspectFit" />
       <text class="empty-text">{{hasActiveFilters ? '未找到匹配的通知，可调整筛选条件试试' : '暂无通知，点击「发布通知」创建第一条吧'}}</text>
       <view class="empty-actions">
         <button class="reload-btn" bindtap="loadNotifications">重新加载</button>
@@ -164,9 +164,9 @@
     </view>
     <view class="form-item">
       <text class="form-label">类型</text>
-      <picker mode="selector" range="{{notificationTypes.slice(1)}}" range-key="label" bindchange="bindTypeChangePublish">
+      <picker mode="selector" range="{{notificationTypes}}" range-key="label" bindchange="bindTypeChangePublish">
         <view class="form-picker">
-          <text>{{getTypeText(publishForm.type)}}</text>
+          <text>{{publishForm.typeText || '请选择类型'}}</text>
         </view>
       </picker>
     </view>
@@ -174,15 +174,11 @@
       <text class="form-label">接收范围</text>
       <picker mode="selector" range="{{receiveScopes}}" range-key="label" bindchange="bindScopeChange">
         <view class="form-picker">
-          <text>{{getScopeText(publishForm.receiveScope)}}</text>
+          <text>{{publishForm.receiveScopeText}}</text>
         </view>
       </picker>
     </view>
-    <view class="form-item">
-      <text class="form-label">定时发送</text>
-      <input type="datetime-local" value="{{publishForm.scheduledTime}}" bindinput="bindScheduledTimeChange" class="form-input" />
-      <text class="form-hint">留空则立即发送</text>
-    </view>
+
   </view>
 </modal>
 

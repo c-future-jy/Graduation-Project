@@ -34,9 +34,27 @@ Page({
    * 生命周期函数--监听页面加载
    */
   onLoad(options) {
+    const initialTitle = this.safeDecodeURIComponent(options && options.title);
+    wx.setNavigationBarTitle({ title: initialTitle || '数据统计' });
+
     this.checkLoginStatus();
     this.updateDateTime();
     this.loadDashboardData();
+  },
+
+  safeDecodeURIComponent(value) {
+    if (!value) return '';
+    try {
+      return decodeURIComponent(value);
+    } catch (e) {
+      return value;
+    }
+  },
+
+  buildUrlWithTitle(url, title) {
+    if (!title) return url;
+    const separator = url.includes('?') ? '&' : '?';
+    return url + separator + 'title=' + encodeURIComponent(title);
   },
 
   /**
@@ -116,29 +134,35 @@ Page({
   goToPage(e) {
     const page = e.currentTarget.dataset.page;
     let url = '';
+    let title = '';
     
     switch (page) {
       case 'users':
         url = '/pages/admin/users/users';
+        title = '用户管理';
         break;
       case 'merchants':
         url = '/pages/admin/merchants/merchants';
+        title = '商家管理';
         break;
       case 'products':
         url = '/pages/admin/products/products';
+        title = '商品管理';
         break;
       case 'orders':
         url = '/pages/admin/orders/orders';
+        title = '订单管理';
         break;
       case 'feedbacks':
         url = '/pages/admin/feedbacks/feedbacks';
+        title = '反馈管理';
         break;
       default:
         return;
     }
     
     wx.navigateTo({
-      url: url
+      url: this.buildUrlWithTitle(url, title)
     });
   },
 
@@ -147,7 +171,7 @@ Page({
    */
   goToNotifications() {
     wx.navigateTo({
-      url: '/pages/admin/notifications/notifications'
+      url: this.buildUrlWithTitle('/pages/admin/notifications/notifications', '通知管理')
     });
   },
 

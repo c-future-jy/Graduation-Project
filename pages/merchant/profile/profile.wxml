@@ -1,2 +1,46 @@
 <!--pages/merchant/profile/profile.wxml-->
-<text>pages/merchant/profile/profile.wxml</text>
+<view class="container">
+	<view class="card" hidden="{{loading}}">
+		<view class="field">
+			<text class="label">店铺名称</text>
+			<input class="input" placeholder="请输入店铺名称" value="{{form.name}}" data-field="name" bindinput="onInput" />
+		</view>
+
+		<view class="field">
+			<text class="label">联系电话</text>
+			<input class="input" placeholder="请输入联系电话" value="{{form.phone}}" data-field="phone" bindinput="onInput" />
+		</view>
+
+		<view class="field">
+			<text class="label">店铺地址</text>
+			<input class="input" placeholder="请输入店铺地址" value="{{form.address}}" data-field="address" bindinput="onInput" />
+		</view>
+
+		<view class="field">
+			<text class="label">店铺描述</text>
+			<textarea class="textarea" placeholder="请输入店铺描述" value="{{form.description}}" data-field="description" bindinput="onInput"></textarea>
+		</view>
+
+		<view class="field logo-field">
+			<text class="label">店铺Logo</text>
+			<view class="logo-row">
+				<image class="logo" src="{{logoPreview || '/assets/images/kong.jpg'}}" mode="aspectFill" />
+				<button class="mini-btn" size="mini" bindtap="chooseLogo" loading="{{uploadingLogo}}">上传</button>
+			</view>
+		</view>
+
+		<view class="field status-field">
+			<text class="label">营业状态</text>
+			<view class="status-row">
+				<text class="status-text">{{form.status === 1 ? '营业中' : '休息中'}}</text>
+				<switch checked="{{form.status === 1}}" bindchange="onStatusChange" />
+			</view>
+		</view>
+
+		<button class="save-btn" bindtap="save" loading="{{saving}}">保存</button>
+	</view>
+
+	<view class="empty" hidden="{{!loading}}">
+		<text class="empty-text">加载中...</text>
+	</view>
+</view>

@@ -14,7 +14,22 @@ Page({
     this.setData({
       merchantId: options.id
     });
+
+    // 支持从跳转参数动态设置导航栏标题：/pages/merchant/merchant?id=xx&title=xxx
+    const initialTitle = this.safeDecodeURIComponent(options.title);
+    if (initialTitle) {
+      wx.setNavigationBarTitle({ title: initialTitle });
+    }
     this.loadMerchantData();
+  },
+
+  safeDecodeURIComponent(value) {
+    if (!value) return '';
+    try {
+      return decodeURIComponent(value);
+    } catch (e) {
+      return value;
+    }
   },
 
   // 加载商家数据
@@ -54,6 +69,11 @@ Page({
           this.setData({
             shopInfo: res.data.merchant
           });
+
+          // 用真实商家名刷新标题（优先级高于跳转参数，避免参数缺失/过期）
+          if (res.data && res.data.merchant && res.data.merchant.name) {
+            wx.setNavigationBarTitle({ title: res.data.merchant.name });
+          }
           resolve();
         } else {
           reject(res.message);
@@ -83,8 +103,10 @@ Page({
   // 跳转到商品详情
   goToProductDetail: function (e) {
     const productId = e.currentTarget.dataset.id;
+    const productName = e.currentTarget.dataset.name;
+    const titleParam = productName ? `&title=${encodeURIComponent(productName)}` : '';
     wx.navigateTo({
-      url: `/pages/detail/detail?id=${productId}`
+      url: `/pages/detail/detail?id=${productId}${titleParam}`
     });
   },
 

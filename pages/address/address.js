@@ -16,10 +16,22 @@ Page({
    * 生命周期函数--监听页面加载
    */
   onLoad(options) {
-    // 检查是否为选择地址模式
-    if (options.selectMode) {
+    const selectMode = !!(options && options.selectMode);
+    if (selectMode) {
       this.setData({ selectMode: true });
-      wx.setNavigationBarTitle({ title: '选择收货地址' });
+    }
+
+    const initialTitle = this.safeDecodeURIComponent(options && options.title);
+    const fallbackTitle = selectMode ? '选择收货地址' : '地址管理';
+    wx.setNavigationBarTitle({ title: initialTitle || fallbackTitle });
+  },
+
+  safeDecodeURIComponent(value) {
+    if (!value) return '';
+    try {
+      return decodeURIComponent(value);
+    } catch (e) {
+      return value;
     }
   },
 
@@ -115,7 +127,7 @@ Page({
     console.log('点击了添加地址按钮');
     wx.showLoading({ title: '加载中...' });
     wx.navigateTo({
-      url: '/pages/address/edit-address/edit-address',
+      url: '/pages/address/edit-address/edit-address?title=' + encodeURIComponent('新增地址'),
       success: function(res) {
         console.log('跳转到编辑地址页面成功', res);
         wx.hideLoading();
@@ -149,7 +161,7 @@ Page({
     console.log('点击了编辑地址按钮，地址ID:', id);
     wx.showLoading({ title: '加载中...' });
     wx.navigateTo({
-      url: `/pages/address/edit-address/edit-address?id=${id}`,
+      url: `/pages/address/edit-address/edit-address?id=${id}&title=${encodeURIComponent('编辑地址')}`,
       success: function(res) {
         console.log('跳转到编辑地址页面成功', res);
         wx.hideLoading();

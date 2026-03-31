@@ -1,5 +1,5 @@
 // pages/order/order.js
-const { getOrders, cancelOrder, completeOrder } = require('../../utils/api');
+const { getOrders, cancelOrder, completeOrder, buyAgain: apiBuyAgain, deleteOrder: apiDeleteOrder } = require('../../utils/api');
 const { handleOrderAction, getStatusText, getStatusClass } = require('../../utils/orderUtils');
 const { showLoading, hideLoading, showError, showSuccess, handlePullDownRefresh, handleReachBottom, handlePagination } = require('../../utils/pageUtils');
 
@@ -28,13 +28,56 @@ Page({
    * 生命周期函数--监听页面加载
    */
   onLoad(options) {
+    // 避免首次进入时 onShow 再触发一次重复加载
+    this._skipOnShowOnce = true;
+
+    const status = options && options.status != null ? String(options.status) : 'all';
+    const normalizedStatus = status === 'all' ? '' : status;
+
+    this.setData({
+      activeTab: normalizedStatus,
+      page: 1,
+      orders: []
+    });
+
+    const initialTitle = this.safeDecodeURIComponent(options && options.title);
+    const derivedTitle = this.getOrderNavTitle(status);
+    wx.setNavigationBarTitle({ title: initialTitle || derivedTitle });
+
     this.loadOrders();
+  },
+
+  safeDecodeURIComponent(value) {
+    if (!value) return '';
+    try {
+      return decodeURIComponent(value);
+    } catch (e) {
+      return value;
+    }
+  },
+
+  getOrderNavTitle(status) {
+    const s = String(status);
+    const map = {
+      all: '全部订单',
+      '': '全部订单',
+      '0': '待支付',
+      '1': '待发货',
+      '2': '待收货',
+      '3': '已完成',
+      '4': '已取消'
+    };
+    return map[s] || '我的订单';
   },
 
   /**
    * 生命周期函数--监听页面显示
    */
   onShow() {
+    if (this._skipOnShowOnce) {
+      this._skipOnShowOnce = false;
+      return;
+    }
     if (this.data.activeTab === '') {
       this.loadOrders();
     }
@@ -80,6 +123,8 @@ Page({
       page: 1,
       orders: []
     });
+
+    wx.setNavigationBarTitle({ title: this.getOrderNavTitle(status === '' ? 'all' : status) });
     this.loadOrders();
   },
 
@@ -174,18 +219,14 @@ Page({
   async buyAgain(orderId) {
     showLoading('处理中...');
     try {
-      const res = await wx.request({
-        url: `http://localhost:3000/api/orders/${orderId}/buy-again`,
-        method: 'POST',
-        header: { 'Authorization': 'Bearer ' + wx.getStorageSync('token') }
-      });
-      if (res.statusCode === 200 && res.data.success) {
+      const res = await apiBuyAgain(orderId);
+      if (res && res.success) {
         hideLoading();
         showSuccess('商品已加入购物车');
         wx.switchTab({ url: '/pages/cart/cart' });
       } else {
         hideLoading();
-        showError(res.data.message || '操作失败');
+        showError((res && res.message) || '操作失败');
       }
     } catch (error) {
       hideLoading();
@@ -214,19 +255,15 @@ Page({
         if (res.confirm) {
           showLoading('处理中...');
           try {
-            const res = await wx.request({
-              url: `http://localhost:3000/api/orders/${orderId}`,
-              method: 'DELETE',
-              header: { 'Authorization': 'Bearer ' + wx.getStorageSync('token') }
-            });
-            if (res.statusCode === 200 && res.data.success) {
+            const apiRes = await apiDeleteOrder(orderId);
+            if (apiRes && apiRes.success) {
               hideLoading();
               showSuccess('订单已删除');
               // 刷新订单列表
               this.loadOrders();
             } else {
               hideLoading();
-              showError(res.data.message || '删除订单失败');
+              showError((apiRes && apiRes.message) || '删除订单失败');
             }
           } catch (error) {
             hideLoading();
@@ -251,7 +288,9 @@ Page({
    */
   goToMerchant(e) {
     const merchantId = e.currentTarget.dataset.merchantId;
-    wx.navigateTo({ url: `/pages/merchant/merchant?id=${merchantId}` });
+    const merchantName = e.currentTarget.dataset.name;
+    const titleParam = merchantName ? `&title=${encodeURIComponent(merchantName)}` : '';
+    wx.navigateTo({ url: `/pages/merchant/merchant?id=${merchantId}${titleParam}` });
   },
 
   /**

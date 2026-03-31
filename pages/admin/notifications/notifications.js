@@ -1,4 +1,13 @@
-const { getAdminNotificationList } = require('../../../utils/api');
+const {
+  getAdminNotificationList,
+  createAdminNotification,
+  markAdminNotificationAsRead,
+  deleteAdminNotification,
+  batchDeleteAdminNotifications,
+  batchMarkAdminNotificationsAsRead
+} = require('../../../utils/api');
+
+const DEBUG = false;
 
 Page({
   data: {
@@ -29,13 +38,16 @@ Page({
       title: '',
       content: '',
       type: 'system',
+      typeText: '系统公告',
       receiveScope: 'all',
-      scheduledTime: ''
+      receiveScopeText: '全体用户'
     },
     notificationTypes: [
       { value: '', label: '全部类型' },
-      { value: 'order', label: '订单通知' },
       { value: 'system', label: '系统公告' },
+      { value: 'order', label: '订单' },
+      { value: 'merchant', label: '商家' },
+      { value: 'platform', label: '平台' },
       { value: 'activity', label: '活动提醒' },
       { value: 'feedback', label: '反馈' }
     ],
@@ -51,16 +63,65 @@ Page({
     ]
   },
 
-  onLoad: function () {
+  _showLoading: function (title) {
+    const next = (this._loadingCount || 0) + 1;
+    this._loadingCount = next;
+    if (next === 1) {
+      wx.showLoading({
+        title: title || '处理中...',
+        success: () => {
+          this._loadingShown = true;
+        },
+        fail: () => {
+          // showLoading 可能因环境/调用时机失败；不应在未展示时强行 hide
+          this._loadingShown = false;
+        }
+      });
+    }
+  },
+
+  _hideLoading: function () {
+    const current = this._loadingCount || 0;
+    if (current <= 0) return;
+    const next = Math.max(0, current - 1);
+    this._loadingCount = next;
+    if (next === 0) {
+      if (!this._loadingShown) return;
+      wx.hideLoading({
+        complete: () => {
+          this._loadingShown = false;
+        }
+      });
+    }
+  },
+
+  onLoad: function (options) {
+    this._loadingCount = 0;
+    this._loadingShown = false;
     this.checkLoginStatus();
-    // 测试显示函数
-    this.testDisplayFunctions();
+    const initialTitle = this.safeDecodeURIComponent(options && options.title);
+    wx.setNavigationBarTitle({ title: initialTitle || '通知管理' });
     // 从本地存储恢复筛选条件
     this.restoreFilterConditions();
     // 计算活跃筛选条件和日期范围文本
     this.updateDateRangeText();
     this.updateActiveFilters();
     this.loadNotifications();
+  },
+
+  onUnload: function () {
+    // 页面卸载时重置，避免计数残留导致后续 hide 触发警告
+    this._loadingCount = 0;
+    this._loadingShown = false;
+  },
+
+  safeDecodeURIComponent(value) {
+    if (!value) return '';
+    try {
+      return decodeURIComponent(value);
+    } catch (e) {
+      return value;
+    }
   },
   
   // 保存筛选条件到本地存储
@@ -146,101 +207,87 @@ Page({
         endTime: this.data.endDate
       };
       
-      console.log('Loading notifications with params:', params);
+      if (DEBUG) console.log('Loading notifications with params:', params);
       const res = await getAdminNotificationList(params);
       
       if (res && res.data) {
         // 打印完整 API 响应
-        console.log('Full API response:', res);
+        if (DEBUG) console.log('Full API response:', res);
         
         // 打印通知数据以验证字段
-        console.log('Notification data from API:', res.data.notifications);
+        if (DEBUG) console.log('Notification data from API:', res.data.notifications);
         
         let notifications = [];
         if (res.data.notifications && Array.isArray(res.data.notifications)) {
           notifications = res.data.notifications.map((notification, index) => {
-            console.log(`Notification ${index} raw data:`, notification);
+            if (DEBUG) console.log(`Notification ${index} raw data:`, notification);
             // 检查所有可能的字段名
-            const type = notification.type || notification.notification_type || notification.type_id || notification.Type || notification.TYPE || '';
+            const type =
+              (notification.type ??
+                notification.notification_type ??
+                notification.type_id ??
+                notification.Type ??
+                notification.TYPE) ??
+              '';
             const sendTime = notification.created_at || notification.send_time || notification.time || notification.createdAt || notification.SendTime || notification.sent_time || '';
-            // 计算未读数量
-            const readCount = notification.read_count || notification.readCount || 0;
-            const totalCount = notification.total_count || 1;
-            const unreadCount = totalCount - readCount;
-            console.log(`Extracted type: ${type}, sendTime: ${sendTime}, readCount: ${readCount}, unreadCount: ${unreadCount}`);
+            // 计算未读数量（后端 read_count/total_count 可能缺失或不可靠，这里做兜底）
+            const isReadRaw = notification.is_read ?? notification.isRead;
+            const isRead = String(isReadRaw) === '1' || isReadRaw === 1 || isReadRaw === true;
+            const readCount = (notification.read_count ?? notification.readCount);
+            const totalCount = (notification.total_count ?? notification.totalCount);
+            const normalizedReadCount = readCount !== undefined && readCount !== null
+              ? Number(readCount)
+              : (isRead ? 1 : 0);
+            const normalizedTotalCount = totalCount !== undefined && totalCount !== null
+              ? Number(totalCount)
+              : 1;
+            const unreadCount = Math.max(0, normalizedTotalCount - normalizedReadCount);
+            if (DEBUG) {
+              console.log(
+                `Extracted type: ${type}, sendTime: ${sendTime}, readCount: ${readCount}, unreadCount: ${unreadCount}`
+              );
+            }
             return {
               id: notification.id,
               title: notification.title || '无标题',
               type: type,
+              isRead,
               receiveScope: 'all', // 默认为全体成员
               sendTime: sendTime,
-              readCount: readCount,
-              unreadCount: unreadCount
+              readCount: normalizedReadCount,
+              unreadCount: unreadCount,
+              formattedType: notification.formattedType
             };
           });
         } else {
           console.log('No notifications data found or not an array');
-          // 添加默认测试数据，确保界面能正常显示
-          notifications = [
-            {
-              id: 1,
-              title: '系统公告',
-              type: 'system',
-              receiveScope: 'all',
-              sendTime: new Date().toISOString(),
-              readCount: 10,
-              unreadCount: 5
-            },
-            {
-              id: 2,
-              title: '活动提醒',
-              type: 'activity',
-              receiveScope: 'all',
-              sendTime: new Date().toISOString(),
-              readCount: 0,
-              unreadCount: 8
-            },
-            {
-              id: 3,
-              title: '订单通知',
-              type: 'order',
-              receiveScope: 'all',
-              sendTime: new Date().toISOString(),
-              readCount: 2,
-              unreadCount: 3
-            },
-            {
-              id: 4,
-              title: '反馈通知',
-              type: 'feedback',
-              receiveScope: 'all',
-              sendTime: new Date().toISOString(),
-              readCount: 1,
-              unreadCount: 4
-            }
-          ];
+          notifications = [];
         }
         
         // Preprocess notifications to include formatted type and time
         notifications = notifications.map((item, index) => {
-          console.log(`Notification ${index} before fix:`, item);
+          if (DEBUG) console.log(`Notification ${index} before fix:`, item);
           const fixedItem = {
             ...item,
             type: item.type || '',
             sendTime: item.sendTime || '',
-            formattedType: this.getTypeText(item.type || ''),
+            formattedType: item.formattedType || this.getTypeText(item.type || ''),
             formattedTime: this.formatDateTime(item.sendTime || '')
           };
-          console.log(`Notification ${index} after fix:`, fixedItem);
-          console.log(`Formatted type: ${fixedItem.formattedType}, Formatted time: ${fixedItem.formattedTime}`);
+          if (DEBUG) {
+            console.log(`Notification ${index} after fix:`, fixedItem);
+            console.log(
+              `Formatted type: ${fixedItem.formattedType}, Formatted time: ${fixedItem.formattedTime}`
+            );
+          }
           return fixedItem;
         });
         
         // 打印处理后的数据
-        console.log('Processed notifications:', notifications);
+        if (DEBUG) console.log('Processed notifications:', notifications);
         
         // 测试格式化函数
-        if (notifications.length > 0) {
+        if (DEBUG && notifications.length > 0) {
           console.log('Testing formatDateTime with:', notifications[0].sendTime);
           console.log('Formatted result:', this.formatDateTime(notifications[0].sendTime));
           console.log('Testing getTypeText with:', notifications[0].type);
@@ -277,17 +324,6 @@ Page({
           progressAngle: progressAngle
         });
         
-        // 打印设置后的数据
-        setTimeout(() => {
-          console.log('Data after setData:', this.data.notifications);
-          // Test the formatting functions with the actual data
-          if (this.data.notifications.length > 0) {
-            const testItem = this.data.notifications[0];
-            console.log('Testing with actual data - type:', testItem.type, 'formatted:', this.getTypeText(testItem.type));
-            console.log('Testing with actual data - sendTime:', testItem.sendTime, 'formatted:', this.formatDateTime(testItem.sendTime));
-          }
-        }, 100);
-        
         // 操作结果提示
         if (notifications.length > 0) {
           wx.showToast({
@@ -303,39 +339,19 @@ Page({
           });
         }
       } else {
-        console.log('Invalid API response:', res);
+        if (DEBUG) console.log('Invalid API response:', res);
         wx.showToast({ title: '加载失败：无效的响应', icon: 'none' });
       }
     } catch (error) {
       console.error('加载通知列表失败:', error);
       wx.showToast({ title: '加载失败', icon: 'none' });
-      // 模拟数据，确保界面能够显示
       this.setData({
-        notifications: [
-          {
-            id: 3,
-            title: '反馈已驳回',
-            type: 'feedback',
-            receiveScope: 'all',
-            sendTime: '2026-03-27T02:19:00.000Z',
-            readCount: 0,
-            unreadCount: 0
-          },
-          {
-            id: 2,
-            title: '反馈已回复',
-            type: 'feedback',
-            receiveScope: 'all',
-            sendTime: '2026-03-27T02:19:00.000Z',
-            readCount: 0,
-            unreadCount: 0
-          }
-        ],
+        notifications: [],
         totalPages: 1,
         readStats: {
-          total: 2,
+          total: 0,
           readCount: 0,
-          unreadCount: 2,
+          unreadCount: 0,
           readRate: '0%'
         },
         progressAngle: 0
@@ -609,21 +625,26 @@ Page({
       content: `确定要删除选中的 ${selectedNotifications.length} 条通知吗？此操作不可恢复。`,
       success: (res) => {
         if (res.confirm) {
-          wx.showLoading({ title: '删除中...' });
-          // 这里应该调用批量删除API
-          setTimeout(() => {
-            wx.hideLoading();
-            // 模拟删除成功
-            const updatedNotifications = this.data.notifications.filter(item => !selectedNotifications.includes(item.id));
-            this.setData({
-              notifications: updatedNotifications,
-              selectedNotifications: [],
-              selectAll: false
+          this._showLoading('删除中...');
+          batchDeleteAdminNotifications(selectedNotifications)
+            .then(() => {
+              this.setData({
+                selectedNotifications: [],
+                selectAll: false,
+                currentPage: 1
+              });
+              return this.loadNotifications();
+            })
+            .then(() => {
+              wx.showToast({ title: '删除成功', icon: 'success' });
+            })
+            .catch((err) => {
+              console.error('批量删除失败:', err);
+              wx.showToast({ title: err?.message || '删除失败', icon: 'none' });
+            })
+            .finally(() => {
+              this._hideLoading();
             });
-            // 重新加载统计数据以保持一致性
-            this.loadNotifications();
-            wx.showToast({ title: '删除成功', icon: 'success' });
-          }, 1000);
         }
       }
     });
@@ -641,41 +662,55 @@ Page({
       content: `确定要将选中的 ${selectedNotifications.length} 条通知标记为已读吗？`,
       success: (res) => {
         if (res.confirm) {
-          wx.showLoading({ title: '处理中...' });
-          // 这里应该调用批量标记已读API
-          setTimeout(() => {
-            wx.hideLoading();
-            // 模拟标记成功
-            const updatedNotifications = this.data.notifications.map(item => {
-              if (selectedNotifications.includes(item.id)) {
-                return {
-                  ...item,
-                  readCount: item.readCount + 1,
-                  unreadCount: Math.max(0, item.unreadCount - 1)
-                };
-              }
-              return item;
+          this._showLoading('处理中...');
+          batchMarkAdminNotificationsAsRead(selectedNotifications)
+            .then((resp) => {
+              wx.showToast({ title: resp?.message || '标记成功', icon: 'success' });
+              this.setData({
+                selectedNotifications: [],
+                selectAll: false
+              });
+              return this.loadNotifications();
+            })
+            .catch((err) => {
+              console.error('批量标记已读失败:', err);
+              wx.showToast({ title: err?.message || '标记失败', icon: 'none' });
+            })
+            .finally(() => {
+              this._hideLoading();
             });
-            this.setData({
-              notifications: updatedNotifications,
-              selectedNotifications: [],
-              selectAll: false
-            });
-            // 重新加载统计数据以保持一致性
-            this.loadNotifications();
-            wx.showToast({ title: '标记成功', icon: 'success' });
-          }, 1000);
         }
       }
     });
   },
 
-  viewNotificationDetail: function (e) {
+  markAsRead: function (e) {
     const id = e.currentTarget.dataset.id;
-    wx.navigateTo({
-      url: `/pages/admin/notifications/detail?id=${id}`
+    if (!id) return;
+
+    wx.showModal({
+      title: '标记已读',
+      content: '确定将该通知标记为已读吗？',
+      success: (res) => {
+        if (!res.confirm) return;
+        this._showLoading('处理中...');
+        markAdminNotificationAsRead(id)
+          .then((resp) => {
+            wx.showToast({ title: resp?.message || '已标记', icon: 'success' });
+            return this.loadNotifications();
+          })
+          .catch((err) => {
+            console.error('标记已读失败:', err);
+            wx.showToast({ title: err?.message || '标记失败', icon: 'none' });
+          })
+          .finally(() => {
+            this._hideLoading();
+          });
+      }
     });
   },
+
+
 
   deleteNotification: function (e) {
     const id = e.currentTarget.dataset.id;
@@ -684,15 +719,19 @@ Page({
       content: '确定要删除这条通知吗？',
       success: (res) => {
         if (res.confirm) {
-          // 模拟删除操作
-          const updatedNotifications = this.data.notifications.filter(item => item.id !== id);
-          this.setData({
-            notifications: updatedNotifications
-          });
-          wx.showToast({
-            title: '删除成功',
-            icon: 'success'
-          });
+          this._showLoading('删除中...');
+          deleteAdminNotification(id)
+            .then(() => this.loadNotifications())
+            .then(() => {
+              wx.showToast({ title: '删除成功', icon: 'success' });
+            })
+            .catch((err) => {
+              console.error('删除通知失败:', err);
+              wx.showToast({ title: err?.message || '删除失败', icon: 'none' });
+            })
+            .finally(() => {
+              this._hideLoading();
+            });
         }
       }
     });
@@ -705,8 +744,9 @@ Page({
         title: '',
         content: '',
         type: 'system',
+        typeText: '系统公告',
         receiveScope: 'all',
-        scheduledTime: ''
+        receiveScopeText: '全体用户'
       }
     });
   },
@@ -719,25 +759,25 @@ Page({
   },
 
   bindTypeChangePublish: function (e) {
+    const selectedIndex = e.detail.value;
     this.setData({
-      'publishForm.type': this.data.notificationTypes[e.detail.value].value
+      'publishForm.type': this.data.notificationTypes[selectedIndex].value,
+      'publishForm.typeText': this.data.notificationTypes[selectedIndex].label
     });
   },
 
   bindScopeChange: function (e) {
+    const selectedIndex = e.detail.value;
     this.setData({
-      'publishForm.receiveScope': this.data.receiveScopes[e.detail.value].value
+      'publishForm.receiveScope': this.data.receiveScopes[selectedIndex].value,
+      'publishForm.receiveScopeText': this.data.receiveScopes[selectedIndex].label
     });
   },
 
-  bindScheduledTimeChange: function (e) {
-    this.setData({
-      'publishForm.scheduledTime': e.detail.value
-    });
-  },
+
 
   publishNotification: function () {
-    const { title, content } = this.data.publishForm;
+    const { title, content, type, receiveScope } = this.data.publishForm;
     if (!title.trim()) {
       wx.showToast({
         title: '请输入通知标题',
@@ -753,26 +793,48 @@ Page({
       return;
     }
 
-    // 模拟发布操作
-    const newNotification = {
-      id: this.data.notifications.length + 1,
-      title: title,
-      type: this.data.publishForm.type,
-      receiveScope: this.data.publishForm.receiveScope,
-      sendTime: new Date().toISOString().replace('T', ' ').substring(0, 19),
-      readCount: 0,
-      unreadCount: 0
-    };
+    if (!type) {
+      wx.showToast({ title: '请选择通知类型', icon: 'none' });
+      return;
+    }
 
-    this.setData({
-      notifications: [newNotification, ...this.data.notifications],
-      showPublishModal: false
-    });
+    // 兼容后端的 receive_scope/role_ids 设计
+    let receive_scope = 'all_users';
+    let role_ids = undefined;
+    if (receiveScope === 'student') {
+      receive_scope = 'specific_roles';
+      role_ids = [1];
+    } else if (receiveScope === 'merchant') {
+      receive_scope = 'specific_roles';
+      role_ids = [2];
+    }
 
-    wx.showToast({
-      title: '发布成功',
-      icon: 'success'
-    });
+    this._showLoading('发布中...');
+    createAdminNotification({
+      title: title.trim(),
+      content: content.trim(),
+      type,
+      receive_scope,
+      role_ids
+    })
+      .then((res) => {
+        this.setData({
+          showPublishModal: false,
+          currentPage: 1
+        });
+        wx.showToast({
+          title: res?.message || '发布成功',
+          icon: 'success'
+        });
+        return this.loadNotifications();
+      })
+      .catch((err) => {
+        console.error('发布通知失败:', err);
+        wx.showToast({ title: err?.message || '发布失败', icon: 'none' });
+      })
+      .finally(() => {
+        this._hideLoading();
+      });
   },
 
   cancelPublish: function () {
@@ -800,7 +862,29 @@ Page({
   },
 
   getTypeColor: function (type) {
-    switch (type) {
+    // 同时兼容后端返回数字 type（tinyint）与历史字符串 type
+    const typeStr = type === undefined || type === null ? '' : String(type).trim();
+    const code = /^\d+$/.test(typeStr) ? Number(typeStr) : null;
+
+    // 后端约定：1反馈 2系统 3订单 4商家 5平台 6活动
+    switch (code) {
+      case 3:
+        return '#1890ff';
+      case 2:
+        return '#52c41a';
+      case 6:
+        return '#fa8c16';
+      case 1:
+        return '#722ed1';
+      case 4:
+        return '#13c2c2';
+      case 5:
+        return '#2f54eb';
+      default:
+        break;
+    }
+
+    switch (typeStr.toLowerCase()) {
       case 'order':
         return '#1890ff';
       case 'system':
@@ -809,31 +893,54 @@ Page({
         return '#fa8c16';
       case 'feedback':
         return '#722ed1';
+      case 'merchant':
+        return '#13c2c2';
+      case 'platform':
+        return '#2f54eb';
       default:
         return '#999';
     }
   },
 
   getTypeText: function (type) {
-    // 处理空值情况
-    if (!type || type === '' || type === null || type === undefined) {
-      return '未知类型';
+    if (type === '' || type === null || type === undefined) return '未知类型';
+
+    const typeStr = String(type).trim();
+
+    // 数字优先（后端 tinyint）
+    if (/^\d+$/.test(typeStr)) {
+      switch (Number(typeStr)) {
+        case 1:
+          return '反馈';
+        case 2:
+          return '系统公告';
+        case 3:
+          return '订单';
+        case 4:
+          return '商家';
+        case 5:
+          return '平台';
+        case 6:
+          return '活动提醒';
+        default:
+          return '未知类型';
+      }
     }
-    // 统一转换为字符串处理
-    const typeStr = String(type);
-    switch (typeStr) {
-      case 'order':
-      case '1':
-        return '订单通知';
-      case 'system':
-      case '2':
-        return '系统公告';
-      case 'activity':
-      case '3':
-        return '活动提醒';
+
+    // 字符串兼容
+    switch (typeStr.toLowerCase()) {
       case 'feedback':
-      case '4':
         return '反馈';
+      case 'system':
+        return '系统公告';
+      case 'order':
+        return '订单';
+      case 'merchant':
+        return '商家';
+      case 'platform':
+        return '平台';
+      case 'activity':
+        return '活动提醒';
       default:
         return '未知类型';
     }
@@ -887,69 +994,5 @@ Page({
     return `${year}-${month}-${day} ${hours}:${minutes}`;
   },
 
-  // 测试函数：验证类型和时间显示
-  testDisplayFunctions: function() {
-    // 测试类型转换
-    console.log('Testing getTypeText with various inputs:');
-    console.log('Type 1:', this.getTypeText(1));
-    console.log('Type "system":', this.getTypeText('system'));
-    console.log('Type 3:', this.getTypeText(3));
-    console.log('Type "feedback":', this.getTypeText('feedback'));
-    // 测试空值情况
-    console.log('Type null:', this.getTypeText(null));
-    console.log('Type undefined:', this.getTypeText(undefined));
-    console.log('Type empty string:', this.getTypeText(''));
-    console.log('Type 0:', this.getTypeText(0));
-    
-    // 测试时间格式化
-    console.log('\nTesting formatDateTime with various inputs:');
-    console.log('ISO string:', this.formatDateTime('2026-03-27T02:19:00.000Z'));
-    console.log('Timestamp:', this.formatDateTime(1774510740000));
-    console.log('Invalid date:', this.formatDateTime('invalid'));
-    console.log('Empty string:', this.formatDateTime(''));
-    // 测试空值情况
-    console.log('Date null:', this.formatDateTime(null));
-    console.log('Date undefined:', this.formatDateTime(undefined));
-    
-    // 测试模拟数据
-    console.log('\nTesting with mock notification data:');
-    const mockNotification = {
-      id: 1,
-      title: '测试通知',
-      type: 'system',
-      receive_scope: 'all',
-      created_at: '2026-03-27T02:19:00.000Z',
-      read_count: 5,
-      unread_count: 10
-    };
-    
-    const processedNotification = {
-      id: mockNotification.id,
-      title: mockNotification.title,
-      type: mockNotification.type,
-      receiveScope: mockNotification.receive_scope,
-      sendTime: mockNotification.created_at,
-      readCount: mockNotification.read_count || 0,
-      unreadCount: mockNotification.unread_count || 0
-    };
-    
-    console.log('Processed notification:', processedNotification);
-    console.log('Formatted type:', this.getTypeText(processedNotification.type));
-    console.log('Formatted time:', this.formatDateTime(processedNotification.sendTime));
-    
-    // 测试空数据情况
-    console.log('\nTesting with empty notification data:');
-    const emptyNotification = {
-      id: 2,
-      title: '空数据测试',
-      type: '',
-      receiveScope: 'all',
-      sendTime: '',
-      readCount: 0,
-      unreadCount: 0
-    };
-    console.log('Empty notification:', emptyNotification);
-    console.log('Formatted type (empty):', this.getTypeText(emptyNotification.type));
-    console.log('Formatted time (empty):', this.formatDateTime(emptyNotification.sendTime));
-  }
+  
 });

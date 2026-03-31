@@ -1,5 +1,10 @@
 // pages/admin/users/users.js
-const { getAdminUserList } = require('../../../utils/api');
+const {
+  getAdminUserList,
+  getAdminUserDetail,
+  updateAdminUserStatus,
+  resetAdminUserPassword
+} = require('../../../utils/api');
 
 Page({
   /**
@@ -15,7 +20,23 @@ Page({
     searchKeyword: '',
     roleFilter: '',
     statusFilter: '',
-    selectedUsers: []
+    selectedUsers: [],
+
+    // 详情弹窗
+    detailVisible: false,
+    detailLoading: false,
+    detail: null
+  },
+
+  formatRole(role) {
+    // 后端角色：1 学生、2 商家、3 管理员
+    if (role === 3) return '管理员';
+    if (role === 2) return '商家';
+    return '学生';
+  },
+
+  formatStatus(status) {
+    return status === 1 ? '正常' : '禁用';
   },
 
   /**
@@ -23,7 +44,18 @@ Page({
    */
   onLoad(options) {
     this.checkLoginStatus();
+    const initialTitle = this.safeDecodeURIComponent(options && options.title);
+    wx.setNavigationBarTitle({ title: initialTitle || '用户管理' });
     this.loadUsers();
+  },
+
+  safeDecodeURIComponent(value) {
+    if (!value) return '';
+    try {
+      return decodeURIComponent(value);
+    } catch (e) {
+      return value;
+    }
   },
 
   /**
@@ -64,7 +96,7 @@ Page({
         nickname: user.nickname,
         phone: user.phone,
         role: user.role,
-        roleText: user.role === 0 ? '管理员' : user.role === 1 ? '学生' : '商家',
+        roleText: this.formatRole(user.role),
         status: user.status,
         statusText: user.status === 1 ? '正常' : '禁用',
         createdAt: user.created_at
@@ -165,12 +197,22 @@ Page({
     wx.showModal({
       title: '批量禁用',
       content: `确定要禁用选中的 ${this.data.selectedUsers.length} 个用户吗？`,
-      success: (res) => {
-        if (res.confirm) {
-          // 实际项目中应调用API
+      success: async (res) => {
+        if (!res.confirm) return;
+        wx.showLoading({ title: '处理中...' });
+        try {
+          const ids = this.data.selectedUsers;
+          for (const id of ids) {
+            await updateAdminUserStatus(id, 0);
+          }
           wx.showToast({ title: '禁用成功' });
-          this.setData({ selectedUsers: [] });
+          this.setData({ selectedUsers: [], page: 1, users: [], hasMore: true });
           this.loadUsers();
+        } catch (error) {
+          console.error('批量禁用失败:', error);
+          wx.showToast({ title: error.message || '禁用失败', icon: 'none' });
+        } finally {
+          wx.hideLoading();
         }
       }
     });
@@ -188,12 +230,22 @@ Page({
     wx.showModal({
       title: '批量启用',
       content: `确定要启用选中的 ${this.data.selectedUsers.length} 个用户吗？`,
-      success: (res) => {
-        if (res.confirm) {
-          // 实际项目中应调用API
+      success: async (res) => {
+        if (!res.confirm) return;
+        wx.showLoading({ title: '处理中...' });
+        try {
+          const ids = this.data.selectedUsers;
+          for (const id of ids) {
+            await updateAdminUserStatus(id, 1);
+          }
           wx.showToast({ title: '启用成功' });
-          this.setData({ selectedUsers: [] });
+          this.setData({ selectedUsers: [], page: 1, users: [], hasMore: true });
           this.loadUsers();
+        } catch (error) {
+          console.error('批量启用失败:', error);
+          wx.showToast({ title: error.message || '启用失败', icon: 'none' });
+        } finally {
+          wx.hideLoading();
         }
       }
     });
@@ -208,8 +260,7 @@ Page({
       return;
     }
     
-    // 实际项目中应调用API导出用户数据
-    wx.showToast({ title: '导出成功' });
+    wx.showToast({ title: '暂未接入导出接口', icon: 'none' });
   },
 
   /**
@@ -223,11 +274,20 @@ Page({
     wx.showModal({
       title: action + '用户',
       content: `确定要${action}该用户吗？`,
-      success: (res) => {
-        if (res.confirm) {
-          // 实际项目中应调用API
+      success: async (res) => {
+        if (!res.confirm) return;
+        wx.showLoading({ title: '处理中...' });
+        try {
+          const targetStatus = status === 1 ? 0 : 1;
+          await updateAdminUserStatus(userId, targetStatus);
           wx.showToast({ title: action + '成功' });
+          this.setData({ page: 1, users: [], hasMore: true });
           this.loadUsers();
+        } catch (error) {
+          console.error(action + '用户失败:', error);
+          wx.showToast({ title: error.message || (action + '失败'), icon: 'none' });
+        } finally {
+          wx.hideLoading();
         }
       }
     });
@@ -242,15 +302,22 @@ Page({
     wx.showModal({
       title: '重置密码',
       content: '确定要重置该用户的密码吗？重置后密码将变为随机密码。',
-      success: (res) => {
-        if (res.confirm) {
-          // 实际项目中应调用API
-          const randomPassword = Math.random().toString(36).substring(2, 10);
+      success: async (res) => {
+        if (!res.confirm) return;
+        wx.showLoading({ title: '处理中...' });
+        try {
+          const result = await resetAdminUserPassword(userId);
+          const newPassword = result && result.data ? result.data.newPassword : '';
           wx.showModal({
             title: '重置成功',
-            content: `新密码：${randomPassword}`,
+            content: newPassword ? `新密码：${newPassword}` : '密码已重置',
             showCancel: false
           });
+        } catch (error) {
+          console.error('重置密码失败:', error);
+          wx.showToast({ title: error.message || '重置失败', icon: 'none' });
+        } finally {
+          wx.hideLoading();
         }
       }
     });
@@ -261,9 +328,73 @@ Page({
    */
   viewUserDetail(e) {
     const userId = e.currentTarget.dataset.id;
-    wx.navigateTo({
-      url: `/pages/admin/users/detail?id=${userId}`
+    this.openUserDetail(userId);
+  },
+
+  closeUserDetail() {
+    this.setData({
+      detailVisible: false,
+      detailLoading: false,
+      detail: null
     });
+  },
+
+  stopTap() {
+    // 阻止蒙层点击穿透
+  },
+
+  async openUserDetail(userId) {
+    if (!userId) return;
+    this.setData({ detailVisible: true, detailLoading: true, detail: null });
+
+    try {
+      const res = await getAdminUserDetail(userId);
+      const user = res.data && res.data.user ? res.data.user : {};
+
+      const counts = res.data && res.data.counts ? res.data.counts : null;
+      const orderCount = counts && typeof counts.orderCount === 'number'
+        ? counts.orderCount
+        : (res.data && res.data.orderStats ? (res.data.orderStats.order_count || 0) : 0);
+
+      const feedbackCount = counts && typeof counts.feedbackCount === 'number'
+        ? counts.feedbackCount
+        : (res.data && Array.isArray(res.data.feedbacks) ? res.data.feedbacks.length : 0);
+
+      const favoriteCount = counts && typeof counts.favoriteCount === 'number'
+        ? counts.favoriteCount
+        : 0;
+
+      const merchant = res.data && res.data.merchant ? res.data.merchant : null;
+
+      this.setData({
+        detailLoading: false,
+        detail: {
+          basic: {
+            id: user.id,
+            nickname: user.nickname,
+            phone: user.phone,
+            avatarUrl: user.avatar_url
+          },
+          account: {
+            role: user.role,
+            roleText: this.formatRole(user.role),
+            status: user.status,
+            statusText: this.formatStatus(user.status),
+            createdAt: user.created_at
+          },
+          related: {
+            orderCount,
+            feedbackCount,
+            favoriteCount
+          },
+          merchant
+        }
+      });
+    } catch (error) {
+      console.error('加载用户详情失败:', error);
+      this.setData({ detailLoading: false });
+      wx.showToast({ title: '加载用户详情失败', icon: 'none' });
+    }
   },
 
   /**

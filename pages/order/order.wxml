@@ -17,7 +17,7 @@
   <view class="order-list">
     <view wx:for="{{orders}}" wx:key="orderId" class="order-card" bindtap="goToOrderDetail" data-orderId="{{item.orderId}}">
       <!-- 商家信息 -->
-      <view class="merchant-info" bindtap="goToMerchant" data-merchantId="{{item.merchantId}}" catchtap="">
+      <view class="merchant-info" bindtap="goToMerchant" data-merchantId="{{item.merchantId}}" data-name="{{item.merchantName}}" catchtap="">
         <image class="merchant-logo" src="{{item.merchantLogo}}" mode="aspectFill"></image>
         <view class="merchant-name">{{item.merchantName}}</view>
         <view class="merchant-arrow">→</view>
@@ -68,7 +68,7 @@
     
     <!-- 空状态 -->
     <view wx:if="{{orders.length === 0}}" class="empty-state">
-      <image class="empty-image" src="https://via.placeholder.com/200x200?text=No+Orders" mode="aspectFit"></image>
+      <image class="empty-image" src="/assets/images/kong.jpg" mode="aspectFit"></image>
       <text class="empty-text">暂无订单</text>
       <button class="empty-button" bindtap="goShopping">去逛逛</button>
     </view>

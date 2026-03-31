@@ -1,5 +1,9 @@
 // pages/admin/products/products.js
-const { getAdminProductList } = require('../../../utils/api');
+const {
+  getAdminProductList,
+  updateAdminProductStatus,
+  batchUpdateAdminProducts
+} = require('../../../utils/api');
 
 Page({
   /**
@@ -24,7 +28,18 @@ Page({
    */
   onLoad(options) {
     this.checkLoginStatus();
+    const initialTitle = this.safeDecodeURIComponent(options && options.title);
+    wx.setNavigationBarTitle({ title: initialTitle || '商品管理' });
     this.loadProducts();
+  },
+
+  safeDecodeURIComponent(value) {
+    if (!value) return '';
+    try {
+      return decodeURIComponent(value);
+    } catch (e) {
+      return value;
+    }
   },
 
   /**
@@ -191,12 +206,19 @@ Page({
     wx.showModal({
       title: '批量下架',
       content: `确定要下架选中的 ${this.data.selectedProducts.length} 个商品吗？`,
-      success: (res) => {
-        if (res.confirm) {
-          // 实际项目中应调用API
+      success: async (res) => {
+        if (!res.confirm) return;
+        wx.showLoading({ title: '处理中...' });
+        try {
+          await batchUpdateAdminProducts(this.data.selectedProducts, 0, '');
           wx.showToast({ title: '下架成功' });
-          this.setData({ selectedProducts: [] });
+          this.setData({ selectedProducts: [], page: 1, products: [], hasMore: true });
           this.loadProducts();
+        } catch (error) {
+          console.error('批量下架失败:', error);
+          wx.showToast({ title: error.message || '下架失败', icon: 'none' });
+        } finally {
+          wx.hideLoading();
         }
       }
     });
@@ -214,12 +236,19 @@ Page({
     wx.showModal({
       title: '批量上架',
       content: `确定要上架选中的 ${this.data.selectedProducts.length} 个商品吗？`,
-      success: (res) => {
-        if (res.confirm) {
-          // 实际项目中应调用API
+      success: async (res) => {
+        if (!res.confirm) return;
+        wx.showLoading({ title: '处理中...' });
+        try {
+          await batchUpdateAdminProducts(this.data.selectedProducts, 1, '');
           wx.showToast({ title: '上架成功' });
-          this.setData({ selectedProducts: [] });
+          this.setData({ selectedProducts: [], page: 1, products: [], hasMore: true });
           this.loadProducts();
+        } catch (error) {
+          console.error('批量上架失败:', error);
+          wx.showToast({ title: error.message || '上架失败', icon: 'none' });
+        } finally {
+          wx.hideLoading();
         }
       }
     });
@@ -236,11 +265,20 @@ Page({
     wx.showModal({
       title: action + '商品',
       content: `确定要${action}该商品吗？`,
-      success: (res) => {
-        if (res.confirm) {
-          // 实际项目中应调用API
+      success: async (res) => {
+        if (!res.confirm) return;
+        wx.showLoading({ title: '处理中...' });
+        try {
+          const targetStatus = status === 1 ? 0 : 1;
+          await updateAdminProductStatus(productId, targetStatus, '');
           wx.showToast({ title: action + '成功' });
+          this.setData({ page: 1, products: [], hasMore: true });
           this.loadProducts();
+        } catch (error) {
+          console.error(action + '商品失败:', error);
+          wx.showToast({ title: error.message || '操作失败', icon: 'none' });
+        } finally {
+          wx.hideLoading();
         }
       }
     });

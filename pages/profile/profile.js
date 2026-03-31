@@ -1,6 +1,12 @@
 // pages/profile/profile.js
 const app = getApp();
-const { getUserProfile, getNotifications } = require('../../utils/api');
+const {
+  getUserProfile,
+  getNotifications,
+  getOrderCounts,
+  getMerchantDashboardStats,
+  applyMerchant: applyMerchantRequest
+} = require('../../utils/api');
 
 Page({
   /**
@@ -17,6 +23,7 @@ Page({
     pendingPayCount: 0,           // 待支付订单数量
     pendingDeliverCount: 0,       // 待发货订单数量
     unreadNoticeCount: 0,         // 未读消息数量
+    merchantPendingOrders: 0,     // 商家待处理订单数（用于商家后台角标）
     submitting: false             // 防止重复提交
   },
 
@@ -35,6 +42,9 @@ Page({
     if (this.data.isLogin) {
       this.loadOrderCounts();
       this.checkUnreadNotice();
+      if (this.data.userInfo && this.data.userInfo.role === 2) {
+        this.loadMerchantBadges();
+      }
     }
   },
 
@@ -77,13 +87,40 @@ Page({
             avatarUrl: userInfo.avatar_url || userInfo.avatarUrl || '/assets/images/morentouxiang.jpg',
             nickName: userInfo.nickname || userInfo.nickName || '未设置昵称',
             phone: userInfo.phone || '',
-            role: userInfo.role || 1
+            role: userInfo.role || 1,
+            merchantId: userInfo.merchant_id || userInfo.merchantId || null
           }
         });
         // 更新本地存储
         wx.setStorageSync('userInfo', this.data.userInfo);
+
+        // 如果刚变更为商家（例如管理员刚审核通过），刷新一次商家角标
+        if (this.data.userInfo && this.data.userInfo.role === 2) {
+          this.loadMerchantBadges();
+        } else {
+          this.setData({ merchantPendingOrders: 0 });
+        }
       })
       .catch(err => {
+      });
+  },
+
+  /**
+   * 商家角标：待处理订单数
+   */
+  loadMerchantBadges() {
+    getMerchantDashboardStats()
+      .then((res) => {
+        if (res && res.success && res.data) {
+          this.setData({
+            merchantPendingOrders: res.data.pendingOrders || 0
+          });
+        } else {
+          this.setData({ merchantPendingOrders: 0 });
+        }
+      })
+      .catch(() => {
+        this.setData({ merchantPendingOrders: 0 });
       });
   },
 
@@ -91,10 +128,7 @@ Page({
    * 加载订单数量
    */
   loadOrderCounts() {
-    request({
-      url: '/orders/counts',
-      method: 'GET'
-    }).then(res => {
+    getOrderCounts().then(res => {
       if (res.success) {
         this.setData({
           pendingPayCount: res.data.pendingPay || 0,
@@ -153,7 +187,7 @@ Page({
   goToOrderList() {
     if (!this.checkAuth()) return;
     wx.navigateTo({
-      url: '/pages/order/order?status=all',
+      url: '/pages/order/order?status=all&title=' + encodeURIComponent('全部订单'),
     });
   },
 
@@ -163,8 +197,17 @@ Page({
   goToOrderStatus(e) {
     if (!this.checkAuth()) return;
     const status = e.currentTarget.dataset.status;
+    const titleMap = {
+      all: '全部订单',
+      '0': '待支付',
+      '1': '待发货',
+      '2': '待收货',
+      '3': '已完成',
+      '4': '已取消'
+    };
+    const title = titleMap[String(status)] || '我的订单';
     wx.navigateTo({
-      url: '/pages/order/order?status=' + status,
+      url: '/pages/order/order?status=' + status + '&title=' + encodeURIComponent(title),
     });
   },
 
@@ -174,7 +217,7 @@ Page({
   goToAddress() {
     if (!this.checkAuth()) return;
     wx.navigateTo({
-      url: '/pages/address/address',
+      url: '/pages/address/address?title=' + encodeURIComponent('地址管理'),
     });
   },
 
@@ -262,6 +305,16 @@ Page({
   },
 
   /**
+   * 跳转到商家后台
+   */
+  goToMerchantCenter() {
+    if (!this.checkAuth()) return;
+    wx.navigateTo({
+      url: '/pages/merchant/index/index'
+    });
+  },
+
+  /**
    * 检查登录权限
    */
   checkAuth() {
@@ -303,51 +356,66 @@ Page({
    * 提交商家申请
    */
   submitMerchantApplication() {
-    // 防止重复提交
-    if (this.data.submitting) return;
-    
+    // 防止重复提交（data 标记 + 实例级锁，避免 setData 还没刷新的连点）
+    if (this._merchantApplySubmitting || this.data.submitting) return;
+
+    const userInfo = wx.getStorageSync('userInfo') || {};
+    const nickname = userInfo.nickname || userInfo.nickName || (this.data.userInfo && this.data.userInfo.nickName);
+    const phone = userInfo.phone || (this.data.userInfo && this.data.userInfo.phone) || '';
+
+    if (!nickname) {
+      wx.showToast({
+        title: '缺少昵称，无法提交申请',
+        icon: 'none'
+      });
+      return;
+    }
+
+    this._merchantApplySubmitting = true;
     this.setData({ submitting: true });
-    wx.showLoading({ title: '提交申请中...' });
-    
-    const token = wx.getStorageSync('token');
-    const userInfo = wx.getStorageSync('userInfo');
-    wx.request({
-      url: 'http://localhost:3000/api/merchants/apply',
-      method: 'POST',
-      header: {
-        'Authorization': 'Bearer ' + token,
-        'Content-Type': 'application/json'
-      },
-      data: {
-        user_id: userInfo.id || this.data.userInfo.id,
-        nickname: userInfo.nickname || userInfo.nickName || this.data.userInfo.nickName,
-        phone: userInfo.phone || this.data.userInfo.phone
-      },
-      success: (res) => {
-        this.setData({ submitting: false });
-        wx.hideLoading();
-        if (res.statusCode === 200 && res.data.success) {
-          wx.showToast({
+
+    this._merchantApplyLoadingCount = (this._merchantApplyLoadingCount || 0) + 1;
+    if (this._merchantApplyLoadingCount === 1) {
+      wx.showLoading({ title: '提交申请中...' });
+    }
+
+    let toastOptions = null;
+    applyMerchantRequest({ nickname, phone })
+      .then((res) => {
+        if (res && res.success) {
+          toastOptions = {
             title: '申请提交成功，等待管理员审核',
             icon: 'success',
             duration: 2000
-          });
+          };
         } else {
-          wx.showToast({
-            title: res.data.message || '申请提交失败',
-            icon: 'none'
-          });
+          toastOptions = {
+            title: (res && res.message) || '申请提交失败',
+            icon: 'none',
+            duration: 2000
+          };
         }
-      },
-      fail: (err) => {
-        this.setData({ submitting: false });
-        wx.hideLoading();
-        wx.showToast({
-          title: '网络错误，请重试',
-          icon: 'none'
-        });
+      })
+      .catch((err) => {
+        toastOptions = {
+          title: (err && err.message) || '网络错误，请重试',
+          icon: 'none',
+          duration: 2000
+        };
         console.error('提交商家申请失败:', err);
-      }
-    });
+      })
+      .finally(() => {
+        this._merchantApplySubmitting = false;
+        this.setData({ submitting: false });
+
+        this._merchantApplyLoadingCount = Math.max((this._merchantApplyLoadingCount || 1) - 1, 0);
+        if (this._merchantApplyLoadingCount === 0) {
+          wx.hideLoading();
+        }
+
+        if (toastOptions) {
+          wx.showToast(toastOptions);
+        }
+      });
   }
 });

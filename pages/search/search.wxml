@@ -54,18 +54,44 @@
 
   <!-- 搜索结果 -->
   <view wx:if="{{showResults}}" class="search-results">
-    <view 
-      wx:for="{{searchResults}}" 
-      wx:key="{{item.id}}"
-      class="result-item"
-      bindtap="clickResult"
-      data-id="{{item.id}}"
-    >
-      <text class="result-title">{{item.title}}</text>
-      <text class="result-desc">{{item.desc}}</text>
-      <text class="result-meta">{{item.meta}}</text>
+    <!-- 商家 -->
+    <view wx:if="{{merchantResults.length > 0}}" class="results-section">
+      <text class="results-section-title">商家</text>
+      <view 
+        wx:for="{{merchantResults}}" 
+        wx:key="{{item.id}}"
+        class="result-item"
+        bindtap="clickResult"
+        data-id="{{item.id}}"
+        data-type="{{item.type}}"
+        data-title="{{item.title}}"
+      >
+        <text class="result-title">{{item.title}}</text>
+        <text class="result-desc">{{item.desc}}</text>
+        <text class="result-meta">{{item.meta}}</text>
+      </view>
     </view>
-    <view wx:if="{{searchResults.length === 0}}" class="empty-container">
+
+    <!-- 商品 -->
+    <view wx:if="{{productResults.length > 0}}" class="results-section">
+      <text class="results-section-title">商品</text>
+      <view 
+        wx:for="{{productResults}}" 
+        wx:key="{{item.id}}"
+        class="result-item"
+        bindtap="clickResult"
+        data-id="{{item.id}}"
+        data-type="{{item.type}}"
+        data-title="{{item.title}}"
+      >
+        <text class="result-title">{{item.title}}</text>
+        <text class="result-desc">{{item.desc}}</text>
+        <text class="result-meta">{{item.meta}}</text>
+      </view>
+    </view>
+
+    <view wx:if="{{merchantResults.length === 0 && productResults.length === 0}}" class="empty-container">
+      <image class="empty-image" src="/assets/images/kong.jpg" mode="aspectFit" />
       <text class="empty-text">暂无搜索结果</text>
     </view>
   </view>

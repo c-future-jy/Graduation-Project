@@ -1,5 +1,5 @@
 // pages/feedback/feedback.js
-const { request } = require('../../utils/api');
+const { request, uploadImage } = require('../../utils/api');
 
 Page({
   data: {
@@ -210,35 +210,22 @@ Page({
       const uploadedImages = [];
       let uploadedCount = 0;
       let hasError = false;
-      const BASE_URL = 'http://localhost:3000/api';
 
       images.forEach((image, index) => {
-        wx.uploadFile({
-          url: BASE_URL + '/upload',
-          filePath: image,
-          name: 'file',
-          header: {
-            'Authorization': wx.getStorageSync('token') ? `Bearer ${wx.getStorageSync('token')}` : ''
-          },
-          success: (res) => {
-            try {
-              const result = JSON.parse(res.data);
-              if (result.success) {
-                uploadedImages.push(result.data.url);
-              } else {
-                console.error('上传图片失败:', result.message);
-                hasError = true;
-              }
-            } catch (e) {
-              console.error('解析上传结果失败:', e);
+        uploadImage(image)
+          .then((res) => {
+            if (res && res.success && res.data && res.data.url) {
+              uploadedImages.push(res.data.url);
+            } else {
+              console.error('上传图片失败:', res && res.message);
               hasError = true;
             }
-          },
-          fail: (err) => {
+          })
+          .catch((err) => {
             console.error('上传图片失败:', err);
             hasError = true;
-          },
-          complete: () => {
+          })
+          .finally(() => {
             uploadedCount++;
             if (uploadedCount === images.length) {
               if (hasError) {
@@ -247,8 +234,7 @@ Page({
                 resolve(uploadedImages);
               }
             }
-          }
-        });
+          });
       });
     });
   },

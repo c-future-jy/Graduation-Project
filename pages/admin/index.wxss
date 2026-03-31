@@ -155,6 +155,22 @@
   text-overflow: clip;
 }
 
+.menu-badge {
+  position: absolute;
+  right: 20rpx;
+  top: 18rpx;
+  min-width: 34rpx;
+  height: 34rpx;
+  padding: 0 10rpx;
+  border-radius: 999rpx;
+  background-color: #ff4d4f;
+  color: #fff;
+  font-size: 20rpx;
+  line-height: 34rpx;
+  text-align: center;
+  box-sizing: border-box;
+}
+
 /* 底部区域 */
 .sidebar-footer {
   margin-top: 32rpx;

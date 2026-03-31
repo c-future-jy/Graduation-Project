@@ -71,8 +71,10 @@ Page({
    */
   goToMerchant(e) {
     const merchantId = e.currentTarget.dataset.id;
+    const merchantName = e.currentTarget.dataset.name;
+    const titleParam = merchantName ? `&title=${encodeURIComponent(merchantName)}` : '';
     wx.navigateTo({
-      url: `/pages/merchant/merchant?id=${merchantId}`
+      url: `/pages/merchant/merchant?id=${merchantId}${titleParam}`
     });
   },
 
@@ -90,7 +92,7 @@ Page({
    */
   goToSearch() {
     wx.navigateTo({
-      url: '/pages/search/search'
+      url: '/pages/search/search?title=' + encodeURIComponent('搜索')
     });
   },
 
@@ -99,8 +101,15 @@ Page({
    */
   filterMerchants(e) {
     const type = e.currentTarget.dataset.type;
+    const filterTitleMap = {
+      delivery: '校园内配送',
+      certified: '校内认证商家',
+      quick: '课间极速达',
+      rated: '师生高口碑'
+    };
+    const title = filterTitleMap[type] ? `筛选：${filterTitleMap[type]}` : '搜索';
     wx.navigateTo({
-      url: `/pages/search/search?filter=${type}`
+      url: `/pages/search/search?filter=${type}&title=${encodeURIComponent(title)}`
     });
   }
 });

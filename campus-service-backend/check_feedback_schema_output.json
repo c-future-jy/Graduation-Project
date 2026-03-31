@@ -1,0 +1,115 @@
+{
+  "ok": true,
+  "feedbackColumns": [
+    {
+      "Field": "id",
+      "Type": "bigint unsigned",
+      "Null": "NO",
+      "Default": null,
+      "Extra": "auto_increment"
+    },
+    {
+      "Field": "user_id",
+      "Type": "bigint unsigned",
+      "Null": "NO",
+      "Default": null,
+      "Extra": ""
+    },
+    {
+      "Field": "merchant_id",
+      "Type": "bigint unsigned",
+      "Null": "YES",
+      "Default": null,
+      "Extra": ""
+    },
+    {
+      "Field": "order_id",
+      "Type": "bigint unsigned",
+      "Null": "YES",
+      "Default": null,
+      "Extra": ""
+    },
+    {
+      "Field": "type",
+      "Type": "tinyint",
+      "Null": "NO",
+      "Default": null,
+      "Extra": ""
+    },
+    {
+      "Field": "rating",
+      "Type": "tinyint unsigned",
+      "Null": "YES",
+      "Default": null,
+      "Extra": ""
+    },
+    {
+      "Field": "content",
+      "Type": "text",
+      "Null": "NO",
+      "Default": null,
+      "Extra": ""
+    },
+    {
+      "Field": "reply",
+      "Type": "text",
+      "Null": "YES",
+      "Default": null,
+      "Extra": ""
+    },
+    {
+      "Field": "reject_reason",
+      "Type": "text",
+      "Null": "YES",
+      "Default": null,
+      "Extra": ""
+    },
+    {
+      "Field": "reply_time",
+      "Type": "datetime",
+      "Null": "YES",
+      "Default": null,
+      "Extra": ""
+    },
+    {
+      "Field": "created_at",
+      "Type": "datetime",
+      "Null": "NO",
+      "Default": "CURRENT_TIMESTAMP",
+      "Extra": "DEFAULT_GENERATED"
+    },
+    {
+      "Field": "reply_user_id",
+      "Type": "bigint unsigned",
+      "Null": "YES",
+      "Default": null,
+      "Extra": ""
+    },
+    {
+      "Field": "status",
+      "Type": "tinyint",
+      "Null": "YES",
+      "Default": "0",
+      "Extra": ""
+    }
+  ],
+  "sampleRow": {
+    "id": 3,
+    "user_id": 6,
+    "merchant_id": 1,
+    "order_id": null,
+    "type": 2,
+    "rating": 2,
+    "content": "范围是粉色粉色",
+    "reply": null,
+    "reject_reason": "啊伟大伟大",
+    "reply_time": "2026-03-27T02:19:16.000Z",
+    "created_at": "2026-03-26T09:43:01.000Z",
+    "reply_user_id": 7,
+    "status": 2,
+    "user_name": "凉义",
+    "merchant_name": "校园奶茶",
+    "order_no": null
+  },
+  "sampleQueryError": null
+}

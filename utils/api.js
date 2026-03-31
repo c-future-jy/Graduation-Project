@@ -1,5 +1,22 @@
-// API 基础配置
-const BASE_URL = 'http://localhost:3000/api';
+function getBaseUrl() {
+  try {
+    const app = typeof getApp === 'function' ? getApp() : null;
+    const url = app && app.globalData && app.globalData.baseUrl;
+    if (url) return String(url).trim();
+
+    // 兜底：如果全局还没初始化，尝试读取本地配置
+    const stored = String(wx.getStorageSync('baseUrl') || '').trim();
+    return stored || 'http://localhost:3000/api';
+  } catch (e) {
+    try {
+      const stored = String(wx.getStorageSync('baseUrl') || '').trim();
+      return stored || 'http://localhost:3000/api';
+    } catch (_) {
+      return 'http://localhost:3000/api';
+    }
+  }
+}
+
 /**
  * 封装请求方法
  */
@@ -9,7 +26,7 @@ function request(options) {
     const token = wx.getStorageSync('token');
     
     wx.request({
-      url: BASE_URL + options.url,
+      url: getBaseUrl() + options.url,
       method: options.method || 'GET',
       data: options.data || {},
       header: {
@@ -20,6 +37,11 @@ function request(options) {
         console.log('API response:', res.statusCode, res.data);
         // 成功响应
         if ((res.statusCode === 200 || res.statusCode === 201) && res.data.success) {
+          // 若后端返回新 token（常见于角色/merchant_id 变更后的自动刷新），则更新本地 token
+          const refreshedToken = res.data && res.data.data && res.data.data.token;
+          if (refreshedToken) {
+            wx.setStorageSync('token', refreshedToken);
+          }
           resolve(res.data);
         } 
         // 401 未授权，只在非登录/注册接口时跳转登录
@@ -92,6 +114,18 @@ function login(code, nickname, avatarUrl, role = 1) {
     data: { code, nickname, avatarUrl, role }
   });
 }
+
+/**
+ * 账号密码登录
+ * @param {Object} data { username, password, role? }
+ */
+function accountLogin(data) {
+  return request({
+    url: '/users/login/account',
+    method: 'POST',
+    data
+  });
+}
 /**
  * 获取个人信息
  */
@@ -132,7 +166,7 @@ function uploadAvatar(filePath) {
   return new Promise((resolve, reject) => {
     const token = wx.getStorageSync('token');
     wx.uploadFile({
-      url: BASE_URL + '/upload/avatar',
+      url: getBaseUrl() + '/upload/avatar',
       filePath,
       name: 'avatar',
       header: {
@@ -142,6 +176,41 @@ function uploadAvatar(filePath) {
         try {
           const data = JSON.parse(res.data);
           if (res.statusCode === 200 && data.success) {
+            resolve(data);
+          } else {
+            wx.showToast({ title: data.message || '上传失败', icon: 'none' });
+            reject(data);
+          }
+        } catch (err) {
+          reject(err);
+        }
+      },
+      fail: (err) => {
+        wx.showToast({ title: '上传失败', icon: 'none' });
+        reject(err);
+      }
+    });
+  });
+}
+
+/**
+ * 通用图片上传
+ * @param {String} filePath 本地文件路径
+ */
+function uploadImage(filePath) {
+  return new Promise((resolve, reject) => {
+    const token = wx.getStorageSync('token');
+    wx.uploadFile({
+      url: getBaseUrl() + '/upload',
+      filePath,
+      name: 'file',
+      header: {
+        'Authorization': token ? `Bearer ${token}` : ''
+      },
+      success: (res) => {
+        try {
+          const data = JSON.parse(res.data);
+          if ((res.statusCode === 200 || res.statusCode === 201) && data.success) {
             resolve(data);
           } else {
             wx.showToast({ title: data.message || '上传失败', icon: 'none' });
@@ -180,6 +249,41 @@ function getMerchantById(id) {
     method: 'GET'
   });
 }
+
+/**
+ * 申请成为商家
+ * @param {Object} data 申请信息
+ */
+function applyMerchant(data) {
+  return request({
+    url: '/merchants/apply',
+    method: 'POST',
+    data
+  });
+}
+
+/**
+ * 获取当前登录用户的商家信息（商家端）
+ */
+function getMyMerchant() {
+  return request({
+    url: '/merchants/me',
+    method: 'GET'
+  });
+}
+
+/**
+ * 更新商家信息（商家/管理员）
+ * @param {Number} id 商家 ID
+ * @param {Object} data 更新字段
+ */
+function updateMerchant(id, data) {
+  return request({
+    url: `/merchants/${id}`,
+    method: 'PUT',
+    data
+  });
+}
 //商品模块
 /**
  * 获取商品列表
@@ -211,6 +315,19 @@ function getProductById(id) {
 function getCategories(params) {
   return request({
     url: '/categories',
+    method: 'GET',
+    data: params
+  });
+}
+
+// 搜索模块
+/**
+ * 聚合搜索（商家 + 商品）
+ * @param {Object} params 查询参数（keyword 或 q）
+ */
+function searchAll(params) {
+  return request({
+    url: '/search',
     method: 'GET',
     data: params
   });
@@ -270,6 +387,38 @@ function completeOrder(id) {
   return request({
     url: `/orders/${id}/complete`,
     method: 'PUT'
+  });
+}
+
+/**
+ * 删除订单
+ * @param {Number|String} id 订单ID
+ */
+function deleteOrder(id) {
+  return request({
+    url: `/orders/${id}`,
+    method: 'DELETE'
+  });
+}
+
+/**
+ * 获取订单数量统计（待支付、待发货等）
+ */
+function getOrderCounts() {
+  return request({
+    url: '/orders/counts',
+    method: 'GET'
+  });
+}
+
+/**
+ * 再次购买：将订单商品加入购物车
+ * @param {Number|String} orderId 订单ID
+ */
+function buyAgain(orderId) {
+  return request({
+    url: `/orders/${orderId}/buy-again`,
+    method: 'POST'
   });
 }
 //地址模块
@@ -488,6 +637,41 @@ function getAdminUserList(params) {
 }
 
 /**
+ * 获取管理员用户详情
+ * @param {Number|String} id 用户 ID
+ */
+function getAdminUserDetail(id) {
+  return request({
+    url: `/admin/users/${id}`,
+    method: 'GET'
+  });
+}
+
+/**
+ * 更新用户状态（管理员）
+ * @param {Number|String} id 用户 ID
+ * @param {Number} status 1 正常, 0 禁用
+ */
+function updateAdminUserStatus(id, status) {
+  return request({
+    url: `/admin/users/${id}/status`,
+    method: 'PUT',
+    data: { status }
+  });
+}
+
+/**
+ * 重置用户密码（管理员）
+ * @param {Number|String} id 用户 ID
+ */
+function resetAdminUserPassword(id) {
+  return request({
+    url: `/admin/users/${id}/reset-password`,
+    method: 'POST'
+  });
+}
+
+/**
  * 获取管理员商家列表
  * @param {Object} params 查询参数 (page, pageSize, status, audit_status, keyword, category_id)
  */
@@ -496,6 +680,43 @@ function getAdminMerchantList(params) {
     url: '/admin/merchants',
     method: 'GET',
     data: params
+  });
+}
+
+/**
+ * 获取管理员商家详情
+ * @param {Number|String} id 商家 ID
+ */
+function getAdminMerchantDetail(id) {
+  return request({
+    url: `/admin/merchants/${id}`,
+    method: 'GET'
+  });
+}
+
+/**
+ * 更新管理员商家状态（营业/休息/禁用）
+ * @param {Number|String} id 商家 ID
+ * @param {Number} status 0 休息/禁用, 1 营业
+ */
+function updateAdminMerchantStatus(id, status) {
+  return request({
+    url: `/admin/merchants/${id}/status`,
+    method: 'PUT',
+    data: { status }
+  });
+}
+
+/**
+ * 审核商家
+ * @param {Number|String} id 商家 ID
+ * @param {Object} data { audit_status: 2|3, audit_remark?: string }
+ */
+function auditAdminMerchant(id, data) {
+  return request({
+    url: `/admin/merchants/${id}/audit`,
+    method: 'PUT',
+    data
   });
 }
 
@@ -512,6 +733,34 @@ function getAdminProductList(params) {
 }
 
 /**
+ * 更新商品状态（管理员）
+ * @param {Number|String} id 商品 ID
+ * @param {Number} status 1 上架, 0 下架
+ * @param {String} offline_reason 下架原因（可选）
+ */
+function updateAdminProductStatus(id, status, offline_reason = '') {
+  return request({
+    url: `/admin/products/${id}/status`,
+    method: 'PUT',
+    data: { status, offline_reason }
+  });
+}
+
+/**
+ * 批量更新商品（管理员）
+ * @param {Number[]} product_ids 商品ID列表
+ * @param {Number} status 1 上架, 0 下架
+ * @param {String} offline_reason 下架原因（可选）
+ */
+function batchUpdateAdminProducts(product_ids, status, offline_reason = '') {
+  return request({
+    url: '/admin/products/batch-update',
+    method: 'POST',
+    data: { product_ids, status, offline_reason }
+  });
+}
+
+/**
  * 获取管理员订单列表
  * @param {Object} params 查询参数 (page, pageSize, order_no, user_id, merchant_id, status, startTime, endTime)
  */
@@ -520,6 +769,19 @@ function getAdminOrderList(params) {
     url: '/admin/orders',
     method: 'GET',
     data: params
+  });
+}
+
+/**
+ * 强制取消订单（管理员）
+ * @param {Number|String} id 订单 ID
+ * @param {String} cancel_reason 取消原因（可选）
+ */
+function forceCancelAdminOrder(id, cancel_reason = '') {
+  return request({
+    url: `/admin/orders/${id}/force-cancel`,
+    method: 'POST',
+    data: { cancel_reason }
   });
 }
 
@@ -562,6 +824,98 @@ function rejectFeedback(id, reason) {
 }
 
 /**
+ * 删除反馈（管理员）
+ */
+function deleteAdminFeedback(id) {
+  return request({
+    url: `/admin/feedbacks/${id}`,
+    method: 'DELETE'
+  });
+}
+
+/**
+ * 批量删除反馈（管理员）
+ * @param {Number[]} ids
+ */
+function batchDeleteAdminFeedbacks(ids) {
+  return request({
+    url: '/admin/feedbacks/batch-delete',
+    method: 'POST',
+    data: { feedback_ids: ids }
+  });
+}
+
+/**
+ * 商家仪表盘：核心统计
+ */
+function getMerchantDashboardStats() {
+  return request({
+    url: '/merchant/dashboard/stats',
+    method: 'GET'
+  });
+}
+
+/**
+ * 商家仪表盘：趋势
+ * @param {Object} params { days }
+ */
+function getMerchantDashboardTrend(params) {
+  return request({
+    url: '/merchant/dashboard/trend',
+    method: 'GET',
+    data: params
+  });
+}
+
+/**
+ * 商家仪表盘：热销商品
+ * @param {Object} params { limit }
+ */
+function getMerchantDashboardTopProducts(params) {
+  return request({
+    url: '/merchant/dashboard/top-products',
+    method: 'GET',
+    data: params
+  });
+}
+
+/**
+ * 商家仪表盘：最近订单
+ * @param {Object} params { limit }
+ */
+function getMerchantDashboardRecentOrders(params) {
+  return request({
+    url: '/merchant/dashboard/recent-orders',
+    method: 'GET',
+    data: params
+  });
+}
+
+/**
+ * 商家仪表盘：库存预警
+ * @param {Object} params { threshold, limit }
+ */
+function getMerchantDashboardLowStock(params) {
+  return request({
+    url: '/merchant/dashboard/low-stock',
+    method: 'GET',
+    data: params
+  });
+}
+
+/**
+ * 商家仪表盘：订单状态分布
+ * @param {Object} params { days } 或 { startDate, endDate }
+ */
+function getMerchantDashboardOrderStatus(params) {
+  return request({
+    url: '/merchant/dashboard/order-status',
+    method: 'GET',
+    data: params
+  });
+}
+
+/**
  * 获取反馈详情（管理员）
  * @param {Number} id 反馈ID
  */
@@ -581,6 +935,64 @@ function getAdminNotificationList(params) {
     url: '/admin/notifications',
     method: 'GET',
     data: params
+  });
+}
+
+/**
+ * 发布通知（管理员）
+ * @param {Object} data 通知数据 (title, content, type, receive_scope, role_ids?, user_ids?, scheduled_time?)
+ */
+function createAdminNotification(data) {
+  return request({
+    url: '/admin/notifications',
+    method: 'POST',
+    data
+  });
+}
+
+/**
+ * 删除通知（管理员）
+ * @param {Number} id 通知ID
+ */
+function deleteAdminNotification(id) {
+  return request({
+    url: `/admin/notifications/${id}`,
+    method: 'DELETE'
+  });
+}
+
+/**
+ * 标记通知已读（管理员）
+ * @param {Number} id 通知ID
+ */
+function markAdminNotificationAsRead(id) {
+  return request({
+    url: `/admin/notifications/${id}/read`,
+    method: 'PUT'
+  });
+}
+
+/**
+ * 批量标记通知已读（管理员）
+ * @param {Number[]} ids 通知ID列表
+ */
+function batchMarkAdminNotificationsAsRead(ids) {
+  return request({
+    url: '/admin/notifications/batch-read',
+    method: 'POST',
+    data: { notification_ids: ids }
+  });
+}
+
+/**
+ * 批量删除通知（管理员）
+ * @param {Number[]} ids 通知ID列表
+ */
+function batchDeleteAdminNotifications(ids) {
+  return request({
+    url: '/admin/notifications/batch-delete',
+    method: 'POST',
+    data: { notification_ids: ids }
   });
 }
 
@@ -632,20 +1044,29 @@ function getAdminMerchantCategories() {
 module.exports = {
   register,
   login,
+  accountLogin,
   getUserProfile,
   updateProfile,
   decryptWeixinPhone,
   uploadAvatar,
+  uploadImage,
   getMerchants,
   getMerchantById,
+  applyMerchant,
+  getMyMerchant,
+  updateMerchant,
   getProducts,
   getProductById,
   getCategories,
+  searchAll,
   getOrders,
   createOrder,
   getOrderById,
   cancelOrder,
   completeOrder,
+  getOrderCounts,
+  buyAgain,
+  deleteOrder,
   getAddresses,
   createAddress,
   updateAddress,
@@ -665,17 +1086,39 @@ module.exports = {
   deleteInvalidItems,
   getSelectedItems,
   getAdminUserList,
+  getAdminUserDetail,
+  updateAdminUserStatus,
+  resetAdminUserPassword,
   getAdminMerchantList,
+  getAdminMerchantDetail,
+  updateAdminMerchantStatus,
+  auditAdminMerchant,
   getAdminProductList,
+  updateAdminProductStatus,
+  batchUpdateAdminProducts,
   getAdminOrderList,
+  forceCancelAdminOrder,
   getAdminFeedbackList,
   replyFeedback,
   rejectFeedback,
   getAdminFeedbackDetail,
+  deleteAdminFeedback,
+  batchDeleteAdminFeedbacks,
   getAdminNotificationList,
+  createAdminNotification,
+  deleteAdminNotification,
+  batchDeleteAdminNotifications,
+  markAdminNotificationAsRead,
+  batchMarkAdminNotificationsAsRead,
   getAdminDashboardStats,
   getAdminOrderTrend,
   getAdminRevenue,
   getAdminMerchantCategories,
+  getMerchantDashboardStats,
+  getMerchantDashboardTrend,
+  getMerchantDashboardTopProducts,
+  getMerchantDashboardRecentOrders,
+  getMerchantDashboardLowStock,
+  getMerchantDashboardOrderStatus,
   request
 };

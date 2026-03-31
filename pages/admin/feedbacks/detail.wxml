@@ -1,9 +1,5 @@
 <view class="container">
-  <view class="header">
-    <button class="back-btn" bindtap="goBack">返回</button>
-    <text class="title">反馈详情</text>
-  </view>
-  
+ 
   <view class="content" wx:if="{{!loading && feedback}}">
     <view class="detail-item">
       <text class="label">反馈ID：</text>

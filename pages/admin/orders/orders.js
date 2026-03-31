@@ -1,5 +1,5 @@
 // pages/admin/orders/orders.js
-const { getAdminOrderList } = require('../../../utils/api');
+const { getAdminOrderList, forceCancelAdminOrder } = require('../../../utils/api');
 
 Page({
   /**
@@ -23,7 +23,18 @@ Page({
    */
   onLoad(options) {
     this.checkLoginStatus();
+    const initialTitle = this.safeDecodeURIComponent(options && options.title);
+    wx.setNavigationBarTitle({ title: initialTitle || '订单管理' });
     this.loadOrders();
+  },
+
+  safeDecodeURIComponent(value) {
+    if (!value) return '';
+    try {
+      return decodeURIComponent(value);
+    } catch (e) {
+      return value;
+    }
   },
 
   /**
@@ -177,12 +188,22 @@ Page({
     wx.showModal({
       title: '批量取消',
       content: `确定要取消选中的 ${this.data.selectedOrders.length} 个订单吗？`,
-      success: (res) => {
-        if (res.confirm) {
-          // 实际项目中应调用API
+      success: async (res) => {
+        if (!res.confirm) return;
+        wx.showLoading({ title: '处理中...' });
+        try {
+          const ids = this.data.selectedOrders;
+          for (const id of ids) {
+            await forceCancelAdminOrder(id, '');
+          }
           wx.showToast({ title: '取消成功' });
-          this.setData({ selectedOrders: [] });
+          this.setData({ selectedOrders: [], page: 1, orders: [], hasMore: true });
           this.loadOrders();
+        } catch (error) {
+          console.error('批量取消失败:', error);
+          wx.showToast({ title: error.message || '取消失败', icon: 'none' });
+        } finally {
+          wx.hideLoading();
         }
       }
     });

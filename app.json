@@ -14,7 +14,7 @@
     "pages/address/edit-address/edit-address",
     "pages/order/order",
     "pages/order-detail/order-detail",
-    "pages/confirm-order/confirm-order",
+    "pages/order-confirm/order-confirm",
     "pages/feedback/feedback",
     "pages/notice/notice",
     "pages/merchant/merchant",

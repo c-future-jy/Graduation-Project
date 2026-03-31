@@ -1,21 +1,72 @@
-const { getAdminFeedbackList, replyFeedback, rejectFeedback } = require('../../../utils/api');
+const {
+  getAdminFeedbackList,
+  replyFeedback,
+  rejectFeedback,
+  batchDeleteAdminFeedbacks
+} = require('../../../utils/api');
+
+function pad2(n) {
+  return String(n).padStart(2, '0');
+}
+
+// 小程序/部分 JS 引擎对 `YYYY-MM-DD HH:mm:ss` 解析不稳定；这里做兼容与空值兜底。
+function toValidDate(value) {
+  if (!value) return null;
+
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? null : value;
+  }
+
+  if (typeof value === 'number') {
+    const d = new Date(value);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+
+  if (typeof value === 'string') {
+    const raw = value.trim();
+    if (!raw) return null;
+
+    // 1) 先尝试原样解析（ISO 等）
+    let d = new Date(raw);
+    if (!Number.isNaN(d.getTime())) return d;
+
+    // 2) MySQL DATETIME: 2026-03-30 12:34:56 -> 2026/03/30 12:34:56
+    const slash = raw.replace(/-/g, '/');
+    d = new Date(slash);
+    if (!Number.isNaN(d.getTime())) return d;
+
+    // 3) 再尝试替换成 ISO 形式：2026/03/30T12:34:56
+    d = new Date(slash.replace(' ', 'T'));
+    if (!Number.isNaN(d.getTime())) return d;
+  }
+
+  return null;
+}
 
 // 格式化时间函数
-function formatTime(timeStr) {
-  const date = new Date(timeStr);
+function formatTime(timeValue) {
+  const date = toValidDate(timeValue);
+  if (!date) return '-';
+
   const now = new Date();
-  const diff = now - date;
+  const diff = now.getTime() - date.getTime();
+
+  // 时间在未来/时钟漂移：直接展示绝对时间
+  if (!Number.isFinite(diff) || diff < 0) {
+    return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())} ${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
+  }
+
   const minutes = Math.floor(diff / 60000);
   const hours = Math.floor(diff / 3600000);
   const days = Math.floor(diff / 86400000);
-  
+
   if (minutes < 1) return '刚刚';
   if (minutes < 60) return `${minutes}分钟前`;
   if (hours < 24) return `${hours}小时前`;
   if (days < 7) return `${days}天前`;
-  
-  // 格式化日期为 YYYY-MM-DD HH:MM
-  return date.toISOString().slice(0, 16).replace('T', ' ');
+
+  // 格式化日期为 YYYY-MM-DD HH:mm（不使用 toISOString，避免 Invalid time value）
+  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())} ${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
 }
 
 Page({
@@ -52,9 +103,20 @@ Page({
     ]
   },
 
-  onLoad: function () {
+  onLoad: function (options) {
     this.checkLoginStatus();
+    const initialTitle = this.safeDecodeURIComponent(options && options.title);
+    wx.setNavigationBarTitle({ title: initialTitle || '反馈管理' });
     this.loadFeedbacks();
+  },
+
+  safeDecodeURIComponent(value) {
+    if (!value) return '';
+    try {
+      return decodeURIComponent(value);
+    } catch (e) {
+      return value;
+    }
   },
 
   checkLoginStatus: function () {
@@ -75,7 +137,7 @@ Page({
     
     // 将前端状态值转换为后端数值
     const statusValue = this.data.feedbackStatuses[selectedStatus].value;
-    let statusNum = null;
+    let statusNum = '';
     if (statusValue === 'pending') {
       statusNum = 0;
     } else if (statusValue === 'replied') {
@@ -94,20 +156,25 @@ Page({
       wx.hideLoading();
       if (res.success) {
         // 转换数据格式，适配前端显示
-        const feedbacks = res.data.feedbacks.map(item => ({
+        const feedbacks = res.data.feedbacks.map(item => {
+          const createdAt = item.create_time || item.created_at || item.createdAt || item.createTime;
+          const typeNum = typeof item.type === 'string' ? parseInt(item.type, 10) : item.type;
+          const statusNum = typeof item.status === 'string' ? parseInt(item.status, 10) : item.status;
+          return {
           id: item.id,
           userId: item.user_id,
           userName: item.user_name,
-          type: item.type === 1 ? 'order' : item.type === 2 ? 'merchant' : 'platform',
+          type: typeNum === 1 ? 'order' : typeNum === 2 ? 'merchant' : 'platform',
           content: item.content,
           rating: item.rating,
-          status: item.status === 0 ? 'pending' : item.status === 1 ? 'replied' : 'rejected',
+          status: statusNum === 0 ? 'pending' : statusNum === 1 ? 'replied' : 'rejected',
           actionContent: item.reply || item.reject_reason || '',
           showFullContent: false,
           currentAction: '',
-          createdAt: item.created_at,
-          formattedTime: formatTime(item.created_at)
-        }));
+          createdAt,
+          formattedTime: formatTime(createdAt)
+          };
+        });
         
         this.setData({
           feedbacks: feedbacks,
@@ -183,7 +250,7 @@ Page({
     const id = e.currentTarget.dataset.id;
     console.log('获取到的反馈ID:', id);
     wx.navigateTo({
-      url: `/pages/admin/feedbacks/detail?id=${id}`,
+      url: `/pages/admin/feedbacks/detail?id=${id}&title=${encodeURIComponent('反馈详情')}`,
       success: function(res) {
         console.log('跳转成功', res);
       },
@@ -320,22 +387,44 @@ Page({
 
   // 确认批量处理
   confirmBatchProcess: function () {
-    const action = this.data.selectedBatchAction;
+    const action = Number(this.data.selectedBatchAction);
     const selectedIds = this.data.selectedFeedbacks;
-    
-    wx.showLoading({ title: '处理中...' });
-    
-    // 模拟批量处理操作
-    setTimeout(() => {
-      wx.hideLoading();
-      wx.showToast({ title: '处理成功', icon: 'success' });
-      this.setData({
-        showBatchModal: false,
-        selectedFeedbacks: [],
-        selectAll: false
+
+    if (!Array.isArray(selectedIds) || selectedIds.length === 0) {
+      wx.showToast({ title: '请选择要处理的反馈', icon: 'none' });
+      return;
+    }
+
+    // 目前仅“批量删除”有对应后端接口
+    if (action !== 2) {
+      wx.showToast({ title: '该批量操作暂未接入接口，请逐条处理', icon: 'none' });
+      this.setData({ showBatchModal: false });
+      return;
+    }
+
+    wx.showLoading({ title: '删除中...' });
+
+    batchDeleteAdminFeedbacks(selectedIds)
+      .then((res) => {
+        wx.hideLoading();
+        if (res && res.success) {
+          wx.showToast({ title: '删除成功', icon: 'success' });
+          this.setData({
+            showBatchModal: false,
+            selectedFeedbacks: [],
+            selectAll: false,
+            currentPage: 1
+          });
+          this.loadFeedbacks();
+        } else {
+          wx.showToast({ title: (res && res.message) || '删除失败', icon: 'none' });
+        }
+      })
+      .catch((err) => {
+        wx.hideLoading();
+        console.error('批量删除反馈失败:', err);
+        wx.showToast({ title: err.message || '网络错误', icon: 'none' });
       });
-      this.loadFeedbacks();
-    }, 1000);
   },
 
   // 取消批量处理

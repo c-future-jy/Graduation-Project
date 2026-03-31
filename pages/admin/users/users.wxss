@@ -104,6 +104,11 @@
   margin-bottom: 20rpx;
 }
 
+.table-scroll {
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
 .table-header {
   display: flex;
   background-color: #f9f9f9;
@@ -112,14 +117,19 @@
   font-weight: bold;
   font-size: 22rpx;
   color: #333;
+  min-width: 1200rpx;
+  box-sizing: border-box;
 }
 
 .table-row {
   display: flex;
   border-bottom: 1rpx solid #e8e8e8;
-  padding: 20rpx;
+  padding: 16rpx 20rpx;
   align-items: center;
   transition: background-color 0.3s;
+  min-width: 1200rpx;
+  box-sizing: border-box;
+  min-height: 76rpx;
 }
 
 .table-row:hover {
@@ -129,49 +139,62 @@
 .table-col {
   display: flex;
   align-items: center;
+  padding: 0 10rpx;
+  box-sizing: border-box;
+  min-width: 0;
+  white-space: nowrap;
 }
 
 .select-col {
-  width: 80rpx;
+  flex: 0 0 80rpx;
   justify-content: center;
 }
 
 .id-col {
-  width: 80rpx;
+  flex: 0 0 90rpx;
   color: #666;
 }
 
 .name-col {
-  flex: 1;
+  flex: 0 0 220rpx;
   color: #333;
 }
 
 .phone-col {
-  width: 200rpx;
+  flex: 0 0 200rpx;
   color: #666;
 }
 
 .role-col {
-  width: 120rpx;
+  flex: 0 0 120rpx;
   justify-content: center;
 }
 
 .status-col {
-  width: 100rpx;
+  flex: 0 0 120rpx;
   justify-content: center;
 }
 
 .time-col {
-  width: 200rpx;
+  flex: 0 0 240rpx;
   color: #999;
   font-size: 20rpx;
 }
 
 .action-col {
-  width: 240rpx;
+  flex: 0 0 320rpx;
   display: flex;
   gap: 8rpx;
   justify-content: flex-end;
+  flex-wrap: nowrap;
+}
+
+.cell-ellipsis {
+  display: block;
+  width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 /* 角色标签 */
@@ -221,6 +244,8 @@
   border-radius: 6rpx;
   font-size: 20rpx;
   border: none;
+  height: 44rpx;
+  line-height: 44rpx;
 }
 
 .action-btn.view {
@@ -254,9 +279,10 @@
 }
 
 .empty-icon {
-  font-size: 80rpx;
+  width: 200rpx;
+  height: 200rpx;
   display: block;
-  margin-bottom: 20rpx;
+  margin: 0 auto 20rpx;
 }
 
 .empty-text {
@@ -290,6 +316,115 @@
 
 .no-more {
   color: #999;
+}
+
+/* 用户详情弹窗 */
+.detail-mask {
+  position: fixed;
+  left: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 30rpx;
+  z-index: 999;
+}
+
+.detail-panel {
+  width: 100%;
+  max-width: 680rpx;
+  background: #fff;
+  border-radius: 12rpx;
+  overflow: hidden;
+}
+
+.detail-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20rpx;
+  border-bottom: 1rpx solid #e8e8e8;
+}
+
+.detail-title {
+  font-size: 28rpx;
+  font-weight: bold;
+  color: #333;
+}
+
+.detail-close {
+  font-size: 40rpx;
+  line-height: 40rpx;
+  color: #999;
+  padding: 0 10rpx;
+}
+
+.detail-loading {
+  padding: 40rpx 20rpx;
+  text-align: center;
+  color: #666;
+}
+
+.detail-content {
+  max-height: 75vh;
+  padding: 20rpx;
+  box-sizing: border-box;
+}
+
+.detail-section {
+  background: #fafafa;
+  border-radius: 12rpx;
+  padding: 16rpx;
+  margin-bottom: 16rpx;
+}
+
+.section-title {
+  display: block;
+  font-size: 22rpx;
+  font-weight: bold;
+  color: #333;
+  margin-bottom: 10rpx;
+}
+
+.detail-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10rpx 0;
+}
+
+.detail-label {
+  font-size: 22rpx;
+  color: #666;
+  flex: 0 0 160rpx;
+}
+
+.detail-value {
+  font-size: 22rpx;
+  color: #333;
+  flex: 1;
+  text-align: right;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.detail-avatar {
+  width: 72rpx;
+  height: 72rpx;
+  border-radius: 50%;
+  background: #f0f0f0;
+}
+
+.detail-avatar.placeholder {
+  width: 72rpx;
+  height: 72rpx;
+  border-radius: 50%;
+  background: #f0f0f0;
+  margin-left: auto;
 }
 
 /* 响应式适配 */

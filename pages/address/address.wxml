@@ -47,7 +47,7 @@
   
   <!-- 空状态 -->
   <view wx:else class="empty-state">
-    <image class="empty-icon" src="/assets/images/shouhuodizhi-1.jpg" mode="aspectFit" />
+    <image class="empty-icon" src="/assets/images/kong.jpg" mode="aspectFit" />
     <text class="empty-text">暂无收货地址</text>
     <text class="empty-subtext">添加收货地址，方便快捷地完成订单</text>
     <button 

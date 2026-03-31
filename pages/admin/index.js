@@ -1,4 +1,6 @@
 // pages/admin/index.js
+const { getAdminDashboardStats } = require('../../utils/api');
+
 Page({
   /**
    * 页面的初始数据
@@ -10,6 +12,11 @@ Page({
       nickName: '管理员'
     },
     today: '',
+    badgeMap: {
+      merchants: 0,
+      feedbacks: 0,
+      orders: 0
+    },
     menuSections: [
       {
         title: '数据分析',
@@ -80,8 +87,44 @@ Page({
    * 生命周期函数--监听页面加载
    */
   onLoad(options) {
+    wx.setNavigationBarTitle({ title: '管理后台' });
     this.checkLoginStatus();
     this.updateDateTime();
+    this.refreshBadges();
+  },
+
+  onShow() {
+    this.updateDateTime();
+    this.refreshBadges();
+  },
+
+  formatBadgeCount(count) {
+    const n = Number(count) || 0;
+    if (n <= 0) return 0;
+    if (n > 99) return '99+';
+    return String(n);
+  },
+
+  async refreshBadges() {
+    try {
+      const res = await getAdminDashboardStats();
+      const data = (res && res.data) || {};
+      this.setData({
+        badgeMap: {
+          merchants: this.formatBadgeCount(data.pendingMerchants),
+          feedbacks: this.formatBadgeCount(data.pendingFeedback),
+          orders: this.formatBadgeCount(data.pendingOrders)
+        }
+      });
+    } catch (e) {
+      // ignore: badges 不应阻塞主界面
+    }
+  },
+
+  buildUrlWithTitle(url, title) {
+    if (!title) return url;
+    const separator = url.includes('?') ? '&' : '?';
+    return url + separator + 'title=' + encodeURIComponent(title);
   },
 
   /**
@@ -131,10 +174,11 @@ Page({
   switchMenu(e) {
     const id = e.currentTarget.dataset.id;
     const url = e.currentTarget.dataset.url;
+    const title = e.currentTarget.dataset.title;
     
     this.setData({ activeTab: id });
     wx.navigateTo({
-      url: url
+      url: this.buildUrlWithTitle(url, title)
     });
   },
 
@@ -143,8 +187,9 @@ Page({
    */
   goToPage(e) {
     const url = e.currentTarget.dataset.url;
+    const title = e.currentTarget.dataset.title;
     wx.navigateTo({
-      url: url
+      url: this.buildUrlWithTitle(url, title)
     });
   },
 

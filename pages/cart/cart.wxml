@@ -16,7 +16,7 @@
 
   <!-- 空状态 -->
   <view wx:elif="{{!hasGoods}}" class="empty-container">
-    <image src="/images/kong.jpg" class="empty-image" />
+    <image src="/assets/images/kong.jpg" class="empty-image" />
     <text class="empty-text">购物车空空如也</text>
     <button class="go-shopping-button" bindtap="goShopping">去逛逛</button>
   </view>

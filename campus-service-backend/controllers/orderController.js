@@ -138,6 +138,24 @@ exports.createOrder = async (req, res, next) => {
     if (!merchant_id || !items || !Array.isArray(items) || items.length === 0) {
       return errorResponse(res, 400, '缺少必要参数');
     }
+
+    // 校验商家状态：禁用/休息/未通过审核时，不允许下单
+    const [merchantRows] = await pool.query(
+      'SELECT status, audit_status FROM merchant WHERE id = ?',
+      [merchant_id]
+    );
+    if (merchantRows.length === 0) {
+      return errorResponse(res, 400, '商家不存在');
+    }
+    const merchantStatus = parseInt(merchantRows[0].status, 10);
+    const auditStatus = merchantRows[0].audit_status === undefined ? null : parseInt(merchantRows[0].audit_status, 10);
+
+    if (merchantStatus !== 1) {
+      return errorResponse(res, 400, '商家已休息或被禁用，暂无法下单');
+    }
+    if (auditStatus !== null && auditStatus !== 2) {
+      return errorResponse(res, 400, '商家未通过审核，暂无法下单');
+    }
     
     // 验证地址
     let receiverName, receiverPhone, receiverAddress;
@@ -178,8 +196,8 @@ exports.createOrder = async (req, res, next) => {
         
         // 检查库存
         const [products] = await pool.query(
-          'SELECT stock, name, image, price FROM product WHERE id = ? AND status = 1',
-          [item.product_id]
+          'SELECT stock, name, image, price FROM product WHERE id = ? AND merchant_id = ? AND status = 1',
+          [item.product_id, merchant_id]
         );
         
         if (products.length === 0) {
@@ -463,6 +481,87 @@ exports.deleteOrder = async (req, res, next) => {
   }
 };
 
+// 用户：再次购买（把订单商品加入购物车）
+// POST /api/orders/:id/buy-again
+exports.buyAgain = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const orderId = req.params.id;
+
+    const [orders] = await pool.query(
+      'SELECT id, merchant_id FROM `order` WHERE id = ? AND user_id = ?',
+      [orderId, userId]
+    );
+    if (orders.length === 0) {
+      return errorResponse(res, 404, '订单不存在');
+    }
+
+    const merchantId = orders[0].merchant_id;
+    const [items] = await pool.query(
+      'SELECT product_id, quantity FROM order_item WHERE order_id = ?',
+      [orderId]
+    );
+    if (!items || items.length === 0) {
+      return errorResponse(res, 400, '订单无可再次购买的商品');
+    }
+
+    let addedCount = 0;
+    let skippedCount = 0;
+
+    for (const item of items) {
+      const productId = item.product_id;
+      const qty = Math.max(parseInt(item.quantity, 10) || 0, 0);
+      if (!productId || qty <= 0) {
+        skippedCount++;
+        continue;
+      }
+
+      const [products] = await pool.query(
+        'SELECT id, stock, status, merchant_id FROM product WHERE id = ?',
+        [productId]
+      );
+      if (products.length === 0) {
+        skippedCount++;
+        continue;
+      }
+
+      const product = products[0];
+      const stock = Math.max(parseInt(product.stock, 10) || 0, 0);
+      if (parseInt(product.status, 10) !== 1 || parseInt(product.merchant_id, 10) !== parseInt(merchantId, 10) || stock <= 0) {
+        skippedCount++;
+        continue;
+      }
+
+      const addQty = Math.min(qty, stock, 99);
+      if (addQty <= 0) {
+        skippedCount++;
+        continue;
+      }
+
+      // spec 字段在部分库中为 NOT NULL，这里统一用空字符串作为默认规格
+      const spec = '';
+
+      await pool.query(
+        `INSERT INTO cart (user_id, product_id, merchant_id, quantity, spec, selected)
+         VALUES (?, ?, ?, ?, ?, 1)
+         ON DUPLICATE KEY UPDATE
+         quantity = LEAST(quantity + VALUES(quantity), ?),
+         merchant_id = VALUES(merchant_id),
+         selected = 1,
+         updated_at = NOW()`,
+        [userId, productId, merchantId, addQty, spec, stock]
+      );
+
+      addedCount++;
+    }
+
+    successResponse(res, { addedCount, skippedCount }, '商品已加入购物车');
+  } catch (error) {
+    console.error('再次购买失败:', error);
+    errorResponse(res, 500, '服务器内部错误');
+  }
+};
+
 // 商家获取订单列表
 exports.getMerchantOrders = async (req, res, next) => {
   try {
@@ -480,10 +579,10 @@ exports.getMerchantOrders = async (req, res, next) => {
       SELECT 
         o.*, 
         u.nickname as user_nickname, 
-        u.avatar as user_avatar, 
+        u.avatar_url as user_avatar, 
         u.phone as user_phone
       FROM 
-        order o
+        \`order\` o
       LEFT JOIN 
         user u ON o.user_id = u.id
       WHERE 
@@ -493,7 +592,7 @@ exports.getMerchantOrders = async (req, res, next) => {
       SELECT 
         COUNT(*) as total 
       FROM 
-        order o
+        \`order\` o
       LEFT JOIN 
         user u ON o.user_id = u.id
       WHERE 
@@ -561,10 +660,10 @@ exports.getMerchantOrderById = async (req, res, next) => {
         SELECT 
           o.*, 
           u.nickname as user_nickname, 
-          u.avatar as user_avatar, 
+          u.avatar_url as user_avatar, 
           u.phone as user_phone
         FROM 
-          order o
+          \`order\` o
         LEFT JOIN 
           user u ON o.user_id = u.id
         WHERE 
@@ -632,8 +731,8 @@ exports.shipOrder = async (req, res, next) => {
       
       // 插入发货通知
       await pool.query(
-        'INSERT INTO notification (user_id, title, content, created_at) VALUES (?, ?, ?, NOW())',
-        [order.user_id, '订单已发货', '您的订单已发货，请注意查收']
+        'INSERT INTO notification (user_id, title, content, type, created_at) VALUES (?, ?, ?, ?, NOW())',
+        [order.user_id, '订单已发货', '您的订单已发货，请注意查收', 3]
       );
       
       // 提交事务
@@ -703,8 +802,8 @@ exports.merchantCancelOrder = async (req, res, next) => {
       
       // 插入取消通知
       await pool.query(
-        'INSERT INTO notification (user_id, title, content, created_at) VALUES (?, ?, ?, NOW())',
-        [order.user_id, '订单已取消', `您的订单已被商家取消，原因：${reason || '无'}`]
+        'INSERT INTO notification (user_id, title, content, type, created_at) VALUES (?, ?, ?, ?, NOW())',
+        [order.user_id, '订单已取消', `您的订单已被商家取消，原因：${reason || '无'}`, 3]
       );
       
       // 提交事务
@@ -943,14 +1042,14 @@ exports.updateAdminOrderStatus = async (req, res, next) => {
       // 状态更新后通知用户和商家
       // 通知用户
       await pool.query(
-        'INSERT INTO notification (user_id, title, content, created_at) VALUES (?, ?, ?, NOW())',
-        [order.user_id, '订单状态更新', `您的订单状态已更新为 ${getStatusText(status)}`]
+        'INSERT INTO notification (user_id, title, content, type, created_at) VALUES (?, ?, ?, ?, NOW())',
+        [order.user_id, '订单状态更新', `您的订单状态已更新为 ${getStatusText(status)}`, 3]
       );
       
       // 通知商家
       await pool.query(
-        'INSERT INTO notification (user_id, title, content, created_at) VALUES (?, ?, ?, NOW())',
-        [order.merchant_id, '订单状态更新', `您的订单状态已更新为 ${getStatusText(status)}`]
+        'INSERT INTO notification (user_id, title, content, type, created_at) VALUES (?, ?, ?, ?, NOW())',
+        [order.merchant_id, '订单状态更新', `您的订单状态已更新为 ${getStatusText(status)}`, 3]
       );
       
       // 提交事务
@@ -1016,14 +1115,14 @@ exports.forceCancelOrder = async (req, res, next) => {
       
       // 通知用户
       await pool.query(
-        'INSERT INTO notification (user_id, title, content, created_at) VALUES (?, ?, ?, NOW())',
-        [order.user_id, '订单被取消', `您的订单已被管理员强制取消，原因：${cancel_reason || '无'}`]
+        'INSERT INTO notification (user_id, title, content, type, created_at) VALUES (?, ?, ?, ?, NOW())',
+        [order.user_id, '订单被取消', `您的订单已被管理员强制取消，原因：${cancel_reason || '无'}`, 3]
       );
       
       // 通知商家
       await pool.query(
-        'INSERT INTO notification (user_id, title, content, created_at) VALUES (?, ?, ?, NOW())',
-        [order.merchant_id, '订单被取消', `您的订单已被管理员强制取消，原因：${cancel_reason || '无'}`]
+        'INSERT INTO notification (user_id, title, content, type, created_at) VALUES (?, ?, ?, ?, NOW())',
+        [order.merchant_id, '订单被取消', `您的订单已被管理员强制取消，原因：${cancel_reason || '无'}`, 3]
       );
       
       // 提交事务

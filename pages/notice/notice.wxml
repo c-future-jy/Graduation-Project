@@ -1,10 +1,6 @@
 <!--pages/notice/notice.wxml-->
 <view class="notice-container">
-  <!-- 页面标题 -->
-  <view class="page-header">
-    <text class="page-title">消息通知</text>
-  </view>
-  
+ 
   <!-- 通知列表 -->
   <view class="notice-list">
     <view wx:if="{{loading}}" class="loading">
@@ -13,12 +9,12 @@
     
     <view wx:else>
       <view wx:if="{{notifications.length === 0}}" class="empty">
-        <image src="/assets/images/empty.png" mode="aspectFit" class="empty-icon" />
+        <image src="/assets/images/kong.jpg" mode="aspectFit" class="empty-icon" />
         <text class="empty-text">暂无通知</text>
       </view>
       
       <view wx:else>
-        <view wx:for="{{notifications}}" wx:key="id" class="notice-item">
+        <view wx:for="{{notifications}}" wx:for-index="idx" wx:key="id" class="notice-item" bindtap="viewNotification" data-index="{{idx}}">
           <view class="notice-header">
             <text class="notice-title">{{item.title}}</text>
             <text class="notice-time">{{item.created_at}}</text>

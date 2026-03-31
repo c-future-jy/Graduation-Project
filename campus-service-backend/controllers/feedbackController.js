@@ -1,9 +1,38 @@
 const { pool } = require('../config/db');
 
+let _tableColumnsCache = new Map();
+async function getTableColumns(tableName) {
+  if (_tableColumnsCache.has(tableName)) return _tableColumnsCache.get(tableName);
+  const [cols] = await pool.query(`SHOW COLUMNS FROM \`${tableName}\``);
+  const set = new Set(cols.map((c) => c.Field));
+  _tableColumnsCache.set(tableName, set);
+  return set;
+}
+
+async function hasTableColumn(tableName, columnName) {
+  try {
+    const columns = await getTableColumns(tableName);
+    return columns.has(columnName);
+  } catch (_) {
+    return false;
+  }
+}
+
+function isDev() {
+  return String(process.env.NODE_ENV || '').toLowerCase() !== 'production';
+}
+
 // 获取反馈列表
 exports.getFeedbackList = async (req, res, next) => {
   try {
-    const [feedbacks] = await pool.query('SELECT * FROM feedback ORDER BY created_at DESC');
+    const timeColumn = (await hasTableColumn('feedback', 'create_time'))
+      ? 'create_time'
+      : (await hasTableColumn('feedback', 'created_at'))
+        ? 'created_at'
+        : null;
+
+    const orderBy = timeColumn ? `ORDER BY \`${timeColumn}\` DESC` : 'ORDER BY id DESC';
+    const [feedbacks] = await pool.query(`SELECT * FROM feedback ${orderBy}`);
     res.json({ success: true, data: { feedbacks } });
   } catch (error) {
     next(error);
@@ -44,15 +73,49 @@ exports.replyFeedback = async (req, res, next) => {
  */
 exports.getAdminFeedbackList = async (req, res, next) => {
   try {
-    const { page = 1, pageSize = 10, type, status, user_id, merchant_id, startTime, endTime } = req.query;
-    const offset = (page - 1) * pageSize;
+    const {
+      page = 1,
+      pageSize = 10,
+      type,
+      status,
+      user_id,
+      merchant_id,
+      startTime,
+      endTime,
+      keyword
+    } = req.query;
+
+    const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    const pageSizeNum = Math.max(1, parseInt(pageSize, 10) || 10);
+    const offset = (pageNum - 1) * pageSizeNum;
+
+    // 兼容不同表结构：有的库是 create_time，有的可能是 created_at
+    const timeColumn = (await hasTableColumn('feedback', 'create_time'))
+      ? 'create_time'
+      : (await hasTableColumn('feedback', 'created_at'))
+        ? 'created_at'
+        : null;
+
+    const merchantNameColumn = (await hasTableColumn('merchant', 'name'))
+      ? 'name'
+      : (await hasTableColumn('merchant', 'merchant_name'))
+        ? 'merchant_name'
+        : null;
+
+    const userNicknameColumn = (await hasTableColumn('user', 'nickname'))
+      ? 'nickname'
+      : null;
+
+    const orderNoColumn = (await hasTableColumn('order', 'order_no'))
+      ? 'order_no'
+      : null;
     
     let query = `
       SELECT 
         f.*,
-        u.nickname as user_name,
-        m.name as merchant_name,
-        o.order_no as order_no
+        ${userNicknameColumn ? `u.\`${userNicknameColumn}\` as user_name` : 'NULL as user_name'},
+        ${merchantNameColumn ? `m.\`${merchantNameColumn}\` as merchant_name` : 'NULL as merchant_name'},
+        ${orderNoColumn ? `o.\`${orderNoColumn}\` as order_no` : 'NULL as order_no'}
       FROM 
         feedback f
       LEFT JOIN 
@@ -83,7 +146,7 @@ exports.getAdminFeedbackList = async (req, res, next) => {
       queryParams.push(type);
     }
     
-    if (status !== undefined && status !== null) {
+    if (status !== undefined && status !== null && status !== '') {
       whereClause.push('f.status = ?');
       queryParams.push(parseInt(status));
     }
@@ -99,13 +162,41 @@ exports.getAdminFeedbackList = async (req, res, next) => {
     }
     
     if (startTime) {
-      whereClause.push('f.created_at >= ?');
-      queryParams.push(startTime);
+      if (timeColumn) {
+        whereClause.push(`f.\`${timeColumn}\` >= ?`);
+        queryParams.push(startTime);
+      }
     }
     
     if (endTime) {
-      whereClause.push('f.created_at <= ?');
-      queryParams.push(endTime);
+      if (timeColumn) {
+        whereClause.push(`f.\`${timeColumn}\` <= ?`);
+        queryParams.push(endTime);
+      }
+    }
+
+    if (keyword) {
+      // 兼容：反馈内容/回复/用户昵称/商家名/订单号 模糊搜索
+      const like = `%${keyword}%`;
+      const parts = ['f.content LIKE ?'];
+      queryParams.push(like);
+      if (await hasTableColumn('feedback', 'reply')) {
+        parts.push('f.reply LIKE ?');
+        queryParams.push(like);
+      }
+      if (userNicknameColumn) {
+        parts.push(`u.\`${userNicknameColumn}\` LIKE ?`);
+        queryParams.push(like);
+      }
+      if (merchantNameColumn) {
+        parts.push(`m.\`${merchantNameColumn}\` LIKE ?`);
+        queryParams.push(like);
+      }
+      if (orderNoColumn) {
+        parts.push(`o.\`${orderNoColumn}\` LIKE ?`);
+        queryParams.push(like);
+      }
+      whereClause.push(`(${parts.join(' OR ')})`);
     }
     
     // 添加WHERE子句
@@ -115,8 +206,12 @@ exports.getAdminFeedbackList = async (req, res, next) => {
     }
     
     // 添加排序和分页
-    query += ' ORDER BY f.created_at DESC LIMIT ? OFFSET ?';
-    queryParams.push(parseInt(pageSize), parseInt(offset));
+    if (timeColumn) {
+      query += ` ORDER BY f.\`${timeColumn}\` DESC LIMIT ? OFFSET ?`;
+    } else {
+      query += ' ORDER BY f.id DESC LIMIT ? OFFSET ?';
+    }
+    queryParams.push(pageSizeNum, offset);
     
     const [feedbacks] = await pool.query(query, queryParams);
     const [countResult] = await pool.query(countQuery, queryParams.slice(0, -2));
@@ -127,7 +222,7 @@ exports.getAdminFeedbackList = async (req, res, next) => {
     );
     
     const total = countResult[0].total;
-    const totalPages = Math.ceil(total / parseInt(pageSize));
+    const totalPages = Math.ceil(total / pageSizeNum);
     
     res.json({
       success: true,
@@ -135,8 +230,8 @@ exports.getAdminFeedbackList = async (req, res, next) => {
         feedbacks,
         pagination: {
           total,
-          page: parseInt(page),
-          pageSize: parseInt(pageSize),
+          page: pageNum,
+          pageSize: pageSizeNum,
           totalPages
         },
         ratingStats: ratingStats[0]
@@ -144,7 +239,12 @@ exports.getAdminFeedbackList = async (req, res, next) => {
     });
   } catch (error) {
     console.error('获取反馈列表失败:', error);
-    res.status(500).json({ success: false, message: '服务器内部错误' });
+    res.status(500).json({
+      success: false,
+      message: '服务器内部错误',
+      error: isDev() ? error.message : undefined,
+      stack: isDev() ? error.stack : undefined
+    });
   }
 };
 
@@ -155,17 +255,56 @@ exports.getAdminFeedbackList = async (req, res, next) => {
 exports.getAdminFeedbackDetail = async (req, res, next) => {
   try {
     const { id } = req.params;
+
+    // 兼容不同表结构（避免 Unknown column 直接 500）
+    const userNicknameColumn = (await hasTableColumn('user', 'nickname'))
+      ? 'nickname'
+      : (await hasTableColumn('user', 'username'))
+        ? 'username'
+        : null;
+
+    const userPhoneColumn = (await hasTableColumn('user', 'phone'))
+      ? 'phone'
+      : (await hasTableColumn('user', 'mobile'))
+        ? 'mobile'
+        : null;
+
+    const merchantNameColumn = (await hasTableColumn('merchant', 'name'))
+      ? 'name'
+      : (await hasTableColumn('merchant', 'merchant_name'))
+        ? 'merchant_name'
+        : null;
+
+    const merchantPhoneColumn = (await hasTableColumn('merchant', 'phone'))
+      ? 'phone'
+      : null;
+
+    const orderNoColumn = (await hasTableColumn('order', 'order_no'))
+      ? 'order_no'
+      : null;
+
+    const orderAmountColumn = (await hasTableColumn('order', 'total_amount'))
+      ? 'total_amount'
+      : (await hasTableColumn('order', 'total_price'))
+        ? 'total_price'
+        : null;
+
+    const feedbackTimeColumn = (await hasTableColumn('feedback', 'create_time'))
+      ? 'create_time'
+      : (await hasTableColumn('feedback', 'created_at'))
+        ? 'created_at'
+        : null;
     
     // 获取反馈基本信息
     const [feedbacks] = await pool.query(`
       SELECT 
         f.*,
-        u.nickname as user_name,
-        u.phone as user_phone,
-        m.name as merchant_name,
-        m.phone as merchant_phone,
-        o.order_no as order_no,
-        o.total_amount as order_amount
+        ${userNicknameColumn ? `u.\`${userNicknameColumn}\` as user_name` : 'NULL as user_name'},
+        ${userPhoneColumn ? `u.\`${userPhoneColumn}\` as user_phone` : 'NULL as user_phone'},
+        ${merchantNameColumn ? `m.\`${merchantNameColumn}\` as merchant_name` : 'NULL as merchant_name'},
+        ${merchantPhoneColumn ? `m.\`${merchantPhoneColumn}\` as merchant_phone` : 'NULL as merchant_phone'},
+        ${orderNoColumn ? `o.\`${orderNoColumn}\` as order_no` : 'NULL as order_no'},
+        ${orderAmountColumn ? `o.\`${orderAmountColumn}\` as order_amount` : 'NULL as order_amount'}
       FROM 
         feedback f
       LEFT JOIN 
@@ -185,15 +324,23 @@ exports.getAdminFeedbackDetail = async (req, res, next) => {
     const feedback = feedbacks[0];
     
     // 获取用户的历史反馈记录
+    const historyTimeSelect = feedbackTimeColumn
+      ? `\`${feedbackTimeColumn}\` as create_time`
+      : 'NULL as create_time';
+
+    const historyOrderBy = feedbackTimeColumn
+      ? `\`${feedbackTimeColumn}\` DESC`
+      : 'id DESC';
+
     const [userFeedbacks] = await pool.query(`
       SELECT 
-        id, type, content, rating, reply, created_at
+        id, type, content, rating, reply, ${historyTimeSelect}
       FROM 
         feedback
       WHERE 
         user_id = ? AND id != ?
       ORDER BY 
-        created_at DESC
+        ${historyOrderBy}
       LIMIT 5
     `, [feedback.user_id, id]);
     
@@ -206,7 +353,64 @@ exports.getAdminFeedbackDetail = async (req, res, next) => {
     });
   } catch (error) {
     console.error('获取反馈详情失败:', error);
-    res.status(500).json({ success: false, message: '服务器内部错误' });
+    res.status(500).json({
+      success: false,
+      message: '服务器内部错误',
+      error: isDev() ? error.message : undefined,
+      stack: isDev() ? error.stack : undefined
+    });
+  }
+};
+
+/**
+ * 删除反馈（管理员）
+ * DELETE /api/admin/feedbacks/:id
+ */
+exports.deleteAdminFeedback = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const [result] = await pool.query('DELETE FROM feedback WHERE id = ?', [id]);
+    if (!result || result.affectedRows === 0) {
+      return res.status(404).json({ success: false, message: '反馈不存在' });
+    }
+    res.json({ success: true, message: '删除成功' });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * 批量删除反馈（管理员）
+ * POST /api/admin/feedbacks/batch-delete
+ * body: { feedback_ids: number[] }
+ */
+exports.batchDeleteAdminFeedbacks = async (req, res, next) => {
+  try {
+    const feedbackIds = req.body && (req.body.feedback_ids || req.body.ids);
+    if (!Array.isArray(feedbackIds) || feedbackIds.length === 0) {
+      return res.status(400).json({ success: false, message: '缺少反馈ID列表' });
+    }
+
+    const ids = feedbackIds
+      .map((x) => parseInt(x, 10))
+      .filter((x) => Number.isFinite(x) && x > 0);
+
+    if (ids.length === 0) {
+      return res.status(400).json({ success: false, message: '反馈ID列表无效' });
+    }
+
+    const [result] = await pool.query(
+      `DELETE FROM feedback WHERE id IN (${ids.map(() => '?').join(',')})`,
+      ids
+    );
+
+    res.json({
+      success: true,
+      message: '删除成功',
+      data: { deleted: result.affectedRows || 0 }
+    });
+  } catch (error) {
+    next(error);
   }
 };
 
@@ -256,7 +460,8 @@ exports.replyAdminFeedback = async (req, res, next) => {
       // 通知用户
       await pool.query(
         'INSERT INTO notification (user_id, title, content, type, created_at) VALUES (?, ?, ?, ?, NOW())',
-        [feedback.user_id, '反馈已回复', '您的反馈已收到回复，请查看', 'feedback']
+        // notification.type 为 tinyint：1=反馈
+        [feedback.user_id, '反馈已回复', '您的反馈已收到回复，请查看', 1]
       );
       
       // 提交事务

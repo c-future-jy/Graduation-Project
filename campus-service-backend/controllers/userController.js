@@ -2,6 +2,16 @@ const { pool } = require('../config/db');
 const { generateToken } = require('../utils/jwt');
 const bcrypt = require('bcryptjs');
 
+async function columnExists(tableName, columnName) {
+  const [rows] = await pool.query(
+    `SELECT COUNT(*) as cnt
+     FROM information_schema.columns
+     WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?`,
+    [tableName, columnName]
+  );
+  return (rows[0] && rows[0].cnt > 0) || false;
+}
+
 /**
  * 用户登录（微信登录）
  * POST /api/users/login
@@ -72,6 +82,21 @@ exports.login = async (req, res, next) => {
       };
     } else {
       user = users[0];
+
+      // 商家被禁用时禁止登录（避免进入商家端）
+      if (user.role === 2 && user.merchant_id) {
+        const [merchants] = await pool.query(
+          'SELECT status FROM merchant WHERE id = ?',
+          [user.merchant_id]
+        );
+        if (merchants.length > 0 && parseInt(merchants[0].status, 10) !== 1) {
+          return res.status(403).json({
+            success: false,
+            message: '商家已被禁用，暂无法登录'
+          });
+        }
+      }
+
       // 更新用户信息
       if (nickname || avatarUrl) {
         await pool.query(
@@ -140,6 +165,20 @@ exports.accountLogin = async (req, res, next) => {
     }
     
     const user = users[0];
+
+    // 商家被禁用时禁止登录（避免进入商家端）
+    if (user.role === 2 && user.merchant_id) {
+      const [merchants] = await pool.query(
+        'SELECT status FROM merchant WHERE id = ?',
+        [user.merchant_id]
+      );
+      if (merchants.length > 0 && parseInt(merchants[0].status, 10) !== 1) {
+        return res.status(403).json({
+          success: false,
+          message: '商家已被禁用，暂无法登录'
+        });
+      }
+    }
     
     // 验证密码
     const bcrypt = require('bcryptjs');
@@ -438,10 +477,13 @@ exports.checkPhone = async (req, res, next) => {
 exports.getProfile = async (req, res, next) => {
   try {
     const userId = req.user.id;
-    
+
+    const hasMerchantId = await columnExists('user', 'merchant_id');
+    const fields = ['id', 'openid', 'nickname', 'avatar_url', 'phone', 'role', 'status', 'created_at'];
+    if (hasMerchantId) fields.push('merchant_id');
+
     const [users] = await pool.query(
-      // 构建查询语句
-      'SELECT id, openid, nickname, avatar_url, phone, role, status, created_at FROM user WHERE id = ?',
+      `SELECT ${fields.join(', ')} FROM user WHERE id = ?`,
       [userId]
     );
     
@@ -452,12 +494,31 @@ exports.getProfile = async (req, res, next) => {
       });
     }
     
-    res.json({
-      success: true,
-      data: {
-        user: users[0]
-      }
-    });
+    const user = users[0];
+
+    // 若用户角色/merchant_id 已变更（常见于管理员审核通过后），下发新 token，避免前端仍用旧 token 访问商家接口被拦截
+    const tokenRole = req.user && typeof req.user.role === 'number' ? req.user.role : parseInt(req.user && req.user.role, 10);
+    const tokenMerchantId = req.user && req.user.merchant_id !== undefined && req.user.merchant_id !== null
+      ? parseInt(req.user.merchant_id, 10)
+      : null;
+    const dbRole = typeof user.role === 'number' ? user.role : parseInt(user.role, 10);
+    const dbMerchantId = hasMerchantId && user.merchant_id !== undefined && user.merchant_id !== null
+      ? parseInt(user.merchant_id, 10)
+      : null;
+
+    const needRefreshToken = (Number.isFinite(tokenRole) ? tokenRole : null) !== dbRole || tokenMerchantId !== dbMerchantId;
+
+    const data = { user };
+    if (needRefreshToken) {
+      data.token = generateToken({
+        id: user.id,
+        openid: user.openid,
+        role: dbRole,
+        merchant_id: dbMerchantId
+      });
+    }
+
+    res.json({ success: true, data });
   } catch (error) {
     next(error);
   }
@@ -663,12 +724,30 @@ exports.getAdminUserList = async (req, res, next) => {
 exports.getAdminUserDetail = async (req, res, next) => {
   try {
     const { id } = req.params;
+
+    const tableExists = async (tableName) => {
+      const [rows] = await pool.query(
+        `SELECT COUNT(*) as cnt
+         FROM information_schema.tables
+         WHERE table_schema = DATABASE() AND table_name = ?`,
+        [tableName]
+      );
+      return (rows[0] && rows[0].cnt > 0) || false;
+    };
+
+    const findFirstExistingTable = async (candidates) => {
+      for (const name of candidates) {
+        if (await tableExists(name)) return name;
+      }
+      return null;
+    };
     
     // 获取用户基本信息
     const [users] = await pool.query(`
       SELECT 
         u.*,
-        m.name as merchant_name
+        m.name as merchant_name,
+        m.status as merchant_status
       FROM 
         user u
       LEFT JOIN 
@@ -696,6 +775,48 @@ exports.getAdminUserDetail = async (req, res, next) => {
       WHERE 
         user_id = ?
     `, [id]);
+
+    const [feedbackCountRows] = await pool.query(
+      'SELECT COUNT(*) as feedback_count FROM feedback WHERE user_id = ?',
+      [id]
+    );
+
+    let favoriteCount = 0;
+    try {
+      // 收藏表在不同项目中命名可能不同：这里做存在性探测，若没有则返回 0
+      const favoriteTable = await findFirstExistingTable([
+        'favorite',
+        'favorites',
+        'user_favorite',
+        'collection',
+        'collect',
+        'user_collect'
+      ]);
+
+      if (favoriteTable) {
+        // 默认优先 user_id 字段
+        const [colRows] = await pool.query(
+          `SELECT column_name as columnName
+           FROM information_schema.columns
+           WHERE table_schema = DATABASE() AND table_name = ? AND column_name IN ('user_id','uid')`,
+          [favoriteTable]
+        );
+        const userCol = colRows.some(r => r.columnName === 'user_id')
+          ? 'user_id'
+          : (colRows.some(r => r.columnName === 'uid') ? 'uid' : null);
+
+        if (userCol) {
+          const [favRows] = await pool.query(
+            `SELECT COUNT(*) as cnt FROM \`${favoriteTable}\` WHERE \`${userCol}\` = ?`,
+            [id]
+          );
+          favoriteCount = (favRows[0] && favRows[0].cnt) || 0;
+        }
+      }
+    } catch (e) {
+      // 收藏统计为非关键字段，失败时兜底 0
+      favoriteCount = 0;
+    }
     
     // 获取用户反馈记录
     const [feedbacks] = await pool.query(`
@@ -712,18 +833,39 @@ exports.getAdminUserDetail = async (req, res, next) => {
     // 获取用户地址列表
     const [addresses] = await pool.query(`
       SELECT 
-        id, name, phone, province, city, district, detail, is_default
+        id,
+        receiver_name as name,
+        receiver_name,
+        phone,
+        province,
+        city,
+        district,
+        detail,
+        is_default
       FROM 
         address
       WHERE 
         user_id = ?
     `, [id]);
+
+    const merchant = user.merchant_id ? {
+      id: user.merchant_id,
+      name: user.merchant_name || null,
+      status: user.merchant_status,
+      statusText: user.merchant_status === 1 ? '营业中' : (user.merchant_status === 0 ? '休息中' : null)
+    } : null;
     
     res.json({
       success: true,
       data: {
         user,
         orderStats: orderStats[0],
+        counts: {
+          orderCount: orderStats[0] ? (orderStats[0].order_count || 0) : 0,
+          feedbackCount: feedbackCountRows[0] ? (feedbackCountRows[0].feedback_count || 0) : 0,
+          favoriteCount
+        },
+        merchant,
         feedbacks,
         addresses
       }
@@ -808,8 +950,8 @@ exports.resetUserPassword = async (req, res, next) => {
     
     // 插入通知
     await pool.query(
-      'INSERT INTO notification (user_id, title, content, created_at) VALUES (?, ?, ?, NOW())',
-      [id, '密码重置通知', `您的密码已被管理员重置为：${newPassword}，请登录后修改密码`]
+      'INSERT INTO notification (user_id, title, content, type, created_at) VALUES (?, ?, ?, ?, NOW())',
+      [id, '密码重置通知', `您的密码已被管理员重置为：${newPassword}，请登录后修改密码`, 2]
     );
     
     res.json({

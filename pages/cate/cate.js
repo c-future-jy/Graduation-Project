@@ -323,11 +323,9 @@ Page({
           id: merchant.id,
           name: merchant.name,
           image: merchant.logo || '../../assets/tabbar/biyetu.jpg',
-          distance: '100m', // 实际项目中可以根据地理位置计算
-          deliveryTime: '30分钟', // 实际项目中可以根据商家设置
-          minPrice: '¥15起送', // 实际项目中可以从商家数据中获取
-          tags: ['校园认证', '满减优惠'], // 实际项目中可以从商家数据中获取
-          hotDish: '热销商品', // 实际项目中可以从商家数据中获取
+          address: merchant.address || '',
+          phone: merchant.phone || '',
+          description: merchant.description || '',
           isClosed: merchant.status !== 1
         }));
 
@@ -354,8 +352,10 @@ Page({
   // 跳转到商家详情
   goToMerchant: function (e) {
     const merchantId = e.currentTarget.dataset.id;
+    const merchantName = e.currentTarget.dataset.name;
+    const titleParam = merchantName ? `&title=${encodeURIComponent(merchantName)}` : '';
     wx.navigateTo({
-      url: `/pages/merchant/merchant?id=${merchantId}`
+      url: `/pages/merchant/merchant?id=${merchantId}${titleParam}`
     });
   },
 

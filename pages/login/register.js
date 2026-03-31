@@ -12,7 +12,6 @@ Page({
     password: '',
     confirmPassword: '',
     selectedRole: 1, // 默认选择学生角色
-    agreed: false,
     passwordStrength: 0,
     strengthText: '',
     usernameError: '',
@@ -34,11 +33,14 @@ Page({
   onUsernameChange(e) {
     const value = e.detail.value;
     console.log('用户名输入变化:', value);
-    this.setData({
-      username: value
-    });
-    this.validateUsername(value);
-    this.updateRegisterButtonStatus();
+    const usernameError = this.validateUsername(value);
+    this.setData(
+      {
+        username: value,
+        usernameError
+      },
+      () => this.updateRegisterButtonStatus()
+    );
   },
 
   /**
@@ -47,21 +49,26 @@ Page({
   onAccountChange(e) {
     const value = e.detail.value;
     console.log('账号输入变化:', value);
-    this.setData({
-      account: value
-    });
-    this.validateAccount(value);
-    this.updateRegisterButtonStatus();
+    const accountError = this.validateAccount(value);
+    this.setData(
+      {
+        account: value,
+        accountError
+      },
+      () => this.updateRegisterButtonStatus()
+    );
   },
 
   /**
    * 手机号变化
    */
   onPhoneChange(e) {
-    this.setData({
-      phone: e.detail.value
-    });
-    this.updateRegisterButtonStatus();
+    this.setData(
+      {
+        phone: e.detail.value
+      },
+      () => this.updateRegisterButtonStatus()
+    );
   },
 
   /**
@@ -70,12 +77,17 @@ Page({
   onPasswordChange(e) {
     const password = e.detail.value;
     console.log('密码输入变化:', password);
-    this.setData({
-      password: password
-    });
-    this.validatePassword(password);
-    this.checkPasswordStrength(password);
-    this.updateRegisterButtonStatus();
+    const passwordError = this.validatePassword(password);
+    const strength = this.checkPasswordStrength(password);
+    this.setData(
+      {
+        password,
+        passwordError,
+        passwordStrength: strength.strength,
+        strengthText: strength.text
+      },
+      () => this.updateRegisterButtonStatus()
+    );
   },
 
   /**
@@ -83,12 +95,9 @@ Page({
    */
   validateUsername(value) {
     if (value.length > 6) {
-      this.setData({ usernameError: '用户名长度不能超过6个字符' });
-      return false;
-    } else {
-      this.setData({ usernameError: '' });
-      return true;
+      return '用户名长度不能超过6个字符';
     }
+    return '';
   },
 
   /**
@@ -96,18 +105,13 @@ Page({
    */
   validateAccount(value) {
     if (value.length < 6) {
-      this.setData({ accountError: '账号长度不能少于6位' });
-      return false;
+      return '账号长度不能少于6位';
     } else if (value.length > 11) {
-      this.setData({ accountError: '账号长度不能超过11位' });
-      return false;
+      return '账号长度不能超过11位';
     } else if (!/^\d+$/.test(value)) {
-      this.setData({ accountError: '账号只能包含数字' });
-      return false;
-    } else {
-      this.setData({ accountError: '' });
-      return true;
+      return '账号只能包含数字';
     }
+    return '';
   },
 
   /**
@@ -115,18 +119,13 @@ Page({
    */
   validatePassword(value) {
     if (value.length < 6) {
-      this.setData({ passwordError: '密码长度不能少于6位' });
-      return false;
-    } else if (value.length > 18) {
-      this.setData({ passwordError: '密码长度不能超过18位' });
-      return false;
+      return '密码长度不能少于6位';
+    } else if (value.length > 8) {
+      return '密码长度不能超过8位';
     } else if (!/[a-zA-Z]/.test(value) || !/\d/.test(value)) {
-      this.setData({ passwordError: '密码必须包含字母和数字' });
-      return false;
-    } else {
-      this.setData({ passwordError: '' });
-      return true;
+      return '密码必须包含字母和数字';
     }
+    return '';
   },
 
   /**
@@ -135,10 +134,12 @@ Page({
   onConfirmPasswordChange(e) {
     const value = e.detail.value;
     console.log('确认密码输入变化:', value);
-    this.setData({
-      confirmPassword: value
-    });
-    this.updateRegisterButtonStatus();
+    this.setData(
+      {
+        confirmPassword: value
+      },
+      () => this.updateRegisterButtonStatus()
+    );
   },
 
   /**
@@ -179,10 +180,7 @@ Page({
         break;
     }
 
-    this.setData({
-      passwordStrength: strength,
-      strengthText: text
-    });
+    return { strength, text };
   },
 
   /**
@@ -196,23 +194,11 @@ Page({
   },
 
   /**
-   * 协议勾选变化
-   */
-  onAgreementChange(e) {
-    const agreed = e.detail.value.length > 0;
-    console.log('协议勾选变化:', agreed);
-    this.setData({
-      agreed: agreed
-    });
-    this.updateRegisterButtonStatus();
-  },
-
-  /**
    * 更新注册按钮状态
    */
   updateRegisterButtonStatus() {
-    const { username, account, password, confirmPassword, agreed, usernameError, accountError, passwordError } = this.data;
-    const canRegister = !!username && !!account && !!password && !!confirmPassword && agreed && 
+    const { username, account, password, confirmPassword, usernameError, accountError, passwordError } = this.data;
+    const canRegister = !!username && !!account && !!password && !!confirmPassword &&
                       password === confirmPassword && !usernameError && !accountError && !passwordError;
     console.log('更新注册按钮状态:', canRegister);
     this.setData({
@@ -225,8 +211,8 @@ Page({
    */
   register() {
     console.log('注册按钮被点击');
-    const { username, account, phone, password, confirmPassword, selectedRole, agreed } = this.data;
-    console.log('当前表单数据:', { username, account, phone, password, confirmPassword, selectedRole, agreed });
+    const { username, account, phone, password, confirmPassword, selectedRole } = this.data;
+    console.log('当前表单数据:', { username, account, phone, password, confirmPassword, selectedRole });
 
     // 验证数据
     if (!username) {
@@ -281,14 +267,6 @@ Page({
     if (password !== confirmPassword) {
       wx.showToast({
         title: '两次输入的密码不一致',
-        icon: 'none'
-      });
-      return;
-    }
-
-    if (!agreed) {
-      wx.showToast({
-        title: '请阅读并同意用户协议和隐私政策',
         icon: 'none'
       });
       return;
@@ -408,27 +386,5 @@ Page({
     wx.navigateBack();
   },
 
-  /**
-   * 跳转到用户协议
-   */
-  goToAgreement() {
-    wx.showModal({
-      title: '用户协议',
-      content: '用户协议内容...',
-      showCancel: false,
-      confirmText: '我知道了'
-    });
-  },
-
-  /**
-   * 跳转到隐私政策
-   */
-  goToPrivacy() {
-    wx.showModal({
-      title: '隐私政策',
-      content: '隐私政策内容...',
-      showCancel: false,
-      confirmText: '我知道了'
-    });
-  }
+  // 毕设简化：不展示/不校验协议
 });

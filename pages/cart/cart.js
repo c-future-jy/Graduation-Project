@@ -581,6 +581,6 @@ Page({
     }
     
     // 跳转到结算页面
-    wx.navigateTo({ url: '/pages/confirm-order/confirm-order' });
+    wx.navigateTo({ url: '/pages/order-confirm/order-confirm' });
   }
 })
