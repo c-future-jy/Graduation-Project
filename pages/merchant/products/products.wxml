@@ -1,2 +1,102 @@
-<!--pages/merchant/products/products.wxml-->
-<text>pages/merchant/products/products.wxml</text>
+<!-- pages/merchant/products/products.wxml -->
+<view class="page">
+	<view class="toolbar">
+		<input
+			class="search"
+			placeholder="搜索商品名称"
+			value="{{keyword}}"
+			confirm-type="search"
+			bindinput="onKeywordInput"
+			bindconfirm="onSearchConfirm"
+		/>
+
+		<picker mode="selector" range="{{categoryOptions}}" range-key="name" value="{{categoryIndex}}" bindchange="onCategoryChange">
+			<view class="picker">{{categoryOptions[categoryIndex].name}}</view>
+		</picker>
+
+		<view class="primary-btn" bindtap="openCreate">发布新商品</view>
+	</view>
+
+	<view wx:if="{{showForm}}" class="form">
+		<view class="form-title">{{editingId ? '编辑商品' : '发布新商品'}}</view>
+
+		<view class="field">
+			<view class="label">商品名称</view>
+			<input class="control" placeholder="必填，最多50字" maxlength="50" value="{{form.name}}" data-field="name" bindinput="onFormInput" />
+		</view>
+
+		<view class="field">
+			<view class="label">价格</view>
+			<input class="control" type="digit" placeholder="必填，大于0" value="{{form.price}}" data-field="price" bindinput="onFormInput" />
+		</view>
+
+		<view class="field">
+			<view class="label">库存</view>
+			<input class="control" type="number" placeholder="必填，非负整数" value="{{form.stock}}" data-field="stock" bindinput="onFormInput" />
+		</view>
+
+		<view class="field">
+			<view class="label">分类</view>
+			<picker mode="selector" range="{{formCategoryOptions}}" range-key="name" value="{{formCategoryIndex}}" bindchange="onFormCategoryChange">
+				<view class="picker">{{formCategoryOptions[formCategoryIndex].name}}</view>
+			</picker>
+
+			<view class="category-create">
+				<view wx:if="{{!showCreateCategory}}" class="category-create-trigger" bindtap="openCreateCategory">+ 新建分类</view>
+				<view wx:else class="category-create-row">
+					<input class="category-create-input" placeholder="输入分类名称" maxlength="20" value="{{newCategoryName}}" bindinput="onNewCategoryNameInput" />
+					<view class="primary-btn small" bindtap="submitNewCategory">创建</view>
+					<view class="secondary-btn small" bindtap="cancelCreateCategory">取消</view>
+				</view>
+			</view>
+		</view>
+
+		<view class="field">
+			<view class="label">图片</view>
+			<view class="image-row">
+				<image wx:if="{{form.imagePreview}}" class="preview" src="{{form.imagePreview}}" mode="aspectFill" />
+				<view class="secondary-btn" bindtap="onChooseImageClick">选择图片</view>
+				<view wx:if="{{form.image}}" class="danger-btn" bindtap="clearProductImage">移除</view>
+			</view>
+		</view>
+
+		<view class="field">
+			<view class="label">描述</view>
+			<textarea class="textarea" placeholder="可选" value="{{form.description}}" maxlength="500" data-field="description" bindinput="onFormInput" />
+		</view>
+
+		<view class="form-actions">
+			<view class="primary-btn" bindtap="submitForm">保存</view>
+			<view class="secondary-btn" bindtap="closeForm">取消</view>
+		</view>
+	</view>
+
+	<view class="list">
+		<view wx:if="{{!loading && products.length === 0}}" class="empty">暂无商品</view>
+
+		<view wx:for="{{products}}" wx:key="id" class="item">
+			<image class="thumb" src="{{item.imagePreview}}" mode="aspectFill" />
+			<view class="meta">
+				<view class="name">{{item.name}}</view>
+				<view class="sub">分类：{{item.category_name || '未分类'}}｜价格：￥{{item.price}}</view>
+				<view class="sub">库存：{{item.stock}}｜状态：{{item.status === 1 ? '上架' : '下架'}}</view>
+
+				<view wx:if="{{editingStockId === item.id}}" class="stock-editor">
+					<input class="stock-input" type="number" value="{{stockDraft}}" placeholder="输入库存" bindinput="onStockDraftInput" />
+					<view class="primary-btn small" data-id="{{item.id}}" bindtap="saveStock">保存</view>
+					<view class="secondary-btn small" bindtap="cancelStockEdit">取消</view>
+				</view>
+
+				<view class="actions">
+					<view class="secondary-btn small" data-id="{{item.id}}" bindtap="openEdit">编辑</view>
+					<view class="secondary-btn small" data-id="{{item.id}}" data-status="{{item.status}}" bindtap="toggleStatus">{{item.status === 1 ? '下架' : '上架'}}</view>
+					<view class="secondary-btn small" data-id="{{item.id}}" data-stock="{{item.stock}}" bindtap="editStock">库存</view>
+					<view class="danger-btn small" data-id="{{item.id}}" bindtap="deleteOne">删除</view>
+				</view>
+			</view>
+		</view>
+
+		<view wx:if="{{loading}}" class="loading">加载中...</view>
+		<view wx:if="{{!loading && !hasMore && products.length > 0}}" class="no-more">没有更多了</view>
+	</view>
+</view>

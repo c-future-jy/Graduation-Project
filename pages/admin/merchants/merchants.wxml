@@ -11,7 +11,8 @@
       <input 
         class="search-input" 
         placeholder="输入商家名称或店主搜索" 
-        bindinput="searchKeyword"
+        value="{{searchKeyword}}"
+        bindinput="onSearchInput"
       />
       <button class="search-btn" bindtap="searchMerchants">搜索</button>
     </view>
@@ -33,7 +34,7 @@
   <view class="batch-actions">
     <checkbox-group bindchange="selectAllMerchants">
       <label class="checkbox-label">
-        <checkbox value="all" />
+        <checkbox value="all" checked="{{merchants.length > 0 && selectedMerchants.length === merchants.length}}" />
         <text>全选</text>
       </label>
     </checkbox-group>
@@ -59,7 +60,7 @@
         <view class="table-col select-col">
           <checkbox-group bindchange="selectMerchant" data-id="{{item.id}}">
             <label class="checkbox-label">
-              <checkbox value="{{item.id}}" checked="{{selectedMerchants.includes(item.id)}}" />
+              <checkbox value="{{item.id}}" checked="{{selectedMap[item.id]}}" />
             </label>
           </checkbox-group>
         </view>

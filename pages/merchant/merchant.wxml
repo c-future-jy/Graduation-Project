@@ -4,7 +4,7 @@
   <view class="shop-header" wx:if="{{shopInfo}}">
     <view class="shop-basic-info">
       <view class="shop-logo">
-        <image src="{{shopInfo.logo || '../../../assets/default-shop.png'}}" mode="aspectFill"></image>
+        <image src="{{shopInfo.logo || '/assets/images/kong.jpg'}}" mode="aspectFill"></image>
       </view>
       <view class="shop-info">
         <view class="shop-name">{{shopInfo.name}}</view>
@@ -21,9 +21,9 @@
   <view class="products-section">
     <view class="section-title">店铺商品</view>
     <view class="products-list" wx:if="{{products.length > 0}}">
-      <view class="product-item" wx:for="{{products}}" wx:key="{{item.id}}" bindtap="goToProductDetail" data-id="{{item.id}}" data-name="{{item.name}}">
+      <view class="product-item" wx:for="{{products}}" wx:key="id" bindtap="goToProductDetail" data-id="{{item.id}}" data-name="{{item.name}}">
         <view class="product-image">
-          <image src="{{item.image || '../../../assets/default-product.png'}}" mode="aspectFill"></image>
+          <image src="{{item.image || '/assets/images/kong.jpg'}}" mode="aspectFill"></image>
         </view>
         <view class="product-info">
           <view class="product-name">{{item.name}}</view>

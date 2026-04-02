@@ -1,5 +1,24 @@
 // pages/merchant/index/index.js
-const { request, getUserProfile, getMyMerchant, getMerchantDashboardStats } = require('../../../utils/api');
+const { getUserProfile, getMyMerchant, getMerchantDashboardStats } = require('../../../utils/api');
+
+function toInt(value, fallback = 0) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function toStr(value, fallback = '') {
+  if (value === null || value === undefined) return fallback;
+  return String(value);
+}
+
+function getErrMsg(err, fallback = '操作失败') {
+  if (!err) return fallback;
+  if (typeof err === 'string') return err;
+  if (err.message) return err.message;
+  if (err.data && err.data.message) return err.data.message;
+  if (err.errMsg) return err.errMsg;
+  return fallback;
+}
 
 Page({
   data: {
@@ -19,6 +38,8 @@ Page({
   },
 
   onLoad: function () {
+    this._loadingCount = 0;
+    this._loadingShown = false;
     this.loadData();
   },
 
@@ -29,70 +50,101 @@ Page({
     }
   },
 
-  // 加载数据
-  loadData: function () {
-    wx.showLoading({ title: '加载中...' });
-
-    // 先拉取一次用户资料：若管理员刚审核通过，会下发新 token（utils/api.js 会自动更新本地 token）
-    getUserProfile()
-      .catch(() => {})
-      .finally(() => {
-        Promise.all([
-          this.getShopInfo(),
-          this.getStats()
-        ]).then(() => {
-      this.setData({ loading: false });
-      wx.hideLoading();
-    }).catch(err => {
-      console.error('加载数据失败:', err);
-      wx.hideLoading();
-      wx.showToast({ title: '加载失败', icon: 'none' });
+  _showLoading(title) {
+    const next = (this._loadingCount || 0) + 1;
+    this._loadingCount = next;
+    if (next !== 1) return;
+    wx.showLoading({
+      title: title || '处理中...',
+      success: () => {
+        this._loadingShown = true;
+      },
+      fail: () => {
+        this._loadingShown = false;
+      }
     });
-      });
+  },
+
+  _hideLoading() {
+    const current = this._loadingCount || 0;
+    if (current <= 0) return;
+    const next = Math.max(0, current - 1);
+    this._loadingCount = next;
+    if (next !== 0) return;
+    if (!this._loadingShown) return;
+    wx.hideLoading({
+      complete: () => {
+        this._loadingShown = false;
+      }
+    });
+  },
+
+  // 加载数据
+  loadData: async function () {
+    this.setData({ loading: true });
+    this._showLoading('加载中...');
+
+    try {
+      // 先拉取一次用户资料：若管理员刚审核通过，会下发新 token（utils/api.js 会自动更新本地 token）
+      try {
+        await getUserProfile();
+      } catch (_) {
+        // ignore
+      }
+
+      await Promise.all([
+        this.getShopInfo(),
+        this.getStats()
+      ]);
+    } catch (err) {
+      console.error('加载数据失败:', err);
+      wx.showToast({ title: getErrMsg(err, '加载失败'), icon: 'none' });
+    } finally {
+      this._hideLoading();
+      this.setData({ loading: false });
+    }
   },
 
   // 获取店铺信息
-  getShopInfo: function () {
-    return new Promise((resolve, reject) => {
-      getMyMerchant()
-        .then(res => {
-          if (res.success && res.data && res.data.merchant) {
-            const merchant = res.data.merchant;
-            // 缓存 merchantId 供其它页面使用（如有需要）
-            if (merchant && merchant.id) {
-              wx.setStorageSync('merchantId', merchant.id);
-            }
-            this.setData({ shopInfo: merchant });
-            resolve();
-          } else {
-            reject((res && res.message) || '获取店铺信息失败');
-          }
-        })
-        .catch(reject);
-    });
+  getShopInfo: async function () {
+    const res = await getMyMerchant();
+    if (!(res && res.success && res.data && res.data.merchant)) {
+      throw new Error((res && res.message) || '获取店铺信息失败');
+    }
+
+    const m = res.data.merchant;
+    if (m && m.id) {
+      wx.setStorageSync('merchantId', m.id);
+    }
+
+    const normalized = {
+      name: toStr(m.name, ''),
+      status: (typeof m.status === 'number' ? m.status : toInt(m.status, 1)) === 1 ? 1 : 0,
+      address: toStr(m.address, ''),
+      phone: toStr(m.phone, ''),
+      description: toStr(m.description, '')
+    };
+    this.setData({ shopInfo: normalized });
   },
 
   // 获取数据统计
-  getStats: function () {
-    return new Promise((resolve, reject) => {
-      getMerchantDashboardStats()
-        .then((res) => {
-          if (res && res.success && res.data) {
-            this.setData({
-              'stats.productCount': res.data.totalProducts || 0,
-              // 后端未提供“总订单数”，这里用“本月订单数”近似展示
-              'stats.orderCount': res.data.monthOrders || 0,
-              'stats.todayOrderCount': res.data.todayOrders || 0
-            });
+  getStats: async function () {
+    try {
+      const res = await getMerchantDashboardStats();
+      if (res && res.success && res.data) {
+        this.setData({
+          stats: {
+            productCount: toInt(res.data.totalProducts, 0),
+            // 后端未提供“总订单数”，这里用“本月订单数”近似展示
+            orderCount: toInt(res.data.monthOrders, 0),
+            todayOrderCount: toInt(res.data.todayOrders, 0)
           }
-          resolve();
-        })
-        .catch((err) => {
-          // 统计不影响主流程
-          console.warn('merchant dashboard stats failed:', err);
-          resolve();
         });
-    });
+      }
+    } catch (err) {
+      // 统计不影响主流程
+      console.warn('merchant dashboard stats failed:', err);
+    }
   },
 
   // 跳转到商品管理
@@ -117,9 +169,11 @@ Page({
   },
 
   // 下拉刷新
-  onPullDownRefresh: function () {
-    this.loadData().then(() => {
+  onPullDownRefresh: async function () {
+    try {
+      await this.loadData();
+    } finally {
       wx.stopPullDownRefresh();
-    });
+    }
   }
 });

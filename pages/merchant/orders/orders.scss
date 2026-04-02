@@ -157,10 +157,21 @@
         display: flex;
         justify-content: space-between;
         align-items: center;
+        flex-wrap: wrap;
+        row-gap: 12rpx;
 
         .order-amount {
+          display: flex;
+          align-items: baseline;
+          white-space: nowrap;
+          flex: 1 1 auto;
+          min-width: 0;
           font-size: 24rpx;
           color: #333;
+
+          .amount-label {
+            margin-right: 6rpx;
+          }
 
           .amount-value {
             font-size: 28rpx;
@@ -171,13 +182,18 @@
 
         .order-actions {
           display: flex;
+          flex: 0 0 auto;
+          margin-left: auto;
+          justify-content: flex-end;
+          flex-wrap: wrap;
           gap: 10rpx;
 
           .action-btn {
-            padding: 8rpx 20rpx;
+            padding: 8rpx 18rpx;
             border-radius: 4rpx;
             font-size: 22rpx;
             line-height: 1.5;
+            white-space: nowrap;
 
             &.secondary {
               background-color: #f5f5f5;

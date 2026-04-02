@@ -63,6 +63,21 @@
   margin-bottom: 12rpx;
 }
 
+.notice-title-wrap {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.unread-dot {
+  width: 12rpx;
+  height: 12rpx;
+  border-radius: 50%;
+  background-color: #333;
+  margin-right: 12rpx;
+  flex: 0 0 auto;
+}
+
 .notice-title {
   font-size: 28rpx;
   font-weight: bold;

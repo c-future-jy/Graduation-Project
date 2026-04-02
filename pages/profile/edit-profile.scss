@@ -90,17 +90,6 @@
         background-color: #f9f9f9;
       }
 
-      /* 头像上传 */
-      .avatar-upload-btn {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        padding: 0;
-        background: none;
-        border: none;
-        width: 100%;
-      }
-
       .avatar {
         width: 120rpx;
         height: 120rpx;
@@ -151,37 +140,6 @@
       .avatar-tip {
         font-size: 12px;
         color: #777;
-      }
-
-      /* 手机号输入容器 */
-      .phone-input-container {
-        width: 100%;
-        display: flex;
-        align-items: center;
-      }
-
-      .phone-input-container .form-input {
-        flex: 1;
-        margin-right: 12rpx;
-      }
-
-      .verify-btn {
-        font-size: 13px;
-        color: #FF6B35;
-        background: none;
-        border: 1rpx solid #FF6B35;
-        border-radius: 16rpx;
-        padding: 6rpx 16rpx;
-      }
-
-      .get-phone-btn {
-        font-size: 13px;
-        color: #fff;
-        background-color: #FF6B35;
-        border: none;
-        border-radius: 16rpx;
-        padding: 8rpx 14rpx;
-        margin-left: 8rpx;
       }
 
       /* 错误提示 */
@@ -246,23 +204,6 @@
   }
 }
 
-/* 输入框焦点样式 */
-input:focus {
-  outline: none;
-  color: #333;
-  border-bottom-color: #ff6600;
-}
-
-.form-input {
-  border: 1rpx solid #eee;
-  border-radius: 6rpx;
-  padding: 10rpx 12rpx;
-}
-
-.form-input:focus {
-  border-color: #ff6600;
-}
-
 /* 按钮通用样式 */
 button {
   outline: none;
@@ -284,8 +225,7 @@ button::after {
   opacity: 0.9;
 }
 
-.password-btn:active,
-.verify-btn:active {
+.password-btn:active {
   opacity: 0.8;
   transform: scale(0.98);
 }

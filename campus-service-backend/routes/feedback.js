@@ -7,6 +7,7 @@ const { auth, checkRole } = require('../middleware/auth');
 router.get('/', feedbackController.getFeedbackList); // 获取反馈列表
 
 // 需要认证的路由
+router.get('/my', auth, checkRole([2]), feedbackController.getMerchantFeedbackList); // 商家获取自己的反馈
 router.post('/', auth, feedbackController.createFeedback); // 创建反馈
 router.put('/:id/reply', auth, checkRole([2, 3]), feedbackController.replyFeedback); // 回复反馈
 

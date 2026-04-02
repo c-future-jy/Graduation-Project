@@ -1,6 +1,13 @@
 // pages/search/search.js
 const { searchAll } = require('../../utils/api');
 
+const FILTER_TITLE_MAP = {
+  delivery: '校园内配送',
+  certified: '校内认证商家',
+  quick: '课间极速达',
+  rated: '师生高口碑'
+};
+
 Page({
 
   /**
@@ -10,7 +17,6 @@ Page({
     searchText: '',
     searchHistory: [],
     hotSearches: ['校园食堂', '奶茶店', '水果捞', '炸鸡', '披萨', '寿司', '甜品', '咖啡'],
-    searchResults: [],
     merchantResults: [],
     productResults: [],
     showResults: false
@@ -22,13 +28,7 @@ Page({
   onLoad(options) {
     const initialTitle = this.safeDecodeURIComponent(options && options.title);
     const filter = options && options.filter;
-    const filterTitleMap = {
-      delivery: '校园内配送',
-      certified: '校内认证商家',
-      quick: '课间极速达',
-      rated: '师生高口碑'
-    };
-    const derivedTitle = filterTitleMap[filter] ? `筛选：${filterTitleMap[filter]}` : '搜索';
+    const derivedTitle = FILTER_TITLE_MAP[filter] ? `筛选：${FILTER_TITLE_MAP[filter]}` : '搜索';
     wx.setNavigationBarTitle({ title: initialTitle || derivedTitle });
 
     this.loadSearchHistory();
@@ -71,55 +71,50 @@ Page({
     });
   },
 
-  /**
-   * 搜索框聚焦
-   */
-  onSearchFocus(e) {
-    console.log('搜索框聚焦:', e);
+  setEmptyResults() {
+    this.setData({
+      merchantResults: [],
+      productResults: [],
+      showResults: true
+    });
   },
 
-  /**
-   * 搜索框点击
-   */
-  onSearchTap(e) {
-    console.log('搜索框点击:', e);
+  applySearchResults(res) {
+    const results = (res && res.data && Array.isArray(res.data.results)) ? res.data.results : [];
+    const merchantResults = results.filter(item => item && item.type === 'merchant');
+    const productResults = results.filter(item => item && item.type === 'product');
+    this.setData({ merchantResults, productResults, showResults: true });
   },
 
   /**
    * 执行搜索
    */
-  search() {
-    console.log('执行搜索:', this.data.searchText);
-    const { searchText } = this.data;
-    if (!searchText.trim()) return;
+  async search() {
+    const rawText = this.data.searchText;
+    const keyword = (rawText || '').trim();
+    if (!keyword) return;
 
-    // 保存搜索历史
-    this.saveSearchHistory(searchText);
+    this.saveSearchHistory(keyword);
 
-    // 调用搜索API
     wx.showLoading({ title: '搜索中...' });
-    searchAll({ keyword: searchText })
-      .then((res) => {
-        wx.hideLoading();
-        if (res && res.success) {
-          const results = (res.data && res.data.results) || [];
-          const merchantResults = results.filter(item => item && item.type === 'merchant');
-          const productResults = results.filter(item => item && item.type === 'product');
-          this.setData({
-            searchResults: results,
-            merchantResults,
-            productResults,
-            showResults: true
-          });
-        } else {
-          this.setData({ searchResults: [], merchantResults: [], productResults: [], showResults: true });
-        }
-      })
-      .catch((err) => {
-        wx.hideLoading();
-        console.error('搜索失败:', err);
-        this.setData({ searchResults: [], merchantResults: [], productResults: [], showResults: true });
-      });
+    try {
+      const res = await searchAll({ keyword });
+      if (res && res.success) {
+        this.applySearchResults(res);
+      } else {
+        this.setEmptyResults();
+      }
+    } catch (err) {
+      console.error('搜索失败:', err);
+      this.setEmptyResults();
+    } finally {
+      wx.hideLoading();
+    }
+  },
+
+  async runSearch(keyword) {
+    this.setData({ searchText: keyword });
+    await this.search();
   },
 
   /**
@@ -156,10 +151,7 @@ Page({
    */
   clickHistory(e) {
     const keyword = e.currentTarget.dataset.keyword;
-    this.setData({
-      searchText: keyword
-    });
-    this.search();
+    this.runSearch(keyword);
   },
 
   /**
@@ -167,10 +159,7 @@ Page({
    */
   clickHotSearch(e) {
     const keyword = e.currentTarget.dataset.keyword;
-    this.setData({
-      searchText: keyword
-    });
-    this.search();
+    this.runSearch(keyword);
   },
 
   /**

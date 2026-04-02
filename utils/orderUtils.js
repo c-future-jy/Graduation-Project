@@ -16,12 +16,10 @@ export function getOrderActions(status) {
       ];
     case '1':
       return [
-        { text: '查看物流', action: 'logistics', type: 'default' },
         { text: '取消订单', action: 'cancel', type: 'primary' }
       ];
     case '2':
       return [
-        { text: '查看物流', action: 'logistics', type: 'default' },
         { text: '确认收货', action: 'confirm', type: 'primary' }
       ];
     case '3':
@@ -104,14 +102,13 @@ export function getStatusClass(status) {
  * @param {string} options.orderId 订单ID
  * @param {Function} options.onCancel 取消订单回调
  * @param {Function} options.onPay 去支付回调
- * @param {Function} options.onLogistics 查看物流回调
  * @param {Function} options.onConfirm 确认收货回调
  * @param {Function} options.onBuyAgain 再次购买回调
  * @param {Function} options.onReview 去评价回调
  * @param {Function} options.onDelete 删除订单回调
  */
 export function handleOrderAction(options) {
-  const { action, orderId, onCancel, onPay, onLogistics, onConfirm, onBuyAgain, onReview, onDelete } = options;
+  const { action, orderId, onCancel, onPay, onConfirm, onBuyAgain, onReview, onDelete } = options;
   
   switch (action) {
     case 'cancel':
@@ -119,9 +116,6 @@ export function handleOrderAction(options) {
       break;
     case 'pay':
       onPay && onPay(orderId);
-      break;
-    case 'logistics':
-      onLogistics && onLogistics(orderId);
       break;
     case 'confirm':
       onConfirm && onConfirm(orderId);

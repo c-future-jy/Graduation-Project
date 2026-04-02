@@ -5,6 +5,8 @@ const { auth, checkRole } = require('../middleware/auth');
 
 // 公开路由
 router.get('/', productController.getProductList); // 获取商品列表
+// 商家端：获取自己的商品（含上下架）
+router.get('/my', auth, checkRole([2]), productController.getMyProductList);
 router.get('/:id', productController.getProductById); // 获取商品详情
 
 // 需要认证的路由

@@ -1,6 +1,34 @@
 // pages/login/register.js
 const { register } = require('../../utils/api');
 
+function toInt(value, fallback = 0) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function toStr(value, fallback = '') {
+  if (value === null || value === undefined) return fallback;
+  return String(value);
+}
+
+function getErrMsg(err, fallback = '操作失败') {
+  if (!err) return fallback;
+  if (typeof err === 'string') return err;
+  if (err.message) return err.message;
+  if (err.data && err.data.message) return err.data.message;
+  if (err.errMsg) return err.errMsg;
+  return fallback;
+}
+
+function maskTrim(value) {
+  return toStr(value, '').trim();
+}
+
+function sanitizeDigits(value, maxLen) {
+  const s = maskTrim(value).replace(/\D/g, '');
+  return maxLen ? s.slice(0, maxLen) : s;
+}
+
 Page({
   /**
    * 页面的初始数据
@@ -17,77 +45,71 @@ Page({
     usernameError: '',
     accountError: '',
     passwordError: '',
-    canRegister: false
+    loadingCount: 0
   },
 
-  /**
-   * 生命周期函数--监听页面加载
-   */
-  onLoad(options) {
+  _showLoading(title = '加载中...') {
+    const next = (this.data.loadingCount || 0) + 1;
+    this.setData({ loadingCount: next });
+    if (next === 1) wx.showLoading({ title });
+  },
 
+  _hideLoading() {
+    const next = Math.max(0, (this.data.loadingCount || 0) - 1);
+    this.setData({ loadingCount: next });
+    if (next === 0) wx.hideLoading();
+  },
+
+  _isLoading() {
+    return (this.data.loadingCount || 0) > 0;
   },
 
   /**
    * 用户名变化
    */
   onUsernameChange(e) {
-    const value = e.detail.value;
-    console.log('用户名输入变化:', value);
+    const value = maskTrim(e && e.detail ? e.detail.value : '').slice(0, 6);
     const usernameError = this.validateUsername(value);
-    this.setData(
-      {
-        username: value,
-        usernameError
-      },
-      () => this.updateRegisterButtonStatus()
-    );
+    this.setData({
+      username: value,
+      usernameError
+    });
   },
 
   /**
    * 账号变化
    */
   onAccountChange(e) {
-    const value = e.detail.value;
-    console.log('账号输入变化:', value);
+    const value = sanitizeDigits(e && e.detail ? e.detail.value : '', 11);
     const accountError = this.validateAccount(value);
-    this.setData(
-      {
-        account: value,
-        accountError
-      },
-      () => this.updateRegisterButtonStatus()
-    );
+    this.setData({
+      account: value,
+      accountError
+    });
   },
 
   /**
    * 手机号变化
    */
   onPhoneChange(e) {
-    this.setData(
-      {
-        phone: e.detail.value
-      },
-      () => this.updateRegisterButtonStatus()
-    );
+    this.setData({
+      phone: sanitizeDigits(e && e.detail ? e.detail.value : '', 11)
+    });
   },
 
   /**
    * 密码变化
    */
   onPasswordChange(e) {
-    const password = e.detail.value;
-    console.log('密码输入变化:', password);
+    const password = toStr(e && e.detail ? e.detail.value : '', '').slice(0, 8);
     const passwordError = this.validatePassword(password);
     const strength = this.checkPasswordStrength(password);
-    this.setData(
-      {
-        password,
-        passwordError,
-        passwordStrength: strength.strength,
-        strengthText: strength.text
-      },
-      () => this.updateRegisterButtonStatus()
-    );
+    this.setData({
+      password,
+      passwordError,
+      passwordStrength: strength.strength,
+      strengthText: strength.text
+    });
   },
 
   /**
@@ -132,14 +154,10 @@ Page({
    * 确认密码变化
    */
   onConfirmPasswordChange(e) {
-    const value = e.detail.value;
-    console.log('确认密码输入变化:', value);
-    this.setData(
-      {
-        confirmPassword: value
-      },
-      () => this.updateRegisterButtonStatus()
-    );
+    const value = toStr(e && e.detail ? e.detail.value : '', '').slice(0, 8);
+    this.setData({
+      confirmPassword: value
+    });
   },
 
   /**
@@ -187,123 +205,104 @@ Page({
    * 选择角色
    */
   selectRole(e) {
-    const role = parseInt(e.currentTarget.dataset.role);
+    const role = toInt(e && e.currentTarget && e.currentTarget.dataset ? e.currentTarget.dataset.role : 1, 1);
     this.setData({
       selectedRole: role
     });
   },
 
-  /**
-   * 更新注册按钮状态
-   */
-  updateRegisterButtonStatus() {
-    const { username, account, password, confirmPassword, usernameError, accountError, passwordError } = this.data;
-    const canRegister = !!username && !!account && !!password && !!confirmPassword &&
-                      password === confirmPassword && !usernameError && !accountError && !passwordError;
-    console.log('更新注册按钮状态:', canRegister);
-    this.setData({
-      canRegister: canRegister
-    });
+  _getFormError() {
+    const username = maskTrim(this.data.username);
+    const account = maskTrim(this.data.account);
+    const phone = maskTrim(this.data.phone);
+    const password = toStr(this.data.password, '');
+    const confirmPassword = toStr(this.data.confirmPassword, '');
+
+    if (!username) return '请输入用户名';
+    const usernameError = this.validateUsername(username);
+    if (usernameError) return usernameError;
+
+    if (!account) return '请输入账号';
+    const accountError = this.validateAccount(account);
+    if (accountError) return accountError;
+
+    if (phone) {
+      const phoneRegex = /^1[3-9]\d{9}$/;
+      if (!phoneRegex.test(phone)) return '请输入正确的手机号（11位）';
+    }
+
+    if (!password) return '请设置密码';
+    const passwordError = this.validatePassword(password);
+    if (passwordError) return passwordError;
+
+    if (password !== confirmPassword) return '两次输入的密码不一致';
+    return '';
+  },
+
+  _handleRegisterSuccess(res, { fallbackNickName, fallbackAccount, fallbackPhone, fallbackRole } = {}) {
+    try {
+      const token = res && res.data && res.data.token;
+      const user = res && res.data && res.data.user;
+      if (token) wx.setStorageSync('token', token);
+
+      const storedUserInfo = {
+        avatarUrl: (user && (user.avatarUrl || user.avatar_url)) || '/assets/images/morentouxiang.jpg',
+        nickName: (user && (user.nickname || user.nickName)) || fallbackNickName || '新用户',
+        phone: (user && user.phone) || fallbackPhone || '',
+        role: (user && user.role) || fallbackRole || 1,
+        merchantId: (user && (user.merchant_id || user.merchantId)) || null,
+        account: (user && user.account) || fallbackAccount || null
+      };
+      wx.setStorageSync('userInfo', storedUserInfo);
+    } catch (_) {
+      // ignore
+    }
+
+    wx.showToast({ title: '注册成功', icon: 'success' });
+    setTimeout(() => {
+      wx.switchTab({ url: '/pages/profile/profile' });
+    }, 1500);
   },
 
   /**
    * 注册
    */
-  register() {
-    console.log('注册按钮被点击');
-    const { username, account, phone, password, confirmPassword, selectedRole } = this.data;
-    console.log('当前表单数据:', { username, account, phone, password, confirmPassword, selectedRole });
+  async register() {
+    if (this._isLoading()) return;
 
-    // 验证数据
-    if (!username) {
-      wx.showToast({
-        title: '请输入用户名',
-        icon: 'none'
-      });
+    const errMsg = this._getFormError();
+    if (errMsg) {
+      wx.showToast({ title: errMsg, icon: 'none' });
       return;
     }
 
-    if (!account) {
-      wx.showToast({
-        title: '请输入账号',
-        icon: 'none'
-      });
-      return;
-    }
+    const username = maskTrim(this.data.username);
+    const accountValue = maskTrim(this.data.account);
+    const phoneValue = maskTrim(this.data.phone);
+    const password = toStr(this.data.password, '');
+    const selectedRole = this.data.selectedRole;
 
-    // 手机号格式验证（如果填写）
-    if (phone && !/^1[3-9]\d{9}$/.test(phone)) {
-      wx.showToast({
-        title: '请输入正确的手机号',
-        icon: 'none'
+    this._showLoading('注册中...');
+    try {
+      const res = await register({
+        username,
+        account: accountValue,
+        phone: phoneValue || null,
+        password,
+        role: selectedRole
       });
-      return;
-    }
-
-    if (!password) {
-      wx.showToast({
-        title: '请设置密码',
-        icon: 'none'
+      this._hideLoading();
+      this._handleRegisterSuccess(res, {
+        fallbackNickName: username,
+        fallbackAccount: accountValue,
+        fallbackPhone: phoneValue,
+        fallbackRole: selectedRole
       });
-      return;
-    }
-
-    if (password.length < 6 || password.length > 8) {
-      wx.showToast({
-        title: '密码长度应在6-8位之间',
-        icon: 'none'
-      });
-      return;
-    }
-
-    if (!/[a-zA-Z]/.test(password) || !/\d/.test(password)) {
-      wx.showToast({
-        title: '密码必须包含字母和数字',
-        icon: 'none'
-      });
-      return;
-    }
-
-    if (password !== confirmPassword) {
-      wx.showToast({
-        title: '两次输入的密码不一致',
-        icon: 'none'
-      });
-      return;
-    }
-
-    wx.showLoading({
-      title: '注册中...'
-    });
-
-    // 调用后端API进行注册
-    register({
-      username,
-      account,
-      phone,
-      password,
-      role: selectedRole
-    }).then((res) => {
-      wx.hideLoading();
-      wx.showToast({
-        title: '注册成功',
-        icon: 'success'
-      });
-
-      // 跳转到登录界面
-      setTimeout(() => {
-        wx.redirectTo({
-          url: '/pages/login/login'
-        });
-      }, 1500);
-    }).catch((err) => {
-      wx.hideLoading();
-      wx.showToast({
-        title: err.message || '注册失败',
-        icon: 'none'
-      });
+    } catch (err) {
+      this._hideLoading();
+      wx.showToast({ title: getErrMsg(err, '注册失败'), icon: 'none' });
       console.error('注册失败:', err);
-    });
+    }
   },
 
   /**
@@ -316,74 +315,53 @@ Page({
       content: '是否使用微信账号注册？',
       success: (res) => {
         if (res.confirm) {
-          wx.showLoading({
-            title: '注册中...'
-          });
-
-          // 1. 调用微信登录接口获取code
-          wx.login({
-            success: (res) => {
-              if (res.code) {
-                // 2. 调用后端API进行微信注册
-                this.wechatAuth(res.code);
-              } else {
-                wx.hideLoading();
-                wx.showToast({
-                  title: '注册失败，请重试',
-                  icon: 'none'
-                });
-              }
-            },
-            fail: (err) => {
-              wx.hideLoading();
-              wx.showToast({
-                title: '注册失败，请重试',
-                icon: 'none'
-              });
-              console.error('微信登录失败:', err);
-            }
-          });
+          this._wechatRegisterFlow();
         }
       }
     });
   },
 
-  /**
-   * 微信授权注册
-   */
-  wechatAuth(code) {
-    // 调用后端API进行微信注册
-    register({
-      code,
-      role: this.data.selectedRole
-    }).then((res) => {
-      wx.hideLoading();
-      wx.showToast({
-        title: '注册成功',
-        icon: 'success'
+  _wxLogin() {
+    return new Promise((resolve, reject) => {
+      wx.login({
+        success: resolve,
+        fail: reject
       });
-
-      // 跳转到登录界面
-      setTimeout(() => {
-        wx.redirectTo({
-          url: '/pages/login/login'
-        });
-      }, 1500);
-    }).catch((err) => {
-      wx.hideLoading();
-      wx.showToast({
-        title: err.message || '注册失败',
-        icon: 'none'
-      });
-      console.error('微信注册失败:', err);
     });
   },
 
+  async _wechatRegisterFlow() {
+    if (this._isLoading()) return;
+    this._showLoading('注册中...');
+    try {
+      const loginRes = await this._wxLogin();
+      const code = loginRes && loginRes.code;
+      if (!code) {
+        wx.showToast({ title: '注册失败，请重试', icon: 'none' });
+        return;
+      }
+      await this.wechatAuth(code);
+    } catch (err) {
+      console.error('微信登录失败:', err);
+      wx.showToast({ title: getErrMsg(err, '注册失败，请重试'), icon: 'none' });
+    } finally {
+      this._hideLoading();
+    }
+  },
+
   /**
-   * 返回上一页
+   * 微信授权注册
    */
-  goBack() {
-    wx.navigateBack();
+  async wechatAuth(code) {
+    const selectedRole = this.data.selectedRole;
+    try {
+      const res = await register({ code, role: selectedRole });
+      this._handleRegisterSuccess(res, { fallbackRole: selectedRole });
+    } catch (err) {
+      wx.showToast({ title: getErrMsg(err, '注册失败'), icon: 'none' });
+      console.error('微信注册失败:', err);
+      throw err;
+    }
   },
 
   // 毕设简化：不展示/不校验协议

@@ -1,6 +1,6 @@
-<view class="container">
-  <view class="header">
-    <text class="title">订单管理</text>
+<view class="orders-container">
+  <view class="page-header">
+    <text class="page-title">订单管理</text>
   </view>
   
   <!-- 搜索和筛选 -->
@@ -9,20 +9,29 @@
       <input 
         class="search-input" 
         placeholder="输入订单号/用户/商家搜索" 
-        bindinput="searchKeyword"
+        value="{{searchKeyword}}"
+        bindinput="onSearchInput"
       />
       <button class="search-btn" bindtap="searchOrders">搜索</button>
     </view>
     <view class="filter-box">
-      <picker class="filter-picker" bindchange="statusFilter">
-        <view class="picker-text">
-          状态：{{statusFilter === '' ? '全部' : statusFilter === '0' ? '待支付' : statusFilter === '1' ? '待发货' : statusFilter === '2' ? '已发货' : statusFilter === '3' ? '已完成' : '已取消'}}
-        </view>
+      <picker
+        class="filter-picker"
+        range="{{statusOptions}}"
+        range-key="label"
+        value="{{statusIndex}}"
+        bindchange="onStatusChange"
+      >
+        <view class="picker-text">状态：{{statusLabel}}</view>
       </picker>
-      <picker class="filter-picker" bindchange="timeRange">
-        <view class="picker-text">
-          时间范围：{{timeRange === '' ? '全部' : timeRange}}
-        </view>
+      <picker
+        class="filter-picker"
+        range="{{timeRangeOptions}}"
+        range-key="label"
+        value="{{timeRangeIndex}}"
+        bindchange="onTimeRangeChange"
+      >
+        <view class="picker-text">时间：{{timeRangeLabel}}</view>
       </picker>
     </view>
   </view>
@@ -31,45 +40,73 @@
   <view class="batch-actions">
     <checkbox-group bindchange="selectAllOrders">
       <label class="checkbox-label">
-        <checkbox value="all" />
+        <checkbox value="all" checked="{{orders.length > 0 && selectedOrders.length === orders.length}}" />
         <text>全选</text>
       </label>
     </checkbox-group>
-    <button class="batch-btn" bindtap="batchCancelOrders">批量取消</button>
+    <button class="batch-btn" bindtap="batchCancelOrders">批量强制取消</button>
+  </view>
+
+  <!-- 数据监督 -->
+  <view class="supervise-bar">
+    <text>订单总数：{{total}}</text>
+    <text>当前列表异常：{{anomalyCount}}</text>
+  </view>
+
+  <view class="status-counts">
+    <text class="count-item">待支付 {{statusCounts[0] || 0}}</text>
+    <text class="count-item">待发货 {{statusCounts[1] || 0}}</text>
+    <text class="count-item">已发货 {{statusCounts[2] || 0}}</text>
+    <text class="count-item">已完成 {{statusCounts[3] || 0}}</text>
+    <text class="count-item">已取消 {{statusCounts[4] || 0}}</text>
   </view>
 
   <!-- 订单列表 -->
-  <view class="orders-table">
-    <view class="table-header">
-      <view class="table-col select-col">选择</view>
-      <view class="table-col id-col">订单号</view>
-      <view class="table-col user-col">用户</view>
-      <view class="table-col merchant-col">商家</view>
-      <view class="table-col amount-col">金额</view>
-      <view class="table-col status-col">状态</view>
-      <view class="table-col time-col">下单时间</view>
-      <view class="table-col action-col">操作</view>
-    </view>
-    <view class="table-body">
-      <view wx:for="{{orders}}" wx:key="id" class="table-row">
-        <view class="table-col select-col">
-          <checkbox-group bindchange="selectOrder" data-id="{{item.id}}">
-            <label class="checkbox-label">
-              <checkbox value="{{item.id}}" checked="{{selectedOrders.includes(item.id)}}" />
-            </label>
-          </checkbox-group>
+  <view class="order-list">
+    <view wx:for="{{orders}}" wx:key="id" class="order-card">
+      <view class="card-check">
+        <checkbox-group bindchange="selectOrder" data-id="{{item.id}}">
+          <label class="checkbox-label">
+            <checkbox value="{{item.id}}" checked="{{selectedMap[item.id]}}" />
+          </label>
+        </checkbox-group>
+      </view>
+
+      <view class="card-main">
+        <view class="card-top">
+          <text class="order-no">{{item.orderNo}}</text>
+          <view class="top-right">
+            <text class="status-tag {{item.statusClass}}">{{item.statusText}}</text>
+            <text wx:if="{{item.isAnomaly}}" class="anomaly-flag">⚠️</text>
+          </view>
         </view>
-        <view class="table-col id-col">{{item.id}}</view>
-        <view class="table-col user-col">{{item.user}}</view>
-        <view class="table-col merchant-col">{{item.merchant}}</view>
-        <view class="table-col amount-col">¥{{item.amount.toFixed(2)}}</view>
-        <view class="table-col status-col">
-          <text class="status-tag {{item.status === '0' ? 'pending' : item.status === '1' ? 'processing' : item.status === '2' ? 'shipped' : item.status === '3' ? 'completed' : 'cancelled'}}">{{item.statusText}}</text>
+
+        <view class="card-meta">
+          <text class="meta">用户：{{item.user}}</text>
+          <text class="meta">商家：{{item.merchant}}</text>
         </view>
-        <view class="table-col time-col">{{item.createdAt}}</view>
-        <view class="table-col action-col">
-          <button class="action-btn view" bindtap="viewOrderDetail" data-id="{{item.id}}">查看</button>
-          <button class="action-btn dispute" bindtap="handleDispute" data-id="{{item.id}}">标记纠纷</button>
+
+        <view class="card-meta">
+          <text class="meta">下单：{{item.createdAt}}</text>
+        </view>
+
+        <view wx:if="{{item.isAnomaly}}" class="anomaly-text">
+          异常：{{item.anomalyReason}}
+        </view>
+
+        <view class="card-bottom">
+          <text class="amount">¥{{item.amountText}}</text>
+          <view class="actions">
+            <button class="action-btn" bindtap="viewOrderDetail" data-id="{{item.id}}">查看</button>
+            <button
+              wx:if="{{item.canAdvance}}"
+              class="action-btn"
+              bindtap="advanceOrderStatus"
+              data-id="{{item.id}}"
+              data-status="{{item.status}}"
+            >推进</button>
+            <button class="action-btn danger" bindtap="forceCancelOne" data-id="{{item.id}}">强制取消</button>
+          </view>
         </view>
       </view>
     </view>
@@ -89,6 +126,42 @@
   <!-- 分页信息 -->
   <view wx:if="{{orders.length > 0}}" class="pagination">
     <text>共 {{total}} 条记录</text>
+    <button wx:if="{{hasMore && !loading}}" class="load-more-btn" bindtap="loadMoreOrders">加载更多</button>
+    <text wx:if="{{loading}}">加载中...</text>
     <text wx:if="{{!hasMore}}" class="no-more">没有更多数据了</text>
+  </view>
+
+  <!-- 订单详情弹层 -->
+  <view wx:if="{{detailVisible}}" class="modal-mask" bindtap="closeDetail">
+    <view class="modal-panel" catchtap="noop">
+      <view class="modal-header">
+        <text class="modal-title">订单详情</text>
+        <text class="modal-close" bindtap="closeDetail">×</text>
+      </view>
+      <view class="modal-body">
+        <view wx:if="{{detailLoading}}" class="modal-loading">
+          <text>加载中...</text>
+        </view>
+        <view wx:else>
+          <view wx:if="{{detailOrder}}" class="detail-section">
+            <view class="detail-row"><text class="label">订单号</text><text class="value">{{detailOrder.order_no || detailOrder.id}}</text></view>
+            <view class="detail-row"><text class="label">用户</text><text class="value">{{detailOrder.user_name}}</text></view>
+            <view class="detail-row"><text class="label">商家</text><text class="value">{{detailOrder.merchant_name}}</text></view>
+            <view class="detail-row"><text class="label">金额</text><text class="value">¥{{detailOrder.total_amount}}</text></view>
+            <view class="detail-row"><text class="label">状态</text><text class="value">{{detailOrder.statusText}}</text></view>
+            <view class="detail-row"><text class="label">下单时间</text><text class="value">{{detailOrder.created_at}}</text></view>
+          </view>
+          <view class="detail-section">
+            <view class="detail-subtitle">商品明细</view>
+            <view wx:if="{{detailItems.length === 0}}" class="detail-empty">无明细</view>
+            <view wx:for="{{detailItems}}" wx:key="product_id" class="detail-item">
+              <text class="item-name">{{item.product_name}}</text>
+              <text class="item-qty">×{{item.quantity}}</text>
+              <text class="item-subtotal">¥{{item.subtotal}}</text>
+            </view>
+          </view>
+        </view>
+      </view>
+    </view>
   </view>
 </view>

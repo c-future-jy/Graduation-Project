@@ -21,14 +21,14 @@
       <view class="address-actions">
         <button 
           class="action-btn edit-btn"
-          bindtap="navigateToEditAddress"
+          catchtap="navigateToEditAddress"
           data-id="{{item.id}}"
         >
           编辑
         </button>
         <button 
           class="action-btn delete-btn"
-          bindtap="deleteAddress"
+          catchtap="deleteAddress"
           data-id="{{item.id}}"
         >
           删除
@@ -36,7 +36,7 @@
         <button 
           wx:if="{{item.is_default === 0}}"
           class="action-btn default-btn"
-          bindtap="setDefaultAddress"
+          catchtap="setDefaultAddress"
           data-id="{{item.id}}"
         >
           设为默认

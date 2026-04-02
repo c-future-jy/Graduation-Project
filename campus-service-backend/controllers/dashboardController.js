@@ -156,7 +156,7 @@ exports.getOrderTrend = async (req, res, next) => {
         COUNT(*) as orderCount,
         status
       FROM 
-        order
+        \`order\`
     `;
 
     const queryParams = [];
@@ -201,6 +201,74 @@ exports.getOrderTrend = async (req, res, next) => {
 };
 
 /**
+ * 获取用户趋势数据（按注册时间）
+ * GET /api/admin/dashboard/user-trend
+ */
+exports.getUserTrend = async (req, res, next) => {
+  try {
+    const { startTime, endTime, granularity = 'day' } = req.query;
+
+    const [colRows] = await pool.query(
+      `SELECT COUNT(*) as cnt
+       FROM information_schema.columns
+       WHERE table_schema = DATABASE() AND table_name = 'user' AND column_name = 'created_at'`
+    );
+    const hasCreatedAt = (colRows && colRows[0] && colRows[0].cnt > 0) || false;
+    if (!hasCreatedAt) {
+      res.json({ success: true, data: [] });
+      return;
+    }
+
+    let dateFormat;
+    switch (granularity) {
+      case 'week':
+        dateFormat = 'YEARWEEK(created_at, 1)';
+        break;
+      case 'month':
+        dateFormat = 'DATE_FORMAT(created_at, "%Y-%m")';
+        break;
+      default:
+        dateFormat = 'DATE_FORMAT(created_at, "%Y-%m-%d")';
+    }
+
+    let query = `
+      SELECT 
+        ${dateFormat} as date,
+        COUNT(*) as userCount
+      FROM 
+        user
+    `;
+
+    const queryParams = [];
+    const where = [];
+
+    if (startTime) {
+      where.push('created_at >= ?');
+      queryParams.push(startTime);
+    }
+    if (endTime) {
+      where.push('created_at <= ?');
+      queryParams.push(endTime);
+    }
+
+    if (where.length > 0) {
+      query += ' WHERE ' + where.join(' AND ');
+    }
+
+    query += ' GROUP BY date ORDER BY date';
+
+    const [rows] = await pool.query(query, queryParams);
+
+    res.json({
+      success: true,
+      data: rows
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
  * 获取营业额统计数据
  * GET /api/admin/dashboard/revenue
  */
@@ -226,7 +294,7 @@ exports.getRevenue = async (req, res, next) => {
         DATE_FORMAT(created_at, "%Y-%m-%d") as date,
         SUM(total_amount) as revenue
       FROM 
-        order
+        \`order\`
       WHERE 
         status IN (2, 3)
     `;

@@ -1,5 +1,38 @@
 // pages/address/address.js
-const { getAddresses, createAddress, updateAddress, deleteAddress, setDefaultAddress } = require('../../utils/api');
+const { getAddresses, deleteAddress, setDefaultAddress } = require('../../utils/api');
+
+function toInt(value, fallback = 0) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function toStr(value, fallback = '') {
+  if (value === null || value === undefined) return fallback;
+  return String(value);
+}
+
+function getErrMsg(err, fallback = '操作失败') {
+  if (!err) return fallback;
+  if (typeof err === 'string') return err;
+  if (err.message) return err.message;
+  if (err.data && err.data.message) return err.data.message;
+  if (err.errMsg) return err.errMsg;
+  return fallback;
+}
+
+function toTime(value) {
+  const s = toStr(value, '');
+  if (!s) return 0;
+  const d = new Date(s.replace(/-/g, '/'));
+  const t = d.getTime();
+  return Number.isFinite(t) ? t : 0;
+}
+
+function maskPhone(phone) {
+  const s = toStr(phone, '');
+  if (!s) return '';
+  return s.replace(/(\d{3})\d{4}(\d{4})/, '$1****$2');
+}
 
 Page({
 
@@ -16,7 +49,8 @@ Page({
    * 生命周期函数--监听页面加载
    */
   onLoad(options) {
-    const selectMode = !!(options && options.selectMode);
+    const rawSelectMode = options && options.selectMode;
+    const selectMode = String(rawSelectMode) === '1' || String(rawSelectMode).toLowerCase() === 'true';
     if (selectMode) {
       this.setData({ selectMode: true });
     }
@@ -36,13 +70,6 @@ Page({
   },
 
   /**
-   * 生命周期函数--监听页面初次渲染完成
-   */
-  onReady() {
-
-  },
-
-  /**
    * 生命周期函数--监听页面显示
    */
   onShow() {
@@ -50,105 +77,62 @@ Page({
   },
 
   /**
-   * 生命周期函数--监听页面隐藏
-   */
-  onHide() {
-
-  },
-
-  /**
-   * 生命周期函数--监听页面卸载
-   */
-  onUnload() {
-
-  },
-
-  /**
    * 页面相关事件处理函数--监听用户下拉动作
    */
-  onPullDownRefresh() {
-    this.loadAddresses(() => {
+  async onPullDownRefresh() {
+    try {
+      await this.loadAddresses();
+    } finally {
       wx.stopPullDownRefresh();
-    });
-  },
-
-  /**
-   * 页面上拉触底事件的处理函数
-   */
-  onReachBottom() {
-
-  },
-
-  /**
-   * 用户点击右上角分享
-   */
-  onShareAppMessage() {
-
+    }
   },
 
   /**
    * 加载地址列表
    */
-  loadAddresses(callback) {
+  async loadAddresses() {
+    if (this.data.loading) return;
     this.setData({ loading: true });
-    getAddresses()
-      .then(res => {
-        // 对地址进行排序：默认地址在前，然后按创建时间倒序
-        const sortedAddresses = (res.data || []).sort((a, b) => {
-          if (a.is_default === 1 && b.is_default === 0) return -1;
-          if (a.is_default === 0 && b.is_default === 1) return 1;
-          return new Date(b.created_at) - new Date(a.created_at);
-        });
-        
-        // 对手机号进行脱敏处理
-        const addressesWithMaskedPhone = sortedAddresses.map(address => {
-          return {
-            ...address,
-            maskedPhone: address.phone.replace(/(\d{3})\d{4}(\d{4})/, '$1****$2')
-          };
-        });
-        
-        this.setData({ addresses: addressesWithMaskedPhone });
-        if (callback) callback();
-      })
-      .catch(err => {
-        console.error('获取地址列表失败:', err);
-        if (callback) callback();
-      })
-      .finally(() => {
-        this.setData({ loading: false });
+    try {
+      const res = await getAddresses();
+      if (!res || res.success === false) {
+        wx.showToast({ title: (res && res.message) || '获取地址列表失败', icon: 'none' });
+        this.setData({ addresses: [] });
+        return;
+      }
+
+      const list = (res && res.data) || [];
+      const normalized = list.map((a) => ({
+        ...a,
+        is_default: toInt(a.is_default, 0) === 1 ? 1 : 0,
+        maskedPhone: maskPhone(a.phone)
+      }));
+
+      // 默认地址在前，其次按创建时间倒序
+      normalized.sort((a, b) => {
+        if (a.is_default === 1 && b.is_default === 0) return -1;
+        if (a.is_default === 0 && b.is_default === 1) return 1;
+        return toTime(b.created_at) - toTime(a.created_at);
       });
+
+      this.setData({ addresses: normalized });
+    } catch (err) {
+      console.error('获取地址列表失败:', err);
+      wx.showToast({ title: getErrMsg(err, '获取地址列表失败'), icon: 'none' });
+    } finally {
+      this.setData({ loading: false });
+    }
   },
 
   /**
    * 跳转到新增地址页面
    */
   navigateToAddAddress() {
-    console.log('点击了添加地址按钮');
-    wx.showLoading({ title: '加载中...' });
     wx.navigateTo({
       url: '/pages/address/edit-address/edit-address?title=' + encodeURIComponent('新增地址'),
-      success: function(res) {
-        console.log('跳转到编辑地址页面成功', res);
-        wx.hideLoading();
-      },
-      fail: function(err) {
+      fail: (err) => {
         console.error('跳转到编辑地址页面失败:', err);
-        wx.hideLoading();
-        
-        // 分析错误原因并提供更清晰的错误信息
-        let errorMessage = '跳转失败，请重试';
-        if (err.errMsg && err.errMsg.includes('is not found')) {
-          errorMessage = '编辑地址页面未注册，请检查app.json配置';
-          console.error('错误原因：编辑地址页面未在app.json中注册');
-          console.error('解决方案：在app.json的pages数组中添加 "pages/address/edit-address/edit-address"');
-        } else if (err.errMsg && err.errMsg.includes('permission')) {
-          errorMessage = '权限不足，无法跳转';
-        } else if (err.errMsg && err.errMsg.includes('network')) {
-          errorMessage = '网络错误，请检查网络连接';
-        }
-        
-        wx.showToast({ title: errorMessage, icon: 'none', duration: 3000 });
+        wx.showToast({ title: getErrMsg(err, '跳转失败，请重试'), icon: 'none', duration: 3000 });
       }
     });
   },
@@ -158,31 +142,11 @@ Page({
    */
   navigateToEditAddress(e) {
     const { id } = e.currentTarget.dataset;
-    console.log('点击了编辑地址按钮，地址ID:', id);
-    wx.showLoading({ title: '加载中...' });
     wx.navigateTo({
       url: `/pages/address/edit-address/edit-address?id=${id}&title=${encodeURIComponent('编辑地址')}`,
-      success: function(res) {
-        console.log('跳转到编辑地址页面成功', res);
-        wx.hideLoading();
-      },
-      fail: function(err) {
+      fail: (err) => {
         console.error('跳转到编辑地址页面失败:', err);
-        wx.hideLoading();
-        
-        // 分析错误原因并提供更清晰的错误信息
-        let errorMessage = '跳转失败，请重试';
-        if (err.errMsg && err.errMsg.includes('is not found')) {
-          errorMessage = '编辑地址页面未注册，请检查app.json配置';
-          console.error('错误原因：编辑地址页面未在app.json中注册');
-          console.error('解决方案：在app.json的pages数组中添加 "pages/address/edit-address/edit-address"');
-        } else if (err.errMsg && err.errMsg.includes('permission')) {
-          errorMessage = '权限不足，无法跳转';
-        } else if (err.errMsg && err.errMsg.includes('network')) {
-          errorMessage = '网络错误，请检查网络连接';
-        }
-        
-        wx.showToast({ title: errorMessage, icon: 'none', duration: 3000 });
+        wx.showToast({ title: getErrMsg(err, '跳转失败，请重试'), icon: 'none', duration: 3000 });
       }
     });
   },
@@ -190,7 +154,7 @@ Page({
   /**
    * 删除地址
    */
-  deleteAddress(e) {
+  async deleteAddress(e) {
     const { id } = e.currentTarget.dataset;
     const { addresses } = this.data;
     
@@ -203,61 +167,51 @@ Page({
     wx.showModal({
       title: '确认删除',
       content: '确定要删除这个地址吗？',
-      success: (res) => {
-        if (res.confirm) {
-          this.setData({ loading: true });
-          deleteAddress(id)
-            .then(() => {
-              wx.showToast({ 
-                title: '删除成功', 
-                icon: 'success',
-                duration: 1500
-              });
-              // 3秒内可撤销
-              this.showUndoToast(id);
-              this.loadAddresses();
-            })
-            .catch(err => {
-              console.error('删除地址失败:', err);
-              wx.showToast({ title: '删除失败', icon: 'none' });
-            })
-            .finally(() => {
-              this.setData({ loading: false });
-            });
+      success: async (res) => {
+        if (!res.confirm) return;
+        if (this.data.loading) return;
+
+        this.setData({ loading: true });
+        try {
+          const resp = await deleteAddress(id);
+          if (resp && resp.success === false) {
+            wx.showToast({ title: (resp && resp.message) || '删除失败', icon: 'none' });
+            return;
+          }
+          wx.showToast({ title: '删除成功', icon: 'success', duration: 1500 });
+          await this.loadAddresses();
+        } catch (err) {
+          console.error('删除地址失败:', err);
+          wx.showToast({ title: getErrMsg(err, '删除失败'), icon: 'none' });
+        } finally {
+          this.setData({ loading: false });
         }
       }
     });
   },
 
   /**
-   * 显示撤销删除提示
-   */
-  showUndoToast(addressId) {
-    // 这里可以实现撤销功能，暂时只做提示
-  },
-
-  /**
    * 设置默认地址
    */
-  setDefaultAddress(e) {
+  async setDefaultAddress(e) {
     const { id } = e.currentTarget.dataset;
+    if (this.data.loading) return;
+
     this.setData({ loading: true });
-    setDefaultAddress(id)
-      .then(() => {
-        wx.showToast({ 
-          title: '设置成功', 
-          icon: 'success',
-          duration: 1500
-        });
-        this.loadAddresses();
-      })
-      .catch(err => {
-        console.error('设置默认地址失败:', err);
-        wx.showToast({ title: '设置失败', icon: 'none' });
-      })
-      .finally(() => {
-        this.setData({ loading: false });
-      });
+    try {
+      const res = await setDefaultAddress(id);
+      if (res && res.success === false) {
+        wx.showToast({ title: (res && res.message) || '设置失败', icon: 'none' });
+        return;
+      }
+      wx.showToast({ title: '设置成功', icon: 'success', duration: 1500 });
+      await this.loadAddresses();
+    } catch (err) {
+      console.error('设置默认地址失败:', err);
+      wx.showToast({ title: getErrMsg(err, '设置失败'), icon: 'none' });
+    } finally {
+      this.setData({ loading: false });
+    }
   },
 
   /**

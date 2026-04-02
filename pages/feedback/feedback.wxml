@@ -33,9 +33,9 @@
   <!-- 订单选择（订单评价时显示） -->
   <view class="order-section" wx:if="{{feedbackType === 1}}">
     <text class="order-label">选择订单<text class="required">*</text></text>
-    <picker bindchange="bindOrderChange" value="{{orderIndex}}" range="{{orders}}" range-key="orderNo" class="order-picker">
+    <picker bindchange="bindOrderChange" value="{{orderIndex >= 0 ? orderIndex : 0}}" range="{{orders}}" range-key="orderNo" class="order-picker">
       <view class="picker-view">
-        <text class="picker-text">{{orders.length > 0 ? '请选择订单' : '暂无可用订单'}}</text>
+        <text class="picker-text">{{orderIndex >= 0 && orders[orderIndex] ? orders[orderIndex].orderNo : (orders.length > 0 ? '请选择订单' : '暂无可用订单')}}</text>
       </view>
     </picker>
   </view>
@@ -43,39 +43,24 @@
   <!-- 商家选择（商家评价时显示） -->
   <view class="merchant-section" wx:if="{{feedbackType === 2}}">
     <text class="merchant-label">选择商家<text class="required">*</text></text>
-    <picker bindchange="bindMerchantChange" value="{{merchantIndex}}" range="{{merchants}}" range-key="name" class="merchant-picker">
+    <picker bindchange="bindMerchantChange" value="{{merchantIndex >= 0 ? merchantIndex : 0}}" range="{{merchants}}" range-key="name" class="merchant-picker">
       <view class="picker-view">
-        <text class="picker-text">{{merchants.length > 0 ? '请选择商家' : '暂无可用商家'}}</text>
+        <text class="picker-text">{{merchantIndex >= 0 && merchants[merchantIndex] ? merchants[merchantIndex].name : (merchants.length > 0 ? '请选择商家' : '暂无可用商家')}}</text>
       </view>
     </picker>
   </view>
   
-  <!-- 评分组件（订单评价和商家评价时显示） -->
-  <view class="rating-section" wx:if="{{feedbackType === 1 || feedbackType === 2}}">
-    <text class="rating-label">评分<text class="required">*</text></text>
+  <!-- 评分组件（平台反馈可选；订单/商家评价必填） -->
+  <view class="rating-section">
+    <text class="rating-label">
+      {{feedbackType === 3 ? '评分（可选）' : '评分'}}
+      <text wx:if="{{feedbackType !== 3}}" class="required">*</text>
+    </text>
     <view class="rating-input">
       <input 
         type="number" 
         class="rating-input-field" 
-        placeholder="请输入1-5分"
-        value="{{rating}}"
-        bindinput="onRatingInput"
-        min="1"
-        max="5"
-        step="1"
-      ></input>
-      <text class="rating-hint">1-5分</text>
-    </view>
-  </view>
-  
-  <!-- 评分组件（平台反馈时显示，可选） -->
-  <view class="rating-section" wx:if="{{feedbackType === 3}}">
-    <text class="rating-label">评分（可选）</text>
-    <view class="rating-input">
-      <input 
-        type="number" 
-        class="rating-input-field" 
-        placeholder="请输入1-5分（可选）"
+        placeholder="{{feedbackType === 3 ? '请输入1-5分（可选）' : '请输入1-5分'}}"
         value="{{rating}}"
         bindinput="onRatingInput"
         min="1"

@@ -22,6 +22,27 @@ function isDev() {
   return String(process.env.NODE_ENV || '').toLowerCase() !== 'production';
 }
 
+async function getMerchantIdForCurrentUser(req, connOrPool = pool) {
+  const userId = req.user && req.user.id;
+  const merchantIdFromToken = req.user && req.user.merchant_id;
+  if (merchantIdFromToken) return merchantIdFromToken;
+  if (!userId) return null;
+
+  const [rows] = await connOrPool.query(
+    'SELECT id FROM merchant WHERE owner_user_id = ? ORDER BY id DESC LIMIT 1',
+    [userId]
+  );
+  return rows && rows[0] && rows[0].id ? rows[0].id : null;
+}
+
+async function insertFeedbackNotification(connOrPool, userId, title, content) {
+  if (!userId) return;
+  await connOrPool.query(
+    'INSERT INTO notification (user_id, title, content, type, created_at) VALUES (?, ?, ?, ?, NOW())',
+    [userId, title, content, 1]
+  );
+}
+
 // 获取反馈列表
 exports.getFeedbackList = async (req, res, next) => {
   try {
@@ -53,15 +74,102 @@ exports.createFeedback = async (req, res, next) => {
   }
 };
 
+// 商家获取自己的反馈列表
+exports.getMerchantFeedbackList = async (req, res, next) => {
+  try {
+    const merchantId = await getMerchantIdForCurrentUser(req, pool);
+    if (!merchantId) {
+      return res.status(403).json({ success: false, message: '商家身份验证失败' });
+    }
+
+    const timeColumn = (await hasTableColumn('feedback', 'create_time'))
+      ? 'create_time'
+      : (await hasTableColumn('feedback', 'created_at'))
+        ? 'created_at'
+        : null;
+
+    const orderBy = timeColumn ? `ORDER BY f.\`${timeColumn}\` DESC` : 'ORDER BY f.id DESC';
+
+    const userNicknameColumn = (await hasTableColumn('user', 'nickname'))
+      ? 'nickname'
+      : (await hasTableColumn('user', 'username'))
+        ? 'username'
+        : null;
+
+    const orderNoColumn = (await hasTableColumn('order', 'order_no')) ? 'order_no' : null;
+
+    const [feedbacks] = await pool.query(
+      `
+        SELECT
+          f.*,
+          ${userNicknameColumn ? `u.\`${userNicknameColumn}\` as user_name` : 'NULL as user_name'},
+          ${orderNoColumn ? `o.\`${orderNoColumn}\` as order_no` : 'NULL as order_no'}
+        FROM feedback f
+        LEFT JOIN user u ON f.user_id = u.id
+        LEFT JOIN \`order\` o ON f.order_id = o.id
+        WHERE f.merchant_id = ?
+        ${orderBy}
+      `,
+      [merchantId]
+    );
+
+    res.json({ success: true, data: { feedbacks } });
+  } catch (error) {
+    next(error);
+  }
+};
+
 // 回复反馈
 exports.replyFeedback = async (req, res, next) => {
   try {
     const { reply } = req.body;
-    await pool.query(
-      'UPDATE feedback SET reply = ?, reply_time = NOW(), reply_user_id = ?, status = 1 WHERE id = ?',
-      [reply, req.user.id, req.params.id]
-    );
-    res.json({ success: true, message: '回复成功' });
+    if (!reply || !String(reply).trim()) {
+      return res.status(400).json({ success: false, message: '回复内容不能为空' });
+    }
+    if (String(reply).length > 500) {
+      return res.status(400).json({ success: false, message: '回复内容不能超过500字符' });
+    }
+
+    const id = parseInt(req.params.id, 10);
+    if (!id) {
+      return res.status(400).json({ success: false, message: '反馈ID不合法' });
+    }
+
+    const conn = await pool.getConnection();
+    try {
+      await conn.beginTransaction();
+
+      const [rows] = await conn.query('SELECT id, user_id, merchant_id FROM feedback WHERE id = ?', [id]);
+      if (!rows || rows.length === 0) {
+        await conn.rollback();
+        return res.status(404).json({ success: false, message: '反馈不存在' });
+      }
+      const feedback = rows[0];
+
+      // 商家只能回复自己店铺的反馈；管理员可回复任意反馈
+      if (req.user && req.user.role === 2) {
+        const merchantId = await getMerchantIdForCurrentUser(req, conn);
+        if (!merchantId || parseInt(feedback.merchant_id, 10) !== parseInt(merchantId, 10)) {
+          await conn.rollback();
+          return res.status(403).json({ success: false, message: '权限不足，只能回复自己店铺的反馈' });
+        }
+      }
+
+      await conn.query(
+        'UPDATE feedback SET reply = ?, reply_time = NOW(), reply_user_id = ?, status = 1 WHERE id = ?',
+        [String(reply).trim(), req.user.id, id]
+      );
+
+      await insertFeedbackNotification(conn, feedback.user_id, '反馈已回复', '商家已回复您的反馈，请在“通知”中查看');
+
+      await conn.commit();
+      res.json({ success: true, message: '回复成功' });
+    } catch (e) {
+      await conn.rollback().catch(() => {});
+      throw e;
+    } finally {
+      conn.release();
+    }
   } catch (error) {
     next(error);
   }
@@ -441,42 +549,34 @@ exports.replyAdminFeedback = async (req, res, next) => {
     
     const feedback = feedbacks[0];
     
-    // 开始事务
-    await pool.query('START TRANSACTION');
-    
+    const conn = await pool.getConnection();
     try {
-      // 更新反馈回复
-      await pool.query(
+      await conn.beginTransaction();
+
+      await conn.query(
         'UPDATE feedback SET reply = ?, reply_time = NOW(), reply_user_id = ?, status = 1 WHERE id = ?',
         [reply, adminId, id]
       );
-      
-      // 记录操作日志
-      await pool.query(
+
+      await conn.query(
         'INSERT INTO admin_operation_log (admin_id, operation, target_user_id, created_at) VALUES (?, ?, ?, NOW())',
         [adminId, '回复反馈', feedback.user_id]
       );
-      
-      // 通知用户
-      await pool.query(
-        'INSERT INTO notification (user_id, title, content, type, created_at) VALUES (?, ?, ?, ?, NOW())',
-        // notification.type 为 tinyint：1=反馈
-        [feedback.user_id, '反馈已回复', '您的反馈已收到回复，请查看', 1]
-      );
-      
-      // 提交事务
-      await pool.query('COMMIT');
-      
+
+      await insertFeedbackNotification(conn, feedback.user_id, '反馈已回复', '您的反馈已收到回复，请在“通知”中查看');
+
+      await conn.commit();
       res.json({ success: true, message: '回复成功' });
     } catch (transactionError) {
-      // 回滚事务
-      await pool.query('ROLLBACK');
+      await conn.rollback().catch(() => {});
       console.error('回复反馈失败:', transactionError);
-      res.status(500).json({ 
-        success: false, 
+      res.status(500).json({
+        success: false,
         message: '回复反馈失败',
-        error: transactionError.message 
+        error: isDev() ? transactionError.message : undefined
       });
+    } finally {
+      conn.release();
     }
   } catch (error) {
     console.error('回复反馈失败:', error);
@@ -514,43 +614,34 @@ exports.rejectAdminFeedback = async (req, res, next) => {
     
     const feedback = feedbacks[0];
     
-    // 开始事务
-    await pool.query('START TRANSACTION');
-    
+    const conn = await pool.getConnection();
     try {
-      // 更新反馈状态为驳回
-      await pool.query(
+      await conn.beginTransaction();
+
+      await conn.query(
         'UPDATE feedback SET reject_reason = ?, reply_time = NOW(), reply_user_id = ?, status = 2 WHERE id = ?',
         [reason, adminId, id]
       );
-      
-      // 记录操作日志
-      await pool.query(
+
+      await conn.query(
         'INSERT INTO admin_operation_log (admin_id, operation, target_user_id, created_at) VALUES (?, ?, ?, NOW())',
         [adminId, '驳回反馈', feedback.user_id]
       );
-      
-      // 通知用户
-      await pool.query(
-        'INSERT INTO notification (user_id, title, content, type, created_at) VALUES (?, ?, ?, ?, NOW())',
-        [feedback.user_id, '反馈已驳回', '您的反馈已被驳回，请查看详情', 1]
-      );
-      
-      // 提交事务
-      await pool.query('COMMIT');
-      
+
+      await insertFeedbackNotification(conn, feedback.user_id, '反馈已驳回', '您的反馈已被驳回，请在“通知”中查看');
+
+      await conn.commit();
       res.json({ success: true, message: '驳回成功' });
     } catch (transactionError) {
-      // 回滚事务
-      await pool.query('ROLLBACK');
+      await conn.rollback().catch(() => {});
       console.error('驳回反馈事务错误:', transactionError);
-      console.error('错误堆栈:', transactionError.stack);
-      res.status(500).json({ 
-        success: false, 
+      res.status(500).json({
+        success: false,
         message: '驳回反馈失败',
-        error: transactionError.message,
-        stack: transactionError.stack 
+        error: isDev() ? transactionError.message : undefined
       });
+    } finally {
+      conn.release();
     }
   } catch (error) {
     console.error('驳回反馈外层错误:', error);

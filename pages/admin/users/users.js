@@ -6,6 +6,34 @@ const {
   resetAdminUserPassword
 } = require('../../../utils/api');
 
+const ROLE_OPTIONS = [
+  { id: '', label: '全部' },
+  { id: '1', label: '学生' },
+  { id: '2', label: '商家' },
+  { id: '3', label: '管理员' }
+];
+
+const STATUS_OPTIONS = [
+  { id: '', label: '全部' },
+  { id: '1', label: '正常' },
+  { id: '0', label: '禁用' }
+];
+
+function isProvided(value) {
+  return value !== undefined && value !== null && value !== '';
+}
+
+function toStr(value) {
+  if (value === undefined || value === null) return '';
+  return String(value);
+}
+
+function toInt(value) {
+  if (value === undefined || value === null || value === '') return 0;
+  const n = typeof value === 'string' ? parseInt(value, 10) : value;
+  return Number.isFinite(n) ? n : 0;
+}
+
 Page({
   /**
    * 页面的初始数据
@@ -21,6 +49,14 @@ Page({
     roleFilter: '',
     statusFilter: '',
     selectedUsers: [],
+    selectedMap: {},
+
+    roleOptions: ROLE_OPTIONS,
+    statusOptions: STATUS_OPTIONS,
+    roleIndex: 0,
+    statusIndex: 0,
+    roleLabel: '全部',
+    statusLabel: '全部',
 
     // 详情弹窗
     detailVisible: false,
@@ -44,18 +80,7 @@ Page({
    */
   onLoad(options) {
     this.checkLoginStatus();
-    const initialTitle = this.safeDecodeURIComponent(options && options.title);
-    wx.setNavigationBarTitle({ title: initialTitle || '用户管理' });
-    this.loadUsers();
-  },
-
-  safeDecodeURIComponent(value) {
-    if (!value) return '';
-    try {
-      return decodeURIComponent(value);
-    } catch (e) {
-      return value;
-    }
+    this.reloadUsers();
   },
 
   /**
@@ -72,6 +97,29 @@ Page({
     }
   },
 
+  buildQueryParams() {
+    const params = {
+      page: this.data.page,
+      pageSize: this.data.pageSize
+    };
+    if (isProvided(this.data.roleFilter)) params.role = this.data.roleFilter;
+    if (isProvided(this.data.statusFilter)) params.status = this.data.statusFilter;
+    const keyword = String(this.data.searchKeyword || '').trim();
+    if (keyword) params.keyword = keyword;
+    return params;
+  },
+
+  reloadUsers() {
+    this.setData({
+      page: 1,
+      users: [],
+      hasMore: true,
+      selectedUsers: [],
+      selectedMap: {}
+    });
+    this.loadUsers();
+  },
+
   /**
    * 加载用户列表
    */
@@ -81,18 +129,11 @@ Page({
     this.setData({ loading: true });
     
     try {
-      // 调用真实API获取数据
-      const params = {
-        page: this.data.page,
-        pageSize: this.data.pageSize,
-        role: this.data.roleFilter,
-        keyword: this.data.searchKeyword
-      };
-      
-      const res = await getAdminUserList(params);
-      
-      const users = res.data.users.map(user => ({
-        id: user.id,
+      const res = await getAdminUserList(this.buildQueryParams());
+      const list = (res && res.data && res.data.users) || [];
+
+      const users = (Array.isArray(list) ? list : []).map(user => ({
+        id: toStr(user.id),
         nickname: user.nickname,
         phone: user.phone,
         role: user.role,
@@ -101,27 +142,27 @@ Page({
         statusText: user.status === 1 ? '正常' : '禁用',
         createdAt: user.created_at
       }));
-      
-      const total = res.data.pagination.total;
+
+      const total = (res && res.data && res.data.pagination && res.data.pagination.total) || 0;
       const hasMore = this.data.page * this.data.pageSize < total;
       
       this.setData({
-        users: this.data.page === 1 ? users : [...this.data.users, ...users],
+        users: this.data.page === 1 ? users : this.data.users.concat(users),
         total,
-        hasMore,
-        loading: false
+        hasMore
       });
     } catch (error) {
       console.error('加载用户列表失败:', error);
-      this.setData({ loading: false });
       wx.showToast({ title: '加载失败', icon: 'none' });
+    } finally {
+      this.setData({ loading: false });
     }
   },
 
   /**
    * 搜索关键词变化
    */
-  searchKeyword(e) {
+  onSearchInput(e) {
     this.setData({ searchKeyword: e.detail.value });
   },
 
@@ -129,60 +170,74 @@ Page({
    * 搜索用户
    */
   searchUsers() {
-    this.setData({ page: 1, users: [] });
-    this.loadUsers();
+    this.reloadUsers();
   },
 
   /**
    * 角色筛选变化
    */
-  roleFilter(e) {
-    this.setData({ roleFilter: e.detail.value });
-    this.setData({ page: 1, users: [] });
-    this.loadUsers();
+  onRoleChange(e) {
+    const index = parseInt(e.detail.value, 10) || 0;
+    const option = this.data.roleOptions[index] || this.data.roleOptions[0];
+    this.setData({
+      roleIndex: index,
+      roleFilter: option.id,
+      roleLabel: option.label
+    });
+    this.reloadUsers();
   },
 
   /**
    * 状态筛选变化
    */
-  statusFilter(e) {
-    this.setData({ statusFilter: e.detail.value });
-    this.setData({ page: 1, users: [] });
-    this.loadUsers();
+  onStatusChange(e) {
+    const index = parseInt(e.detail.value, 10) || 0;
+    const option = this.data.statusOptions[index] || this.data.statusOptions[0];
+    this.setData({
+      statusIndex: index,
+      statusFilter: option.id,
+      statusLabel: option.label
+    });
+    this.reloadUsers();
   },
 
   /**
    * 选择用户
    */
   selectUser(e) {
-    const userId = e.detail.value[0];
-    let selectedUsers = this.data.selectedUsers;
-    
-    if (userId) {
-      if (!selectedUsers.includes(userId)) {
-        selectedUsers.push(userId);
-      }
+    const id = toStr(e.currentTarget.dataset.id);
+    const checked = Array.isArray(e.detail.value) && e.detail.value.length > 0;
+
+    const selectedMap = { ...this.data.selectedMap };
+    let selectedUsers = Array.isArray(this.data.selectedUsers) ? [...this.data.selectedUsers] : [];
+
+    if (checked) {
+      selectedMap[id] = true;
+      if (!selectedUsers.includes(id)) selectedUsers.push(id);
     } else {
-      // 取消选择，需要找到当前取消的用户ID
-      const currentId = e.currentTarget.dataset.id;
-      selectedUsers = selectedUsers.filter(id => id !== currentId);
+      delete selectedMap[id];
+      selectedUsers = selectedUsers.filter(x => toStr(x) !== id);
     }
-    
-    this.setData({ selectedUsers });
+
+    this.setData({ selectedMap, selectedUsers });
   },
 
   /**
    * 全选用户
    */
   selectAllUsers(e) {
-    const allSelected = e.detail.value[0];
-    let selectedUsers = [];
-    
-    if (allSelected) {
-      selectedUsers = this.data.users.map(user => user.id);
+    const checked = Array.isArray(e.detail.value) && e.detail.value.length > 0;
+    if (!checked) {
+      this.setData({ selectedUsers: [], selectedMap: {} });
+      return;
     }
-    
-    this.setData({ selectedUsers });
+
+    const selectedUsers = this.data.users.map(u => toStr(u.id));
+    const selectedMap = {};
+    selectedUsers.forEach(id => {
+      selectedMap[id] = true;
+    });
+    this.setData({ selectedUsers, selectedMap });
   },
 
   /**
@@ -206,8 +261,8 @@ Page({
             await updateAdminUserStatus(id, 0);
           }
           wx.showToast({ title: '禁用成功' });
-          this.setData({ selectedUsers: [], page: 1, users: [], hasMore: true });
-          this.loadUsers();
+          this.setData({ selectedUsers: [], selectedMap: {} });
+          this.reloadUsers();
         } catch (error) {
           console.error('批量禁用失败:', error);
           wx.showToast({ title: error.message || '禁用失败', icon: 'none' });
@@ -239,8 +294,8 @@ Page({
             await updateAdminUserStatus(id, 1);
           }
           wx.showToast({ title: '启用成功' });
-          this.setData({ selectedUsers: [], page: 1, users: [], hasMore: true });
-          this.loadUsers();
+          this.setData({ selectedUsers: [], selectedMap: {} });
+          this.reloadUsers();
         } catch (error) {
           console.error('批量启用失败:', error);
           wx.showToast({ title: error.message || '启用失败', icon: 'none' });
@@ -268,7 +323,7 @@ Page({
    */
   toggleUserStatus(e) {
     const userId = e.currentTarget.dataset.id;
-    const status = e.currentTarget.dataset.status;
+    const status = toInt(e.currentTarget.dataset.status);
     const action = status === 1 ? '禁用' : '启用';
     
     wx.showModal({
@@ -281,8 +336,8 @@ Page({
           const targetStatus = status === 1 ? 0 : 1;
           await updateAdminUserStatus(userId, targetStatus);
           wx.showToast({ title: action + '成功' });
-          this.setData({ page: 1, users: [], hasMore: true });
-          this.loadUsers();
+          this.setData({ selectedUsers: [], selectedMap: {} });
+          this.reloadUsers();
         } catch (error) {
           console.error(action + '用户失败:', error);
           wx.showToast({ title: error.message || (action + '失败'), icon: 'none' });
@@ -411,9 +466,7 @@ Page({
    * 页面相关事件处理函数--监听用户下拉动作
    */
   onPullDownRefresh() {
-    this.setData({ page: 1, users: [] });
-    this.loadUsers(() => {
-      wx.stopPullDownRefresh();
-    });
+    this.setData({ page: 1, users: [], hasMore: true, selectedUsers: [], selectedMap: {} });
+    Promise.resolve(this.loadUsers()).finally(() => wx.stopPullDownRefresh());
   }
 })

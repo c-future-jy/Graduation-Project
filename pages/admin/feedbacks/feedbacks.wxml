@@ -35,7 +35,7 @@
     <view wx:for="{{feedbacks}}" wx:key="id" class="feedback-card">
       <view class="card-header">
         <view class="checkbox-wrapper">
-          <checkbox value="{{item.id}}" checked="{{selectedFeedbacks.indexOf(item.id) > -1}}" bindchange="toggleFeedbackSelection" data-id="{{item.id}}" />
+          <checkbox value="{{item.id}}" checked="{{selectedMap[item.id]}}" bindchange="toggleFeedbackSelection" data-id="{{item.id}}" />
         </view>
         <view class="user-info">
           <text class="user-name">{{item.userName}}</text>
@@ -101,7 +101,7 @@
       <image src="/assets/images/kong.jpg" mode="aspectFit" class="empty-image" />
       <text class="empty-text">未找到相关反馈</text>
       <text class="empty-subtext">尝试调整筛选条件或重新加载</text>
-      <button class="reload-btn" bindtap="loadFeedbacks">重新加载</button>
+      <button class="reload-btn" bindtap="reloadFeedbacks">重新加载</button>
     </view>
   </view>
   

@@ -31,9 +31,7 @@
           placeholder-style="color:#bfbfbf;font-size:14px;"
           value="{{userInfo.nickName}}" 
           bindinput="onNickNameChange"
-          bindfocus="onInputFocus"
-          bindblur="onInputBlur"
-          data-field="nickName"
+          maxlength="20"
         />
         <text wx:if="{{nickNameError}}" class="error-tip">{{nickNameError}}</text>
       </view>
@@ -49,9 +47,6 @@
           bindinput="onPhoneChange"
           type="number"
           maxlength="11"
-          bindfocus="onInputFocus"
-          bindblur="onInputBlur"
-          data-field="phone"
         />
         <text wx:if="{{phoneError}}" class="error-tip">{{phoneError}}</text>
       </view>

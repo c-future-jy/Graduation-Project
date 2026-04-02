@@ -1,4 +1,26 @@
 const { getMerchants, getCategories } = require('../../utils/api');
+const { toNetworkUrl } = require('../../utils/url');
+
+const FILTER_TITLE_MAP = {
+  delivery: '校园内配送',
+  certified: '校内认证商家',
+  quick: '课间极速达',
+  rated: '师生高口碑'
+};
+
+function normalizeMerchants(merchants) {
+  return (Array.isArray(merchants) ? merchants : []).map(m => ({
+    ...m,
+    logo: toNetworkUrl(m.logo)
+  }));
+}
+
+function normalizeCategories(categories) {
+  return (Array.isArray(categories) ? categories : []).map(c => ({
+    ...c,
+    icon: toNetworkUrl(c.icon)
+  }));
+}
 
 Page({
   data: {
@@ -7,7 +29,7 @@ Page({
     currentCategory: 0
   },
 
-  onLoad(options) {
+  onLoad() {
     this.loadData();
   },
 
@@ -18,18 +40,15 @@ Page({
     wx.showLoading({ title: '加载中...' });
     
     try {
-      // 加载商家列表
-      const merchantsRes = await getMerchants();
-      this.setData({
-        merchants: merchantsRes.data.merchants || []
-      });
+      const [merchantsRes, categoriesRes] = await Promise.all([
+        getMerchants({}),
+        getCategories({ type: 2 })
+      ]);
 
-      // 加载分类列表
-      const categoriesRes = await getCategories({ type: 2 });
-      console.log('首页加载的分类数据:', categoriesRes.data.categories);
-      this.setData({
-        categories: categoriesRes.data.categories || []
-      });
+      const merchants = normalizeMerchants(merchantsRes && merchantsRes.data && merchantsRes.data.merchants);
+      const categories = normalizeCategories(categoriesRes && categoriesRes.data && categoriesRes.data.categories);
+
+      this.setData({ merchants, categories });
       
     } catch (error) {
       wx.showToast({
@@ -46,6 +65,7 @@ Page({
    */
   selectCategory(e) {
     const categoryId = e.currentTarget.dataset.id;
+    if (categoryId == null) return;
     this.setData({
       currentCategory: categoryId
     });
@@ -82,9 +102,13 @@ Page({
    * 下拉刷新
    */
   onPullDownRefresh() {
-    this.loadData().then(() => {
-      wx.stopPullDownRefresh();
-    });
+    (async () => {
+      try {
+        await this.loadData();
+      } finally {
+        wx.stopPullDownRefresh();
+      }
+    })();
   },
 
   /**
@@ -92,7 +116,7 @@ Page({
    */
   goToSearch() {
     wx.navigateTo({
-      url: '/pages/search/search?title=' + encodeURIComponent('搜索')
+      url: `/pages/search/search?title=${encodeURIComponent('搜索')}`
     });
   },
 
@@ -101,13 +125,7 @@ Page({
    */
   filterMerchants(e) {
     const type = e.currentTarget.dataset.type;
-    const filterTitleMap = {
-      delivery: '校园内配送',
-      certified: '校内认证商家',
-      quick: '课间极速达',
-      rated: '师生高口碑'
-    };
-    const title = filterTitleMap[type] ? `筛选：${filterTitleMap[type]}` : '搜索';
+    const title = FILTER_TITLE_MAP[type] ? `筛选：${FILTER_TITLE_MAP[type]}` : '搜索';
     wx.navigateTo({
       url: `/pages/search/search?filter=${type}&title=${encodeURIComponent(title)}`
     });

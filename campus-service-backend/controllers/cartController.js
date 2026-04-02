@@ -16,6 +16,11 @@ const errorResponse = (res, code, message) => {
   });
 };
 
+const normalizeSpec = (spec) => {
+  if (spec === undefined || spec === null) return '';
+  return String(spec).trim();
+};
+
 // 获取购物车列表
 exports.getCartList = async (req, res, next) => {
   try {
@@ -152,13 +157,15 @@ exports.addToCart = async (req, res, next) => {
   try {
     const userId = req.user.id;
     const { product_id, merchant_id, quantity = 1, spec, selected = true } = req.body;
+    const specValue = normalizeSpec(spec);
+    const quantityNum = parseInt(quantity, 10);
     
     // 验证参数
     if (!product_id || !merchant_id) {
       return errorResponse(res, 400, '缺少必要参数');
     }
     
-    if (quantity < 1 || quantity > 99) {
+    if (!Number.isFinite(quantityNum) || quantityNum < 1 || quantityNum > 99) {
       return errorResponse(res, 400, '商品数量应在1-99之间');
     }
     
@@ -178,7 +185,14 @@ exports.addToCart = async (req, res, next) => {
       return errorResponse(res, 400, '商品已下架');
     }
     
-    if (quantity > product.stock) {
+    // 购物车里可能已有该商品（同规格），需要校验累加后不超过库存
+    const [existingItems] = await pool.query(
+      'SELECT quantity FROM cart WHERE user_id = ? AND product_id = ? AND spec = ? LIMIT 1',
+      [userId, product_id, specValue]
+    );
+    const existingQty = existingItems && existingItems.length ? Number(existingItems[0].quantity || 0) : 0;
+    const nextQty = existingQty + quantityNum;
+    if (nextQty > product.stock) {
       return errorResponse(res, 400, '商品库存不足');
     }
     
@@ -196,16 +210,36 @@ exports.addToCart = async (req, res, next) => {
       return errorResponse(res, 400, '商家休息中，暂不支持下单');
     }
     
-    // 使用INSERT ... ON DUPLICATE KEY UPDATE实现"存在则更新，不存在则新增"
-    await pool.query(
-      `INSERT INTO cart (user_id, product_id, merchant_id, quantity, spec, selected) 
-       VALUES (?, ?, ?, ?, ?, ?) 
-       ON DUPLICATE KEY UPDATE 
-       quantity = quantity + ?, 
-       selected = ?, 
-       updated_at = NOW()`,
-      [userId, product_id, merchant_id, quantity, spec, selected ? 1 : 0, quantity, selected ? 1 : 0]
-    );
+    // 使用 INSERT ... ON DUPLICATE KEY UPDATE 实现“存在则更新，不存在则新增”
+    // 兼容旧表：
+    // - spec 可能 NOT NULL 且无默认值 → 统一用 '' 兜底
+    // - selected 字段可能不存在 → 捕获错误后回退到不写 selected
+    const selectedValue = selected ? 1 : 0;
+    try {
+      await pool.query(
+        `INSERT INTO cart (user_id, product_id, merchant_id, quantity, spec, selected)
+         VALUES (?, ?, ?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE
+         quantity = quantity + ?,
+         selected = ?,
+         updated_at = NOW()`,
+        [userId, product_id, merchant_id, quantityNum, specValue, selectedValue, quantityNum, selectedValue]
+      );
+    } catch (e) {
+      // Unknown column 'selected'
+      if (e && e.code === 'ER_BAD_FIELD_ERROR' && String(e.message || '').toLowerCase().includes('selected')) {
+        await pool.query(
+          `INSERT INTO cart (user_id, product_id, merchant_id, quantity, spec)
+           VALUES (?, ?, ?, ?, ?)
+           ON DUPLICATE KEY UPDATE
+           quantity = quantity + ?,
+           updated_at = NOW()`,
+          [userId, product_id, merchant_id, quantityNum, specValue, quantityNum]
+        );
+      } else {
+        throw e;
+      }
+    }
     
     successResponse(res, null, '添加成功');
   } catch (error) {
@@ -220,6 +254,8 @@ exports.updateCartItem = async (req, res, next) => {
     const userId = req.user.id;
     const cartId = req.params.id;
     const { quantity, selected, spec } = req.body;
+    const quantityNum = quantity !== undefined ? parseInt(quantity, 10) : undefined;
+    const specValue = spec !== undefined ? normalizeSpec(spec) : undefined;
     
     // 验证参数
     if (!cartId) {
@@ -239,8 +275,8 @@ exports.updateCartItem = async (req, res, next) => {
     const productId = cartItems[0].product_id;
     
     // 如果更新数量，检查库存
-    if (quantity !== undefined) {
-      if (quantity < 1 || quantity > 99) {
+    if (quantityNum !== undefined) {
+      if (!Number.isFinite(quantityNum) || quantityNum < 1 || quantityNum > 99) {
         return errorResponse(res, 400, '商品数量应在1-99之间');
       }
       
@@ -253,7 +289,7 @@ exports.updateCartItem = async (req, res, next) => {
         return errorResponse(res, 404, '商品不存在');
       }
       
-      if (quantity > products[0].stock) {
+      if (quantityNum > products[0].stock) {
         return errorResponse(res, 400, '商品库存不足');
       }
     }
@@ -262,9 +298,9 @@ exports.updateCartItem = async (req, res, next) => {
     let updateFields = [];
     let updateParams = [];
     
-    if (quantity !== undefined) {
+    if (quantityNum !== undefined) {
       updateFields.push('quantity = ?');
-      updateParams.push(quantity);
+      updateParams.push(quantityNum);
     }
     
     if (selected !== undefined) {
@@ -272,9 +308,9 @@ exports.updateCartItem = async (req, res, next) => {
       updateParams.push(selected ? 1 : 0);
     }
     
-    if (spec !== undefined) {
+    if (specValue !== undefined) {
       updateFields.push('spec = ?');
-      updateParams.push(spec);
+      updateParams.push(specValue);
     }
     
     if (updateFields.length === 0) {
@@ -284,10 +320,44 @@ exports.updateCartItem = async (req, res, next) => {
     updateFields.push('updated_at = NOW()');
     updateParams.push(cartId, userId);
     
-    const [result] = await pool.query(
-      `UPDATE cart SET ${updateFields.join(', ')} WHERE id = ? AND user_id = ?`,
-      updateParams
-    );
+    let result;
+    try {
+      [result] = await pool.query(
+        `UPDATE cart SET ${updateFields.join(', ')} WHERE id = ? AND user_id = ?`,
+        updateParams
+      );
+    } catch (e) {
+      // Unknown column 'selected' (旧表)
+      if (e && e.code === 'ER_BAD_FIELD_ERROR' && String(e.message || '').toLowerCase().includes('selected')) {
+        // 去掉 selected 更新后重试
+        const rebuiltFields = [];
+        const rebuiltParams = [];
+
+        if (quantityNum !== undefined) {
+          rebuiltFields.push('quantity = ?');
+          rebuiltParams.push(quantityNum);
+        }
+
+        if (specValue !== undefined) {
+          rebuiltFields.push('spec = ?');
+          rebuiltParams.push(specValue);
+        }
+
+        if (rebuiltFields.length === 0) {
+          return errorResponse(res, 400, '没有需要更新的字段');
+        }
+
+        rebuiltFields.push('updated_at = NOW()');
+        rebuiltParams.push(cartId, userId);
+
+        [result] = await pool.query(
+          `UPDATE cart SET ${rebuiltFields.join(', ')} WHERE id = ? AND user_id = ?`,
+          rebuiltParams
+        );
+      } else {
+        throw e;
+      }
+    }
     
     if (result.affectedRows === 0) {
       return errorResponse(res, 404, '购物车商品不存在');

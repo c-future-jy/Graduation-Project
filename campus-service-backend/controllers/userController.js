@@ -142,19 +142,56 @@ exports.login = async (req, res, next) => {
  */
 exports.accountLogin = async (req, res, next) => {
   try {
-    const { phone, password, role = 1 } = req.body;
-    
-    if (!phone || !password) {
+    const { account, username, phone, password } = req.body;
+    const accountValue = String(account || username || '').trim();
+    const phoneValue = String(phone || '').trim();
+
+    if ((!accountValue && !phoneValue) || !password) {
       return res.status(400).json({
         success: false,
-        message: '请输入手机号和密码'
+        message: '请输入账号或手机号和密码'
       });
     }
-    
-    // 查找用户
+
+    const hasAccountColumn = await columnExists('user', 'account');
+    const hasUsernameColumn = await columnExists('user', 'username');
+    const hasPhoneColumn = await columnExists('user', 'phone');
+
+    const conditions = [];
+    const params = [];
+
+    if (accountValue) {
+      if (hasAccountColumn) {
+        conditions.push('account = ?');
+        params.push(accountValue);
+      }
+      if (hasUsernameColumn) {
+        conditions.push('username = ?');
+        params.push(accountValue);
+      }
+      // 兼容：用户把手机号当“账号”输入
+      if (hasPhoneColumn && /^\d{6,15}$/.test(accountValue)) {
+        conditions.push('phone = ?');
+        params.push(accountValue);
+      }
+    }
+
+    if (phoneValue && hasPhoneColumn) {
+      conditions.push('phone = ?');
+      params.push(phoneValue);
+    }
+
+    if (conditions.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: '请输入账号或手机号和密码'
+      });
+    }
+
+    // 查找用户（兼容 account/username/phone 任一字段）
     const [users] = await pool.query(
-      'SELECT id, openid, nickname, avatar_url, role, merchant_id, phone, password FROM user WHERE phone = ?',
-      [phone]
+      `SELECT id, openid, nickname, avatar_url, role, merchant_id, phone, account, password FROM user WHERE (${conditions.join(' OR ')})`,
+      params
     );
     
     if (users.length === 0) {
@@ -181,7 +218,6 @@ exports.accountLogin = async (req, res, next) => {
     }
     
     // 验证密码
-    const bcrypt = require('bcryptjs');
     const isPasswordValid = await bcrypt.compare(password, user.password);
     
     if (!isPasswordValid) {
@@ -209,6 +245,7 @@ exports.accountLogin = async (req, res, next) => {
           openid: user.openid,
           nickname: user.nickname,
           avatarUrl: user.avatar_url,
+          account: user.account || null,
           phone: user.phone,
           role: user.role,
           merchant_id: user.merchant_id
@@ -227,7 +264,11 @@ exports.accountLogin = async (req, res, next) => {
  */
 exports.register = async (req, res, next) => {
   try {
-    const { code, nickname, avatarUrl, phone, password, role = 1, username } = req.body;
+    const { code, nickname, avatarUrl, phone, account, password, role = 1, username } = req.body;
+    const phoneValue = String(phone || '').trim();
+    const accountValue = String(account || '').trim();
+    const hasAccountColumn = await columnExists('user', 'account');
+    const nicknameToSave = nickname || username || '新用户';
     
     let openid;
     
@@ -275,12 +316,73 @@ exports.register = async (req, res, next) => {
         });
       }
     } 
-    // 账号密码注册模式
-    else if (phone && password) {
+    // 账号密码注册模式（账号与手机号分离）
+    else if (accountValue && password) {
+      // 账号格式校验：6-11 位纯数字
+      if (!/^\d{6,11}$/.test(accountValue)) {
+        return res.status(400).json({
+          success: false,
+          message: '账号需6-11位纯数字'
+        });
+      }
+
+      // 账号唯一性校验（需要数据库已迁移出 user.account 列）
+      if (hasAccountColumn) {
+        const [existingUsersByAccount] = await pool.query(
+          'SELECT id FROM user WHERE account = ?',
+          [accountValue]
+        );
+        if (existingUsersByAccount.length > 0) {
+          return res.status(409).json({
+            success: false,
+            message: '账号已被注册'
+          });
+        }
+      } else {
+        console.warn('user.account 列不存在：请执行 migrate_schema_compat.js 添加 account 字段以启用账号注册/登录');
+      }
+
+      // 手机号可选：若提供则做格式校验与重复校验
+      if (phoneValue) {
+        const phoneRegex = /^1[3-9]\d{9}$/;
+        if (!phoneRegex.test(phoneValue)) {
+          return res.status(400).json({
+            success: false,
+            message: '请输入正确的手机号'
+          });
+        }
+
+        const [existingUsersByPhone] = await pool.query(
+          'SELECT id FROM user WHERE phone = ?',
+          [phoneValue]
+        );
+        if (existingUsersByPhone.length > 0) {
+          return res.status(409).json({
+            success: false,
+            message: '手机号已被注册'
+          });
+        }
+      }
+
+      // 检查手机号是否已存在
+      // 密码强度校验
+      const passwordRegex = /^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{6,18}$/;
+      if (!passwordRegex.test(password)) {
+        return res.status(400).json({
+          success: false,
+          message: '密码需6-18位且包含字母和数字'
+        });
+      }
+      
+      // 为账号密码注册生成默认openid
+      openid = `account_${accountValue}_${Date.now()}`;
+    }
+    // 兼容：旧版仍允许 phone+password 注册
+    else if (phoneValue && password) {
       // 检查手机号是否已存在
       const [existingUsersByPhone] = await pool.query(
         'SELECT id FROM user WHERE phone = ?',
-        [phone]
+        [phoneValue]
       );
       
       if (existingUsersByPhone.length > 0) {
@@ -300,7 +402,7 @@ exports.register = async (req, res, next) => {
       }
       
       // 为账号密码注册生成默认openid
-      openid = `phone_${phone}_${Date.now()}`;
+      openid = `phone_${phoneValue}_${Date.now()}`;
     } else {
       return res.status(400).json({
         success: false,
@@ -330,10 +432,19 @@ exports.register = async (req, res, next) => {
     }
     
     // 创建用户
-    const [result] = await pool.query(
-      'INSERT INTO user (openid, nickname, avatar_url, phone, password, username, role) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [openid, nickname || '新用户', avatarUrl || '', phone || null, hashedPassword, username || null, role]
-    );
+    let result;
+    if (hasAccountColumn) {
+      [result] = await pool.query(
+        'INSERT INTO user (openid, nickname, avatar_url, account, phone, password, username, role) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        [openid, nicknameToSave, avatarUrl || '', accountValue || null, phoneValue || null, hashedPassword, username || null, role]
+      );
+    } else {
+      // 兼容：数据库未迁移时仍可注册，但无法保存 account 字段
+      [result] = await pool.query(
+        'INSERT INTO user (openid, nickname, avatar_url, phone, password, username, role) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [openid, nicknameToSave, avatarUrl || '', phoneValue || null, hashedPassword, username || null, role]
+      );
+    }
     
     // 生成Token
     const token = generateToken({
@@ -352,9 +463,10 @@ exports.register = async (req, res, next) => {
         user: {
           id: result.insertId,
           openid,
-          nickname: nickname || '新用户',
+          nickname: nicknameToSave,
           avatarUrl: avatarUrl || '',
-          phone: phone || null,
+          account: hasAccountColumn ? (accountValue || null) : null,
+          phone: phoneValue || null,
           username: username || null,
           role
         }
@@ -479,7 +591,11 @@ exports.getProfile = async (req, res, next) => {
     const userId = req.user.id;
 
     const hasMerchantId = await columnExists('user', 'merchant_id');
+    const hasUsername = await columnExists('user', 'username');
+    const hasAccount = await columnExists('user', 'account');
     const fields = ['id', 'openid', 'nickname', 'avatar_url', 'phone', 'role', 'status', 'created_at'];
+    if (hasUsername) fields.push('username');
+    if (hasAccount) fields.push('account');
     if (hasMerchantId) fields.push('merchant_id');
 
     const [users] = await pool.query(
@@ -531,12 +647,38 @@ exports.getProfile = async (req, res, next) => {
 exports.updateProfile = async (req, res, next) => {
   try {
     const userId = req.user.id;
-    const { nickname, avatarUrl } = req.body;
-    
-    // 构建更新语句
+    const nickname = req.body && req.body.nickname;
+    const avatarUrl = req.body && (req.body.avatarUrl || req.body.avatar_url);
+    const phone = req.body && req.body.phone;
+
+    const fields = [];
+    const values = [];
+
+    if (nickname !== undefined) {
+      fields.push('nickname = ?');
+      values.push(nickname);
+    }
+
+    if (avatarUrl !== undefined) {
+      fields.push('avatar_url = ?');
+      values.push(avatarUrl);
+    }
+
+    if (phone !== undefined) {
+      fields.push('phone = ?');
+      values.push(phone);
+    }
+
+    if (fields.length === 0) {
+      return res.json({ success: true, message: '无需更新' });
+    }
+
+    fields.push('updated_at = NOW()');
+    values.push(userId);
+
     await pool.query(
-      'UPDATE user SET nickname = ?, avatar_url = ?, updated_at = NOW() WHERE id = ?',
-      [nickname, avatarUrl, userId]
+      `UPDATE user SET ${fields.join(', ')} WHERE id = ?`,
+      values
     );
     
     res.json({
@@ -640,7 +782,7 @@ exports.decryptWeixinPhone = async (req, res, next) => {
  */
 exports.getAdminUserList = async (req, res, next) => {
   try {
-    const { page = 1, pageSize = 10, role, keyword, startTime, endTime } = req.query;
+    const { page = 1, pageSize = 10, role, status, keyword, startTime, endTime } = req.query;
     const offset = (page - 1) * pageSize;
     
     let query = `
@@ -667,6 +809,11 @@ exports.getAdminUserList = async (req, res, next) => {
     if (role) {
       whereClause.push('u.role = ?');
       queryParams.push(role);
+    }
+
+    if (status !== undefined && status !== '') {
+      whereClause.push('u.status = ?');
+      queryParams.push(status);
     }
     
     if (keyword) {

@@ -7,19 +7,32 @@
       <input 
         class="search-input" 
         placeholder="输入昵称或手机号搜索" 
-        bindinput="searchKeyword"
+        value="{{searchKeyword}}"
+        bindinput="onSearchInput"
       />
       <button class="search-btn" bindtap="searchUsers">搜索</button>
     </view>
     <view class="filter-box">
-      <picker class="filter-picker" bindchange="roleFilter">
+      <picker
+        class="filter-picker"
+        range="{{roleOptions}}"
+        range-key="label"
+        value="{{roleIndex}}"
+        bindchange="onRoleChange"
+      >
         <view class="picker-text">
-          角色：{{roleFilter === '' ? '全部' : roleFilter === '3' ? '管理员' : roleFilter === '1' ? '学生' : '商家'}}
+          角色：{{roleLabel}}
         </view>
       </picker>
-      <picker class="filter-picker" bindchange="statusFilter">
+      <picker
+        class="filter-picker"
+        range="{{statusOptions}}"
+        range-key="label"
+        value="{{statusIndex}}"
+        bindchange="onStatusChange"
+      >
         <view class="picker-text">
-          状态：{{statusFilter === '' ? '全部' : statusFilter === '1' ? '正常' : '禁用'}}
+          状态：{{statusLabel}}
         </view>
       </picker>
     </view>
@@ -29,7 +42,7 @@
   <view class="batch-actions">
     <checkbox-group bindchange="selectAllUsers">
       <label class="checkbox-label">
-        <checkbox value="all" />
+        <checkbox value="all" checked="{{selectedUsers.length === users.length && users.length > 0}}" />
         <text>全选</text>
       </label>
     </checkbox-group>
@@ -56,7 +69,7 @@
           <view class="table-col select-col">
             <checkbox-group bindchange="selectUser" data-id="{{item.id}}">
               <label class="checkbox-label">
-                <checkbox value="{{item.id}}" checked="{{selectedUsers.includes(item.id)}}" />
+                <checkbox value="{{item.id}}" checked="{{selectedMap[item.id]}}" />
               </label>
             </checkbox-group>
           </view>

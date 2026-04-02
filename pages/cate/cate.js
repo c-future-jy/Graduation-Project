@@ -1,57 +1,94 @@
+const { getCategories, getMerchants } = require('../../utils/api');
+const { toNetworkUrl } = require('../../utils/url');
+
+const DEFAULT_ICON = '../../assets/images/message.jpg';
+const DEFAULT_MERCHANT_IMAGE = '../../assets/tabbar/biyetu.jpg';
+
+const CATEGORY_ID_MAP = {
+  1: 'breakfast',
+  2: 'lunch',
+  3: 'noodles',
+  4: 'rice',
+  5: 'salad',
+  6: 'snack',
+  7: 'drink',
+  8: 'market'
+};
+
+const FILTERS = [
+  { id: 'smart', name: '智能排序' },
+  { id: 'distance', name: '距离最近' },
+  { id: 'sales', name: '销量最高' },
+  { id: 'rating', name: '评分最高' },
+  { id: 'price_asc', name: '价格升序' },
+  { id: 'price_desc', name: '价格降序' }
+];
+
+function buildDefaultCategories() {
+  return [
+    { id: 'recommend', name: '推荐', icon: DEFAULT_ICON },
+    { id: 'breakfast', name: '早餐', icon: DEFAULT_ICON },
+    { id: 'lunch', name: '午餐套餐', icon: DEFAULT_ICON },
+    { id: 'noodles', name: '面食粉类', icon: DEFAULT_ICON },
+    { id: 'rice', name: '米饭快餐', icon: DEFAULT_ICON },
+    { id: 'salad', name: '轻食沙拉', icon: DEFAULT_ICON },
+    { id: 'snack', name: '小吃夜宵', icon: DEFAULT_ICON },
+    { id: 'drink', name: '饮品甜点', icon: DEFAULT_ICON },
+    { id: 'market', name: '超市便利', icon: DEFAULT_ICON }
+  ];
+}
+
+function normalizeCategoryKey(value) {
+  if (value == null) return '';
+  if (typeof value === 'number') return CATEGORY_ID_MAP[value] || String(value);
+  const s = String(value).trim();
+  if (!s) return '';
+  if (/^\d+$/.test(s)) {
+    return CATEGORY_ID_MAP[parseInt(s, 10)] || s;
+  }
+  return s;
+}
+
+function pickInitialCategory(categories, initialCategory) {
+  const desiredId = normalizeCategoryKey(initialCategory) || 'recommend';
+  let category = categories.find(cat => cat.id === desiredId);
+  if (category) return category;
+
+  // 兼容：首页可能传了更宽松的文本（如“奶茶”/“便利”）
+  const text = String(initialCategory || '');
+  const keywordMap = [
+    { keyword: '奶茶', id: 'drink' },
+    { keyword: '饮品', id: 'drink' },
+    { keyword: '便利', id: 'market' },
+    { keyword: '超市', id: 'market' },
+    { keyword: '水果', id: 'salad' },
+    { keyword: '轻食', id: 'salad' },
+    { keyword: '快餐', id: 'lunch' }
+  ];
+  const matched = keywordMap.find(k => text.includes(k.keyword));
+  if (matched) {
+    category = categories.find(cat => cat.id === matched.id);
+    if (category) return category;
+  }
+
+  return categories[0] || { id: 'recommend', name: '推荐' };
+}
+
 Page({
   data: {
-    // 分类数据
     categories: [],
-    // 分类ID映射关系
-    categoryMap: {
-      1: 'breakfast',
-      2: 'lunch',
-      3: 'noodles',
-      4: 'rice',
-      5: 'salad',
-      6: 'snack',
-      7: 'drink',
-      8: 'market'
-    },
-    // 反向分类ID映射关系
-    reverseCategoryMap: {
-      'breakfast': 1,
-      'lunch': 2,
-      'noodles': 3,
-      'rice': 4,
-      'salad': 5,
-      'snack': 6,
-      'drink': 7,
-      'market': 8
-    },
-    // 筛选标签
-    filters: [
-      { id: 'smart', name: '智能排序' },
-      { id: 'distance', name: '距离最近' },
-      { id: 'sales', name: '销量最高' },
-      { id: 'rating', name: '评分最高' },
-      { id: 'price_asc', name: '价格升序' },
-      { id: 'price_desc', name: '价格降序' }
-    ],
-    // 当前选中的分类
+    filters: FILTERS,
     currentCategory: 'recommend',
     currentCategoryName: '推荐',
-    // 当前选中的筛选标签
     currentFilter: 'smart',
-    // 商家数据
     merchants: [],
-    // 加载状态
     loading: false,
-    // 网络异常
-    networkError: false,
-    // 拼单引导
-    showGroupBuy: true
+    networkError: false
   },
 
   onLoad: function (options) {
     // 从本地存储中获取分类参数
     const selectedCategory = wx.getStorageSync('selectedCategory');
-    console.log('从本地存储中获取的selectedCategory:', selectedCategory);
     // 清除本地存储中的分类参数
     wx.removeStorageSync('selectedCategory');
     // 初始化加载分类列表
@@ -60,184 +97,33 @@ Page({
 
   // 加载分类列表
   loadCategories: function (initialCategory) {
-    console.log('分类页面接收到的initialCategory:', initialCategory);
-    // 导入API模块
-    const { getCategories } = require('../../utils/api');
-
-    // 调用API获取分类数据
     getCategories({ type: 1 })
       .then(res => {
-        // 处理API返回的数据
-        const categories = res.data.categories.map(category => ({
-          id: this.data.categoryMap[category.id] || category.id.toString(),
+        const list = (res && res.data && Array.isArray(res.data.categories)) ? res.data.categories : [];
+        const categories = list.map(category => ({
+          id: CATEGORY_ID_MAP[category.id] || String(category.id),
           name: category.name,
-          icon: category.icon || '../../assets/images/message.jpg'
+          icon: category.icon || DEFAULT_ICON
         }));
-
-        // 添加推荐分类
-        categories.unshift({
-          id: 'recommend',
-          name: '推荐',
-          icon: '../../assets/images/message.jpg'
-        });
-
-        this.setData({
-          categories: categories
-        });
-
-        // 初始化检查时间敏感分类
-        this.checkTimeSensitiveCategories();
-        
-        // 初始化加载分类数据
-        let categoryToLoad = initialCategory || 'recommend';
-        console.log('处理前的categoryToLoad:', categoryToLoad);
-        
-        // 处理数字ID，映射到对应的字符串ID
-        if (typeof categoryToLoad === 'string' && !isNaN(categoryToLoad)) {
-          categoryToLoad = this.data.categoryMap[parseInt(categoryToLoad)] || categoryToLoad;
-        } else if (typeof categoryToLoad === 'number') {
-          categoryToLoad = this.data.categoryMap[categoryToLoad] || categoryToLoad.toString();
-        }
-        
-        console.log('处理后的categoryToLoad:', categoryToLoad);
-        console.log('当前的categories:', categories);
-        
-        // 查找对应的分类
-        let category = categories.find(cat => cat.id === categoryToLoad);
-        console.log('根据categoryToLoad找到的category:', category);
-        
-        // 如果找不到，尝试直接使用initialCategory作为id查找
-        if (!category && initialCategory) {
-          category = categories.find(cat => cat.id === initialCategory);
-          console.log('根据initialCategory找到的category:', category);
-        }
-        
-        // 如果还是找不到，尝试根据分类名称查找
-        if (!category && initialCategory) {
-          // 尝试从首页传递的分类名称中提取关键词
-          const categoryNames = categories.map(cat => cat.name);
-          console.log('当前分类名称列表:', categoryNames);
-          
-          // 简单的关键词匹配
-          const keywords = ['奶茶', '便利', '水果', '快餐'];
-          const categoryKeywords = {
-            '奶茶': 'drink',
-            '便利': 'market',
-            '水果': 'salad',
-            '快餐': 'lunch'
-          };
-          
-          for (const keyword of keywords) {
-            if (initialCategory.toString().includes(keyword)) {
-              const mappedCategoryId = categoryKeywords[keyword];
-              category = categories.find(cat => cat.id === mappedCategoryId);
-              if (category) {
-                console.log('根据关键词', keyword, '找到的category:', category);
-                break;
-              }
-            }
-          }
-        }
-        
-        // 如果还是找不到，使用推荐分类
-        if (!category) {
-          category = categories[0];
-          console.log('使用推荐分类:', category);
-        }
-        
-        this.setData({
-          currentCategory: category.id,
-          currentCategoryName: category.name
-        });
-        
-        // 加载对应分类的商家数据
-        this.loadMerchants(category.id);
+        categories.unshift({ id: 'recommend', name: '推荐', icon: DEFAULT_ICON });
+        this.initCategoriesAndLoad(categories, initialCategory);
       })
-      .catch(err => {
-        console.error('获取分类数据失败:', err);
-        // 错误时使用默认分类
-        const defaultCategories = [
-          {
-            id: 'recommend',
-            name: '推荐',
-            icon: '../../assets/images/message.jpg'
-          },
-          {
-            id: 'breakfast',
-            name: '早餐',
-            icon: '../../assets/images/message.jpg'
-          },
-          {
-            id: 'lunch',
-            name: '午餐套餐',
-            icon: '../../assets/images/message.jpg'
-          },
-          {
-            id: 'noodles',
-            name: '面食粉类',
-            icon: '../../assets/images/message.jpg'
-          },
-          {
-            id: 'rice',
-            name: '米饭快餐',
-            icon: '../../assets/images/message.jpg'
-          },
-          {
-            id: 'salad',
-            name: '轻食沙拉',
-            icon: '../../assets/images/message.jpg'
-          },
-          {
-            id: 'snack',
-            name: '小吃夜宵',
-            icon: '../../assets/images/message.jpg'
-          },
-          {
-            id: 'drink',
-            name: '饮品甜点',
-            icon: '../../assets/images/message.jpg'
-          },
-          {
-            id: 'market',
-            name: '超市便利',
-            icon: '../../assets/images/message.jpg'
-          }
-        ];
-
-        this.setData({
-          categories: defaultCategories
-        });
-
-        // 初始化检查时间敏感分类
-        this.checkTimeSensitiveCategories();
-        
-        // 初始化加载分类数据
-        let categoryToLoad = initialCategory || 'recommend';
-        // 处理数字ID，映射到对应的字符串ID
-        if (typeof categoryToLoad === 'string' && !isNaN(categoryToLoad)) {
-          categoryToLoad = this.data.categoryMap[parseInt(categoryToLoad)] || categoryToLoad;
-        } else if (typeof categoryToLoad === 'number') {
-          categoryToLoad = this.data.categoryMap[categoryToLoad] || categoryToLoad.toString();
-        }
-        // 查找对应的分类
-        let category = defaultCategories.find(cat => cat.id === categoryToLoad);
-        // 如果找不到，尝试直接使用initialCategory作为id查找
-        if (!category && initialCategory) {
-          category = defaultCategories.find(cat => cat.id === initialCategory);
-        }
-        // 如果还是找不到，使用推荐分类
-        if (!category) {
-          category = defaultCategories[0];
-        }
-        
-        this.setData({
-          currentCategory: category.id,
-          currentCategoryName: category.name
-        });
-        
-        // 加载对应分类的商家数据
-        this.loadMerchants(category.id);
+      .catch(() => {
+        this.initCategoriesAndLoad(buildDefaultCategories(), initialCategory);
       });
+  },
+
+  initCategoriesAndLoad(categories, initialCategory) {
+    this.setData({ categories });
+    this.checkTimeSensitiveCategories();
+
+    const picked = pickInitialCategory(categories, initialCategory);
+    this.setData({
+      currentCategory: picked.id,
+      currentCategoryName: picked.name
+    });
+
+    this.loadMerchants(picked.id);
   },
 
   onShow: function () {
@@ -272,6 +158,7 @@ Page({
   switchCategory: function (e) {
     const categoryId = e.currentTarget.dataset.id;
     const category = this.data.categories.find(cat => cat.id === categoryId);
+    if (!category) return;
     const categoryName = category.name;
     
     // 检查是否是早餐分类且不在早餐时间
@@ -312,17 +199,15 @@ Page({
       networkError: false
     });
 
-    // 导入API模块
-    const { getMerchants } = require('../../utils/api');
-
     // 调用API获取商家数据
     getMerchants({ category: categoryId })
       .then(res => {
         // 处理API返回的数据
-        const merchants = res.data.merchants.map(merchant => ({
+        const list = (res && res.data && Array.isArray(res.data.merchants)) ? res.data.merchants : [];
+        const merchants = list.map(merchant => ({
           id: merchant.id,
           name: merchant.name,
-          image: merchant.logo || '../../assets/tabbar/biyetu.jpg',
+          image: toNetworkUrl(merchant.logo) || DEFAULT_MERCHANT_IMAGE,
           address: merchant.address || '',
           phone: merchant.phone || '',
           description: merchant.description || '',

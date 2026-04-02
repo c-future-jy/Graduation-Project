@@ -6,6 +6,46 @@ const {
   auditAdminMerchant
 } = require('../../../utils/api');
 
+const STATUS_OPTIONS = [
+  { label: '全部', value: '' },
+  { label: '营业中', value: '1' },
+  { label: '休息中', value: '0' }
+];
+
+const AUDIT_OPTIONS = [
+  { label: '全部', value: '' },
+  { label: '待审核', value: '1' },
+  { label: '已通过', value: '2' },
+  { label: '已拒绝', value: '3' }
+];
+
+function isProvided(value) {
+  return value !== undefined && value !== null && value !== '';
+}
+
+function toStr(value) {
+  if (value === undefined || value === null) return '';
+  return String(value);
+}
+
+function toInt(value) {
+  if (value === undefined || value === null || value === '') return 0;
+  const n = typeof value === 'string' ? parseInt(value, 10) : value;
+  return Number.isFinite(n) ? n : 0;
+}
+
+function getMerchantStatusText(status) {
+  return toInt(status) === 1 ? '营业中' : '休息中';
+}
+
+function getAuditStatusText(auditStatus) {
+  const a = toInt(auditStatus);
+  if (a === 1) return '待审核';
+  if (a === 2) return '已通过';
+  if (a === 3) return '已拒绝';
+  return '-';
+}
+
 Page({
   /**
    * 页面的初始数据
@@ -21,18 +61,10 @@ Page({
     statusFilter: '',
     auditFilter: '',
     selectedMerchants: [],
+    selectedMap: {},
 
-    statusOptions: [
-      { label: '全部', value: '' },
-      { label: '营业中', value: '1' },
-      { label: '休息中', value: '0' }
-    ],
-    auditOptions: [
-      { label: '全部', value: '' },
-      { label: '待审核', value: '1' },
-      { label: '已通过', value: '2' },
-      { label: '已拒绝', value: '3' }
-    ],
+    statusOptions: STATUS_OPTIONS,
+    auditOptions: AUDIT_OPTIONS,
     statusPickerIndex: 0,
     auditPickerIndex: 0,
 
@@ -53,18 +85,7 @@ Page({
    */
   onLoad(options) {
     this.checkLoginStatus();
-    const initialTitle = this.safeDecodeURIComponent(options && options.title);
-    wx.setNavigationBarTitle({ title: initialTitle || '商家管理' });
-    this.loadMerchants();
-  },
-
-  safeDecodeURIComponent(value) {
-    if (!value) return '';
-    try {
-      return decodeURIComponent(value);
-    } catch (e) {
-      return value;
-    }
+    this.reloadMerchants();
   },
 
   /**
@@ -81,65 +102,78 @@ Page({
     }
   },
 
+  buildQueryParams() {
+    const params = {
+      page: this.data.page,
+      pageSize: this.data.pageSize
+    };
+
+    if (isProvided(this.data.statusFilter)) params.status = this.data.statusFilter;
+    if (isProvided(this.data.auditFilter)) params.audit_status = this.data.auditFilter;
+    const keyword = String(this.data.searchKeyword || '').trim();
+    if (keyword) params.keyword = keyword;
+    return params;
+  },
+
+  reloadMerchants() {
+    this.setData({
+      page: 1,
+      merchants: [],
+      hasMore: true,
+      selectedMerchants: [],
+      selectedMap: {}
+    });
+    this.loadMerchants();
+  },
+
   /**
    * 加载商家列表
    */
   async loadMerchants() {
     if (this.data.loading || !this.data.hasMore) return;
-    
     this.setData({ loading: true });
-    
+
     try {
-      // 调用真实API获取数据
-      const params = {
-        page: this.data.page,
-        pageSize: this.data.pageSize,
-        status: this.data.statusFilter,
-        audit_status: this.data.auditFilter,
-        keyword: this.data.searchKeyword
-      };
-      
-      const res = await getAdminMerchantList(params);
-      
-      const merchants = (res.data.merchants || []).map(merchant => ({
-        id: merchant.id,
-        name: merchant.name,
-        owner: merchant.owner_name,
-        phone: merchant.phone,
-        address: merchant.address,
-        status: (typeof merchant.status === 'string' ? parseInt(merchant.status, 10) : merchant.status),
-        statusText: (typeof merchant.status === 'string' ? parseInt(merchant.status, 10) : merchant.status) === 1 ? '营业中' : '休息中',
-        auditStatus: (typeof merchant.audit_status === 'string' ? parseInt(merchant.audit_status, 10) : merchant.audit_status),
-        auditStatusText: (() => {
-          const a = typeof merchant.audit_status === 'string' ? parseInt(merchant.audit_status, 10) : merchant.audit_status;
-          if (a === 1) return '待审核';
-          if (a === 2) return '已通过';
-          if (a === 3) return '已拒绝';
-          return '-';
-        })(),
-        createdAt: merchant.created_at
-      }));
-      
-      const total = (res.data.pagination && res.data.pagination.total) || 0;
+      const res = await getAdminMerchantList(this.buildQueryParams());
+      const list = (res && res.data && res.data.merchants) || [];
+
+      const merchants = (Array.isArray(list) ? list : []).map(merchant => {
+        const status = toInt(merchant.status);
+        const auditStatus = toInt(merchant.audit_status);
+        return {
+          id: toStr(merchant.id),
+          name: merchant.name,
+          owner: merchant.owner_name,
+          phone: merchant.phone,
+          address: merchant.address,
+          status,
+          statusText: getMerchantStatusText(status),
+          auditStatus,
+          auditStatusText: getAuditStatusText(auditStatus),
+          createdAt: merchant.created_at
+        };
+      });
+
+      const total = (res && res.data && res.data.pagination && res.data.pagination.total) || 0;
       const hasMore = this.data.page * this.data.pageSize < total;
-      
+
       this.setData({
-        merchants: this.data.page === 1 ? merchants : [...this.data.merchants, ...merchants],
+        merchants: this.data.page === 1 ? merchants : this.data.merchants.concat(merchants),
         total,
-        hasMore,
-        loading: false
+        hasMore
       });
     } catch (error) {
       console.error('加载商家列表失败:', error);
-      this.setData({ loading: false });
       wx.showToast({ title: '加载失败', icon: 'none' });
+    } finally {
+      this.setData({ loading: false });
     }
   },
 
   /**
    * 搜索关键词变化
    */
-  searchKeyword(e) {
+  onSearchInput(e) {
     this.setData({ searchKeyword: e.detail.value });
   },
 
@@ -147,8 +181,7 @@ Page({
    * 搜索商家
    */
   searchMerchants() {
-    this.setData({ page: 1, merchants: [] });
-    this.loadMerchants();
+    this.reloadMerchants();
   },
 
   /**
@@ -157,8 +190,8 @@ Page({
   onStatusPickerChange(e) {
     const index = parseInt(e.detail.value, 10) || 0;
     const option = this.data.statusOptions[index] || this.data.statusOptions[0];
-    this.setData({ statusPickerIndex: index, statusFilter: option.value, page: 1, merchants: [] });
-    this.loadMerchants();
+    this.setData({ statusPickerIndex: index, statusFilter: option.value });
+    this.reloadMerchants();
   },
 
   /**
@@ -167,108 +200,87 @@ Page({
   onAuditPickerChange(e) {
     const index = parseInt(e.detail.value, 10) || 0;
     const option = this.data.auditOptions[index] || this.data.auditOptions[0];
-    this.setData({ auditPickerIndex: index, auditFilter: option.value, page: 1, merchants: [] });
-    this.loadMerchants();
+    this.setData({ auditPickerIndex: index, auditFilter: option.value });
+    this.reloadMerchants();
   },
 
   /**
    * 选择商家
    */
   selectMerchant(e) {
-    const merchantId = e.detail.value[0];
-    let selectedMerchants = this.data.selectedMerchants;
-    
-    if (merchantId) {
-      if (!selectedMerchants.includes(merchantId)) {
-        selectedMerchants.push(merchantId);
-      }
+    const id = toStr(e.currentTarget.dataset.id);
+    const checked = Array.isArray(e.detail.value) && e.detail.value.length > 0;
+
+    const selectedMap = { ...this.data.selectedMap };
+    let selectedMerchants = Array.isArray(this.data.selectedMerchants) ? [...this.data.selectedMerchants] : [];
+
+    if (checked) {
+      selectedMap[id] = true;
+      if (!selectedMerchants.includes(id)) selectedMerchants.push(id);
     } else {
-      // 取消选择，需要找到当前取消的商家ID
-      const currentId = e.currentTarget.dataset.id;
-      selectedMerchants = selectedMerchants.filter(id => id !== currentId);
+      delete selectedMap[id];
+      selectedMerchants = selectedMerchants.filter(x => toStr(x) !== id);
     }
-    
-    this.setData({ selectedMerchants });
+
+    this.setData({ selectedMap, selectedMerchants });
   },
 
   /**
    * 全选商家
    */
   selectAllMerchants(e) {
-    const allSelected = e.detail.value[0];
-    let selectedMerchants = [];
-    
-    if (allSelected) {
-      selectedMerchants = this.data.merchants.map(merchant => merchant.id);
+    const checked = Array.isArray(e.detail.value) && e.detail.value.length > 0;
+    if (!checked) {
+      this.setData({ selectedMerchants: [], selectedMap: {} });
+      return;
     }
-    
-    this.setData({ selectedMerchants });
+
+    const selectedMerchants = this.data.merchants.map(m => toStr(m.id));
+    const selectedMap = {};
+    selectedMerchants.forEach(id => {
+      selectedMap[id] = true;
+    });
+    this.setData({ selectedMerchants, selectedMap });
   },
 
-  /**
-   * 批量禁用商家
-   */
+  batchUpdateMerchantStatus(targetStatus) {
+    const ids = this.data.selectedMerchants;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      wx.showToast({ title: '请选择商家', icon: 'none' });
+      return;
+    }
+
+    const isEnable = targetStatus === 1;
+    const actionText = isEnable ? '启用' : '禁用';
+    wx.showModal({
+      title: `批量${actionText}`,
+      content: `确定要${actionText}选中的 ${ids.length} 个商家吗？`,
+      success: async (res) => {
+        if (!res.confirm) return;
+        wx.showLoading({ title: '处理中...' });
+        try {
+          for (const id of ids) {
+            await updateAdminMerchantStatus(id, targetStatus);
+          }
+          wx.showToast({ title: `${actionText}成功` });
+          this.setData({ selectedMerchants: [], selectedMap: {} });
+          this.reloadMerchants();
+        } catch (error) {
+          console.error(`批量${actionText}失败:`, error);
+          wx.showToast({ title: error.message || `${actionText}失败`, icon: 'none' });
+        } finally {
+          wx.hideLoading();
+        }
+      }
+    });
+  },
+
   batchDisableMerchants() {
-    if (this.data.selectedMerchants.length === 0) {
-      wx.showToast({ title: '请选择要禁用的商家', icon: 'none' });
-      return;
-    }
-    
-    wx.showModal({
-      title: '批量禁用',
-      content: `确定要禁用选中的 ${this.data.selectedMerchants.length} 个商家吗？`,
-      success: async (res) => {
-        if (!res.confirm) return;
-        wx.showLoading({ title: '处理中...' });
-        try {
-          const ids = this.data.selectedMerchants;
-          for (const id of ids) {
-            await updateAdminMerchantStatus(id, 0);
-          }
-          wx.showToast({ title: '禁用成功' });
-          this.setData({ selectedMerchants: [], page: 1, merchants: [], hasMore: true });
-          this.loadMerchants();
-        } catch (error) {
-          console.error('批量禁用失败:', error);
-          wx.showToast({ title: error.message || '禁用失败', icon: 'none' });
-        } finally {
-          wx.hideLoading();
-        }
-      }
-    });
+    this.batchUpdateMerchantStatus(0);
   },
 
-  /**
-   * 批量启用商家
-   */
   batchEnableMerchants() {
-    if (this.data.selectedMerchants.length === 0) {
-      wx.showToast({ title: '请选择要启用的商家', icon: 'none' });
-      return;
-    }
-    
-    wx.showModal({
-      title: '批量启用',
-      content: `确定要启用选中的 ${this.data.selectedMerchants.length} 个商家吗？`,
-      success: async (res) => {
-        if (!res.confirm) return;
-        wx.showLoading({ title: '处理中...' });
-        try {
-          const ids = this.data.selectedMerchants;
-          for (const id of ids) {
-            await updateAdminMerchantStatus(id, 1);
-          }
-          wx.showToast({ title: '启用成功' });
-          this.setData({ selectedMerchants: [], page: 1, merchants: [], hasMore: true });
-          this.loadMerchants();
-        } catch (error) {
-          console.error('批量启用失败:', error);
-          wx.showToast({ title: error.message || '启用失败', icon: 'none' });
-        } finally {
-          wx.hideLoading();
-        }
-      }
-    });
+    this.batchUpdateMerchantStatus(1);
   },
 
   /**
@@ -276,27 +288,25 @@ Page({
    */
   toggleMerchantStatus(e) {
     const merchantId = e.currentTarget.dataset.id;
-    const status = e.currentTarget.dataset.status;
+    const status = toInt(e.currentTarget.dataset.status);
     const action = status === 1 ? '禁用' : '启用';
     
     wx.showModal({
       title: action + '商家',
       content: `确定要${action}该商家吗？`,
-      success: (res) => {
-        if (res.confirm) {
-          wx.showLoading({ title: '处理中...' });
-          updateAdminMerchantStatus(merchantId, status === 1 ? 0 : 1)
-            .then(() => {
-              wx.hideLoading();
-              wx.showToast({ title: action + '成功' });
-              this.setData({ page: 1, merchants: [], selectedMerchants: [] });
-              this.loadMerchants();
-            })
-            .catch((err) => {
-              wx.hideLoading();
-              console.error(action + '商家失败:', err);
-              wx.showToast({ title: err.message || '操作失败', icon: 'none' });
-            });
+      success: async (res) => {
+        if (!res.confirm) return;
+        wx.showLoading({ title: '处理中...' });
+        try {
+          await updateAdminMerchantStatus(merchantId, status === 1 ? 0 : 1);
+          wx.showToast({ title: action + '成功' });
+          this.setData({ selectedMerchants: [], selectedMap: {} });
+          this.reloadMerchants();
+        } catch (err) {
+          console.error(action + '商家失败:', err);
+          wx.showToast({ title: err.message || '操作失败', icon: 'none' });
+        } finally {
+          wx.hideLoading();
         }
       }
     });
@@ -356,8 +366,8 @@ Page({
         wx.hideLoading();
         wx.showToast({ title: auditStatus === 2 ? '已通过' : '已驳回' });
         this.closeAudit();
-        this.setData({ page: 1, merchants: [], selectedMerchants: [] });
-        this.loadMerchants();
+        this.setData({ selectedMerchants: [], selectedMap: {} });
+        this.reloadMerchants();
       })
       .catch((err) => {
         wx.hideLoading();
@@ -370,68 +380,64 @@ Page({
   /**
    * 查看商家详情
    */
-  viewMerchantDetail(e) {
+  async viewMerchantDetail(e) {
     const merchantId = e.currentTarget.dataset.id;
     this.setData({ detailVisible: true, detailLoading: true, detail: null });
 
-    getAdminMerchantDetail(merchantId)
-      .then((res) => {
-        const data = res.data || {};
-        const merchant = data.merchant || {};
-        const owner = data.owner || null;
-        const products = data.products || [];
-        const orderStats = data.orderStats || {};
-        const feedbackStats = data.feedbackStats || {};
-        const revenueStats = data.revenueStats || {};
-        const feedbacks = data.feedbacks || [];
+    try {
+      const res = await getAdminMerchantDetail(merchantId);
+      const data = (res && res.data) || {};
+      const merchant = data.merchant || {};
+      const owner = data.owner || null;
+      const products = Array.isArray(data.products) ? data.products : [];
+      const orderStats = data.orderStats || {};
+      const feedbackStats = data.feedbackStats || {};
+      const revenueStats = data.revenueStats || {};
+      const feedbacks = Array.isArray(data.feedbacks) ? data.feedbacks : [];
 
-        this.setData({
-          detailLoading: false,
-          detail: {
-            basic: {
-              id: merchant.id,
-              name: merchant.name,
-              address: merchant.address,
-              phone: merchant.phone,
-              logo: merchant.logo
-            },
-            owner,
-            status: merchant.status,
-            statusText: merchant.status === 1 ? '营业中' : '休息中/禁用',
-            auditStatus: typeof merchant.audit_status === 'string' ? parseInt(merchant.audit_status, 10) : merchant.audit_status,
-            auditStatusText: (() => {
-              const a = typeof merchant.audit_status === 'string' ? parseInt(merchant.audit_status, 10) : merchant.audit_status;
-              if (a === 1) return '待审核';
-              if (a === 2) return '已通过';
-              if (a === 3) return '已拒绝';
-              return '-';
-            })(),
-            products: products.map(p => ({
-              id: p.id,
-              name: p.name,
-              stock: p.stock,
-              status: p.status,
-              statusText: p.status === 1 ? '上架' : '下架'
-            })),
-            stats: {
-              orderCount: orderStats.order_count || 0,
-              processingCount: orderStats.processing_count || 0,
-              finishedCount: orderStats.finished_count || 0,
-              totalRevenue: revenueStats.total_revenue || 0
-            },
-            feedback: {
-              avgRating: feedbackStats.avg_rating || 0,
-              count: feedbackStats.feedback_count || 0,
-              list: feedbacks
-            }
+      const status = toInt(merchant.status);
+      const auditStatus = toInt(merchant.audit_status);
+
+      this.setData({
+        detail: {
+          basic: {
+            id: merchant.id,
+            name: merchant.name,
+            address: merchant.address,
+            phone: merchant.phone,
+            logo: merchant.logo
+          },
+          owner,
+          status,
+          statusText: status === 1 ? '营业中' : '休息中/禁用',
+          auditStatus,
+          auditStatusText: getAuditStatusText(auditStatus),
+          products: products.map(p => ({
+            id: p.id,
+            name: p.name,
+            stock: p.stock,
+            status: p.status,
+            statusText: toInt(p.status) === 1 ? '上架' : '下架'
+          })),
+          stats: {
+            orderCount: orderStats.order_count || 0,
+            processingCount: orderStats.processing_count || 0,
+            finishedCount: orderStats.finished_count || 0,
+            totalRevenue: revenueStats.total_revenue || 0
+          },
+          feedback: {
+            avgRating: feedbackStats.avg_rating || 0,
+            count: feedbackStats.feedback_count || 0,
+            list: feedbacks
           }
-        });
-      })
-      .catch((err) => {
-        console.error('加载商家详情失败:', err);
-        this.setData({ detailLoading: false });
-        wx.showToast({ title: err.message || '加载失败', icon: 'none' });
+        }
       });
+    } catch (err) {
+      console.error('加载商家详情失败:', err);
+      wx.showToast({ title: err.message || '加载失败', icon: 'none' });
+    } finally {
+      this.setData({ detailLoading: false });
+    }
   },
 
   closeMerchantDetail() {
@@ -452,9 +458,7 @@ Page({
    * 页面相关事件处理函数--监听用户下拉动作
    */
   onPullDownRefresh() {
-    this.setData({ page: 1, merchants: [] });
-    Promise.resolve(this.loadMerchants()).finally(() => {
-      wx.stopPullDownRefresh();
-    });
+    this.setData({ page: 1, merchants: [], hasMore: true, selectedMerchants: [], selectedMap: {} });
+    Promise.resolve(this.loadMerchants()).finally(() => wx.stopPullDownRefresh());
   }
 })

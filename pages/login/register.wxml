@@ -10,6 +10,8 @@
         placeholder="请输入用户名（最多6个字符）" 
         value="{{username}}" 
         bindinput="onUsernameChange"
+        bindblur="onUsernameChange"
+        bindconfirm="onUsernameChange"
         maxlength="6"
       />
       <view class="input-counter">
@@ -79,6 +81,7 @@
         value="{{confirmPassword}}" 
         bindinput="onConfirmPasswordChange"
         password
+        maxlength="8"
       />
     </view>
 

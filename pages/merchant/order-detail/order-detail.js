@@ -1,11 +1,27 @@
 // pages/merchant/order-detail/order-detail.js
 const { request } = require('../../../utils/api');
+const { toNetworkUrl } = require('../../../utils/url');
 
 Page({
   data: {
     orderInfo: {},
     loading: true,
     orderId: null
+  },
+
+  getErrMsg(err, fallback = '操作失败') {
+    if (!err) return fallback;
+    if (typeof err === 'string') return err;
+    if (err.message) return err.message;
+    if (err.data && err.data.message) return err.data.message;
+    return fallback;
+  },
+
+  toMoney(value) {
+    if (value === null || value === undefined || value === '') return '0.00';
+    const n = Number(value);
+    if (!Number.isFinite(n)) return '0.00';
+    return n.toFixed(2);
   },
 
   onLoad: function (options) {
@@ -24,14 +40,28 @@ Page({
     
     wx.showLoading({ title: '加载中...' });
     
-    request({
+    return request({
       url: `/orders/merchant/orders/${orderId}`,
       method: 'GET'
     }).then(res => {
       wx.hideLoading();
       if (res.success) {
+        const order = (res.data && res.data.order) ? res.data.order : {};
+        const totalAmount = order.total_amount ?? order.amount ?? 0;
+
+        const products = Array.isArray(order.products) ? order.products : [];
+        const normalizedProducts = products.map((p) => ({
+          ...p,
+          image: toNetworkUrl(p.image || p.product_image)
+        }));
+
         this.setData({
-          orderInfo: res.data.order,
+          orderInfo: {
+            ...order,
+            user_avatar: toNetworkUrl(order.user_avatar),
+            products: normalizedProducts,
+            displayAmount: this.toMoney(totalAmount)
+          },
           loading: false
         });
       } else {
@@ -66,26 +96,33 @@ Page({
   },
 
   // 执行发货
-  shipOrder: function (orderId) {
+  async shipOrder(orderId) {
     wx.showLoading({ title: '发货中...' });
+    try {
+      const res = await request({
+        url: `/orders/merchant/orders/${orderId}/ship`,
+        method: 'POST',
+        silent: true
+      });
 
-    request({
-      url: `/orders/merchant/orders/${orderId}/ship`,
-      method: 'POST'
-    }).then(res => {
-      wx.hideLoading();
-      if (res.success) {
+      if (res && res.success) {
         wx.showToast({ title: '发货成功', icon: 'success' });
+        try {
+          wx.setStorageSync('merchantOrdersNeedRefresh', '1');
+        } catch (_) {
+          // ignore
+        }
         // 刷新订单详情
-        this.loadOrderDetail();
+        await this.loadOrderDetail();
       } else {
-        wx.showToast({ title: res.message || '发货失败', icon: 'none' });
+        wx.showToast({ title: (res && res.message) || '发货失败', icon: 'none' });
       }
-    }).catch(err => {
+    } catch (err) {
       console.error('发货失败:', err);
+      wx.showToast({ title: this.getErrMsg(err, '发货失败'), icon: 'none' });
+    } finally {
       wx.hideLoading();
-      wx.showToast({ title: '网络错误', icon: 'none' });
-    });
+    }
   },
 
   // 处理取消订单

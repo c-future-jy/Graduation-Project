@@ -148,8 +148,10 @@
 .goods-item {
   display: flex;
   padding: 20rpx 0;
-  border-bottom: 1rpx solid #f0f0f0;
   position: relative;
+  align-items: center;
+  box-sizing: border-box;
+  border-bottom: 1rpx solid #f0f0f0;
 }
 
 .goods-item:last-child {
@@ -216,14 +218,15 @@
 }
 
 .quantity-btn {
-  width: 60rpx;
-  height: 60rpx;
+  width: 44rpx;
+  height: 44rpx;
   display: flex;
   align-items: center;
   justify-content: center;
   background-color: #f5f5f5;
-  font-size: 32rpx;
+  font-size: 28rpx;
   border: none;
+  padding: 0;
 }
 
 .quantity-btn:disabled {
@@ -231,10 +234,10 @@
 }
 
 .quantity-input {
-  width: 80rpx;
-  height: 60rpx;
+  width: 60rpx;
+  height: 44rpx;
   text-align: center;
-  font-size: 32rpx;
+  font-size: 28rpx;
   border: none;
   border-left: 1rpx solid #e0e0e0;
   border-right: 1rpx solid #e0e0e0;
@@ -260,26 +263,7 @@
   color: white;
 }
 
-/* 删除按钮 */
-.delete-btn {
-  position: absolute;
-  right: 0;
-  top: 0;
-  bottom: 0;
-  width: 120rpx;
-  background-color: #ff4757;
-  color: white;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 32rpx;
-  transform: translateX(100%);
-  transition: transform 0.3s ease;
-}
 
-.goods-item:hover .delete-btn {
-  transform: translateX(0);
-}
 
 /* 失效商品 */
 .invalid-section {
@@ -430,61 +414,3 @@
   background-color: #ccc;
 }
 
-/* 编辑模式 */
-.edit-bar {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 100rpx;
-  background-color: white;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0 20rpx;
-  border-top: 1rpx solid #f0f0f0;
-  z-index: 100;
-}
-
-.edit-left {
-  display: flex;
-  align-items: center;
-}
-
-.edit-checkbox {
-  transform: scale(1.2);
-  margin-right: 10rpx;
-}
-
-.edit-text {
-  font-size: 32rpx;
-  color: #333;
-}
-
-.edit-right {
-  display: flex;
-  align-items: center;
-}
-
-.delete-all-button {
-  width: 200rpx;
-  height: 80rpx;
-  background-color: #ff4757;
-  color: white;
-  font-size: 28rpx;
-  border-radius: 40rpx;
-  margin-right: 20rpx;
-}
-
-.delete-all-button:disabled {
-  background-color: #ccc;
-}
-
-.exit-edit-button {
-  width: 120rpx;
-  height: 80rpx;
-  background-color: #3498db;
-  color: white;
-  font-size: 32rpx;
-  border-radius: 40rpx;
-}

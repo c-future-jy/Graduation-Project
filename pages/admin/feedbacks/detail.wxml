@@ -37,7 +37,7 @@
     
     <view class="detail-item">
       <text class="label">提交时间：</text>
-      <text class="value">{{feedback.createdAt}}</text>
+      <text class="value">{{feedback.formattedTime}}</text>
     </view>
     
     <!-- 回复/驳回内容展示 -->

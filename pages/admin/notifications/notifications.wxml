@@ -30,7 +30,7 @@
           <svg width="80" height="80" viewBox="0 0 80 80">
             <circle class="progress-background" cx="40" cy="40" r="36" />
             <circle class="progress-bar" cx="40" cy="40" r="36" 
-                    style="stroke-dasharray: {{2 * Math.PI * 36}}; stroke-dashoffset: {{2 * Math.PI * 36 * (1 - (progressAngle || 0) / 360)}}" />
+                    style="stroke-dasharray: {{progressCircumference}}; stroke-dashoffset: {{progressDashOffset}}" />
           </svg>
           <text class="progress-text">{{readStats.readRate || '0%'}}</text>
         </view>
@@ -109,7 +109,7 @@
 
     <!-- 内容列表 -->
     <view class="table-row" wx:for="{{notifications}}" wx:key="id">
-      <view class="table-cell cell-checkbox"><checkbox value="{{item.id}}" checked="{{selectedNotifications.indexOf(item.id) > -1}}" bindchange="toggleNotificationSelection" data-id="{{item.id}}" /></view>
+      <view class="table-cell cell-checkbox"><checkbox value="{{item.id}}" checked="{{selectedMap[item.id]}}" bindchange="toggleNotificationSelection" data-id="{{item.id}}" /></view>
       <view class="table-cell cell-id">{{item.id}}</view>
       <view class="table-cell cell-title">{{item.title}}</view>
       <view class="table-cell cell-type">

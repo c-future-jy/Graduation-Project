@@ -3,13 +3,13 @@
   <!-- 用户信息卡片 -->
   <view class="user-card" bindtap="goToLogin" wx:if="{{!isLogin}}">
     <view class="user-info">
-      <image class="avatar" src="/assets/images/morentouxiang.jpg" mode="aspectFill" bindtap="goToLogin"/>
-      <view class="user-detail" bindtap="goToLogin">
-        <text class="nickname" bindtap="goToLogin">点击登录</text>
-        <text class="desc" bindtap="goToLogin">登录享受更多服务</text>  
+      <image class="avatar" src="/assets/images/morentouxiang.jpg" mode="aspectFill" />
+      <view class="user-detail">
+        <text class="nickname">点击登录</text>
+        <text class="desc">登录享受更多服务</text>  
       </view>
     </view>
-    <text class="arrow" bindtap="goToLogin"></text>
+    <text class="arrow"></text>
   </view>
   <view class="user-card" wx:else bindtap="goToEditProfile">
     <!-- 已登录状态显示的内容 -->
@@ -20,7 +20,7 @@
           <text class="nickname">{{userInfo.nickName}}</text>
           <view class="role-tag" wx:if="{{userInfo.role === 1}}">学生</view>
           <view class="role-tag merchant" wx:elif="{{userInfo.role === 2}}">商家</view>
-          <view class="role-tag admin" wx:else>{{userInfo.role === 3 ? '管理员' : ''}}</view>
+          <view class="role-tag admin" wx:elif="{{userInfo.role === 3}}">管理员</view>
         </view>
         <text class="desc">校园生活，一站搞定</text>
         <text class="phone" wx:if="{{userInfo.phone}}">手机号：{{userInfo.phone}}</text>
@@ -57,7 +57,7 @@
     <!-- 标题行 -->
     <view class="section-title">
       <text class="title">我的订单</text>
-      <text class="more" bindtap="goToOrderList">查看全部></text>
+      <text class="more" bindtap="navigateToOrders" data-status="all">查看全部></text>
     </view>
     <!-- 订单状态菜单 -->
     <view class="order-menu">

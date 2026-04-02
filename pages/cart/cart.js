@@ -1,5 +1,86 @@
 // pages/cart/cart.js
-const { getCartList, updateCartItem, deleteCartItem, deleteSelectedItems, deleteInvalidItems } = require('../../utils/api');
+const { getCartList, updateCartItem, deleteCartItem, deleteInvalidItems } = require('../../utils/api');
+const { toNetworkUrl } = require('../../utils/url');
+
+function coerceChecked(detailValue) {
+  if (Array.isArray(detailValue)) return detailValue.length > 0;
+  if (typeof detailValue === 'boolean') return detailValue;
+  if (detailValue === null || detailValue === undefined) return false;
+  return Boolean(detailValue);
+}
+
+function toInt(v, fallback = 0) {
+  const n = parseInt(v, 10);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function toNum(v, fallback = 0) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function normalizeMerchants(rawMerchants) {
+  const merchants = (rawMerchants || []).map((m) => {
+    const goods = (m.goods || []).map((g) => {
+      const checked = g.checked !== undefined ? Boolean(g.checked) : (g.selected !== undefined ? Boolean(g.selected) : false);
+      return {
+        ...g,
+        checked,
+        cartId: g.cartId !== undefined ? g.cartId : g.cart_id,
+        goodsId: g.goodsId !== undefined ? g.goodsId : g.product_id,
+        merchantId: g.merchantId !== undefined ? g.merchantId : m.merchantId,
+        goodsImage: toNetworkUrl(g.goodsImage),
+        price: toNum(g.price, 0),
+        quantity: toInt(g.quantity, 1),
+        stock: toInt(g.stock, 0)
+      };
+    });
+
+    const merchantChecked = goods.length > 0 && goods.every((x) => x.checked);
+    return {
+      ...m,
+      merchantLogo: toNetworkUrl(m.merchantLogo),
+      checked: merchantChecked,
+      goods
+    };
+  });
+
+  const allChecked = merchants.length > 0 && merchants.every((m) => m.checked);
+  return { merchants, allChecked };
+}
+
+function normalizeInvalidGoods(rawInvalidGoods) {
+  return (rawInvalidGoods || []).map((g) => ({
+    ...g,
+    cartId: g.cartId !== undefined ? g.cartId : g.cart_id,
+    goodsId: g.goodsId !== undefined ? g.goodsId : g.product_id,
+    goodsImage: toNetworkUrl(g.goodsImage)
+  }));
+}
+
+function extractAllCartItems(merchants) {
+  const items = [];
+  (merchants || []).forEach((m) => {
+    (m.goods || []).forEach((g) => {
+      const cartId = g && g.cartId;
+      if (cartId !== undefined && cartId !== null && String(cartId).trim() !== '') {
+        items.push(g);
+      }
+    });
+  });
+  return items;
+}
+
+async function persistSelectedForItems(items, checked) {
+  const tasks = (items || [])
+    .map((g) => g && g.cartId)
+    .filter((id) => id !== undefined && id !== null && String(id).trim() !== '')
+    .map((id) => updateCartItem(id, { selected: checked }));
+
+  if (tasks.length === 0) return;
+  await Promise.allSettled(tasks);
+}
+
 Page({
 
   /**
@@ -13,7 +94,8 @@ Page({
     hasCheckedGoods: false,
     checkedCount: 0,
     totalPrice: 0,
-    editMode: false,
+    defaultMerchantLogo: '/assets/images/morentouxiang.jpg',
+    defaultGoodsImage: '/assets/images/chatu-2.jpg',
     merchants: [],
     invalidGoods: []
   },
@@ -22,6 +104,7 @@ Page({
    * 生命周期函数--监听页面加载
    */
   onLoad(options) {
+    this._didInitialShow = false;
     this.loadCartData();
   },
 
@@ -29,8 +112,42 @@ Page({
    * 生命周期函数--监听页面显示
    */
   onShow() {
-    // 页面显示时重新加载购物车数据
+    // 避免首次 onLoad + onShow 重复加载
+    if (!this._didInitialShow) {
+      this._didInitialShow = true;
+      return;
+    }
     this.loadCartData();
+  },
+
+  onMerchantLogoError(e) {
+    const merchantId = String(e.currentTarget.dataset.merchantId);
+    const merchants = (this.data.merchants || []).map((m) => {
+      if (String(m.merchantId) !== merchantId) return m;
+      return { ...m, merchantLogo: this.data.defaultMerchantLogo };
+    });
+    this.setData({ merchants });
+  },
+
+  onGoodsImageError(e) {
+    const cartId = String(e.currentTarget.dataset.cartId);
+    const merchants = (this.data.merchants || []).map((m) => ({
+      ...m,
+      goods: (m.goods || []).map((g) => {
+        if (String(g.cartId) !== cartId) return g;
+        return { ...g, goodsImage: this.data.defaultGoodsImage };
+      })
+    }));
+    this.setData({ merchants });
+  },
+
+  onInvalidGoodsImageError(e) {
+    const cartId = String(e.currentTarget.dataset.cartId);
+    const invalidGoods = (this.data.invalidGoods || []).map((g) => {
+      if (String(g.cartId) !== cartId) return g;
+      return { ...g, goodsImage: this.data.defaultGoodsImage };
+    });
+    this.setData({ invalidGoods });
   },
 
   /**
@@ -68,15 +185,22 @@ Page({
     
     try {
       const res = await getCartList();
-      
+
+      const normalized = normalizeMerchants((res && res.data && res.data.merchants) || []);
+      const invalidGoods = normalizeInvalidGoods((res && res.data && res.data.invalidGoods) || []);
+      const hasGoods = normalized.merchants.length > 0;
+
       this.setData({
-        merchants: res.data.merchants || [],
-        invalidGoods: res.data.invalidGoods || [],
-        hasGoods: (res.data.merchants && res.data.merchants.length > 0),
+        merchants: normalized.merchants,
+        invalidGoods,
+        hasGoods,
+        allChecked: normalized.allChecked,
         loading: false
+      }, () => {
+        this.updateCheckoutInfo();
+        if (callback) callback();
       });
       
-      if (callback) callback();
     } catch (error) {
       // 检查是否是未登录导致的错误
       if (error.message === '请先登录') {
@@ -104,6 +228,19 @@ Page({
   },
 
   /**
+   * 点击商品跳转详情
+   */
+  goGoodsDetail(e) {
+    const goodsId = e && e.currentTarget && e.currentTarget.dataset ? e.currentTarget.dataset.goodsId : undefined;
+    const id = goodsId !== undefined && goodsId !== null ? String(goodsId).trim() : '';
+    if (!id) return;
+
+    wx.navigateTo({
+      url: `/pages/detail/detail?id=${encodeURIComponent(id)}`
+    });
+  },
+
+  /**
    * 切换全选状态
    */
   toggleAllCheck(e) {
@@ -112,7 +249,7 @@ Page({
       e.stopPropagation();
     }
     
-    const allChecked = e.detail.value[0];
+    const allChecked = coerceChecked(e && e.detail && e.detail.value);
     let merchants = this.data.merchants;
     
     merchants = merchants.map(merchant => {
@@ -129,6 +266,12 @@ Page({
     
     this.setData({ merchants, allChecked });
     this.updateCheckoutInfo();
+
+    // 同步到后端 selected（结算页依赖 /cart/selected）
+    persistSelectedForItems(extractAllCartItems(merchants), allChecked).catch((err) => {
+      console.error('同步选中状态失败:', err);
+      this.loadCartData();
+    });
   },
 
   /**
@@ -140,28 +283,32 @@ Page({
       e.stopPropagation();
     }
     
-    const merchantId = e.currentTarget.dataset.merchantId;
-    const checked = e.detail.value[0];
+    const merchantId = String(e.currentTarget.dataset.merchantId);
+    const checked = coerceChecked(e && e.detail && e.detail.value);
     
     let merchants = this.data.merchants;
     merchants = merchants.map(merchant => {
-      if (merchant.merchantId === merchantId) {
-        const goods = merchant.goods.map(goods => ({
-          ...goods,
-          checked
-        }));
-        return {
-          ...merchant,
-          checked,
-          goods
-        };
-      }
-      return merchant;
+      const isTarget = String(merchant.merchantId) === merchantId;
+      const goods = merchant.goods.map(goods => ({
+        ...goods,
+        checked: isTarget ? checked : goods.checked
+      }));
+      return {
+        ...merchant,
+        checked: isTarget ? checked : merchant.checked,
+        goods
+      };
     });
     
     this.setData({ merchants });
     this.updateAllCheckedStatus();
     this.updateCheckoutInfo();
+
+    const merchant = (merchants || []).find((m) => String(m.merchantId) === String(merchantId));
+    persistSelectedForItems((merchant && merchant.goods) || [], checked).catch((err) => {
+      console.error('同步商家选中状态失败:', err);
+      this.loadCartData();
+    });
   },
 
   /**
@@ -173,35 +320,43 @@ Page({
       e.stopPropagation();
     }
     
-    const goodsId = e.currentTarget.dataset.goodsId;
-    const merchantId = e.currentTarget.dataset.merchantId;
-    const checked = e.detail.value[0];
+    const cartId = String(e.currentTarget.dataset.cartId);
+    const merchantId = String(e.currentTarget.dataset.merchantId);
+    const checked = coerceChecked(e && e.detail && e.detail.value);
     
     let merchants = this.data.merchants;
     merchants = merchants.map(merchant => {
-      if (merchant.merchantId === merchantId) {
+      if (String(merchant.merchantId) === merchantId) {
         const goods = merchant.goods.map(goods => {
-          if (goods.goodsId === goodsId) {
+          if (String(goods.cartId) === String(cartId)) {
             return { ...goods, checked };
           }
           return goods;
         });
-        
+
         // 检查商家是否所有商品都被选中
-        const merchantChecked = goods.every(item => item.checked);
-        
+        const merchantChecked = goods.length > 0 && goods.every(item => item.checked);
+
         return {
           ...merchant,
           checked: merchantChecked,
           goods
         };
       }
+
       return merchant;
     });
     
     this.setData({ merchants });
     this.updateAllCheckedStatus();
     this.updateCheckoutInfo();
+
+    if (cartId !== undefined && cartId !== null && String(cartId).trim() !== '') {
+      updateCartItem(cartId, { selected: checked }).catch((err) => {
+        console.error('同步商品选中状态失败:', err);
+        this.loadCartData();
+      });
+    }
   },
 
   /**
@@ -233,15 +388,17 @@ Page({
     for (const merchant of merchants) {
       for (const goods of merchant.goods) {
         if (goods.checked) {
-          totalPrice += goods.price * goods.quantity;
-          checkedCount += goods.quantity;
+          const price = toNum(goods.price, 0);
+          const qty = toInt(goods.quantity, 0);
+          totalPrice += price * qty;
+          checkedCount += qty;
           hasCheckedGoods = true;
         }
       }
     }
     
     this.setData({
-      totalPrice,
+      totalPrice: Number(totalPrice.toFixed(2)),
       checkedCount,
       hasCheckedGoods
     });
@@ -256,18 +413,51 @@ Page({
       e.stopPropagation();
     }
     
-    const goodsId = e.currentTarget.dataset.goodsId;
-    const merchantId = e.currentTarget.dataset.merchantId;
+    const cartId = String(e.currentTarget.dataset.cartId);
+    const merchantId = String(e.currentTarget.dataset.merchantId);
     
-    // 先更新本地数据，提供即时反馈
+    // 找到当前商品
+    const merchantsNow = this.data.merchants || [];
+    let currentQty = 1;
+    for (const m of merchantsNow) {
+      if (String(m.merchantId) !== merchantId) continue;
+      for (const g of m.goods || []) {
+        if (String(g.cartId) === String(cartId)) {
+          currentQty = toInt(g.quantity, 1);
+        }
+      }
+    }
+
+    // qty=1 时再次点击减号：确认删除
+    if (currentQty <= 1) {
+      wx.showModal({
+        title: '确认删除',
+        content: '数量已为 1，是否删除该商品？',
+        success: async (res) => {
+          if (!res.confirm) return;
+          try {
+            await deleteCartItem(cartId);
+            this.loadCartData();
+            wx.showToast({ title: '删除成功' });
+          } catch (error) {
+            console.error('删除商品失败:', error);
+            wx.showToast({ title: '删除失败', icon: 'none' });
+            this.loadCartData();
+          }
+        }
+      });
+      return;
+    }
+
+    // qty>1：正常减一（先更新本地，后同步后端）
     let merchants = this.data.merchants;
     let updatedGoods = null;
-    
+
     merchants = merchants.map(merchant => {
-      if (merchant.merchantId === merchantId) {
+      if (String(merchant.merchantId) === merchantId) {
         const goods = merchant.goods.map(goods => {
-          if (goods.goodsId === goodsId && goods.quantity > 1) {
-            updatedGoods = { ...goods, quantity: goods.quantity - 1 };
+          if (String(goods.cartId) === String(cartId) && toInt(goods.quantity, 1) > 1) {
+            updatedGoods = { ...goods, quantity: toInt(goods.quantity, 1) - 1 };
             return updatedGoods;
           }
           return goods;
@@ -276,17 +466,15 @@ Page({
       }
       return merchant;
     });
-    
+
     this.setData({ merchants });
     this.updateCheckoutInfo();
-    
-    // 调用API更新服务器数据
-    if (updatedGoods) {
+
+    if (updatedGoods && cartId !== undefined && cartId !== null && String(cartId).trim() !== '') {
       try {
-        await updateCartItem(goodsId, { quantity: updatedGoods.quantity });
+        await updateCartItem(cartId, { quantity: updatedGoods.quantity });
       } catch (error) {
         console.error('更新商品数量失败:', error);
-        // 恢复原数据
         this.loadCartData();
       }
     }
@@ -301,20 +489,20 @@ Page({
       e.stopPropagation();
     }
     
-    const goodsId = e.currentTarget.dataset.goodsId;
-    const merchantId = e.currentTarget.dataset.merchantId;
+    const cartId = String(e.currentTarget.dataset.cartId);
+    const merchantId = String(e.currentTarget.dataset.merchantId);
     
     // 先更新本地数据，提供即时反馈
     let merchants = this.data.merchants;
     let updatedGoods = null;
     
     merchants = merchants.map(merchant => {
-      if (merchant.merchantId === merchantId) {
+      if (String(merchant.merchantId) === merchantId) {
         const goods = merchant.goods.map(goods => {
-          if (goods.goodsId === goodsId && goods.quantity < goods.stock) {
+          if (String(goods.cartId) === String(cartId) && goods.quantity < goods.stock) {
             updatedGoods = { ...goods, quantity: goods.quantity + 1 };
             return updatedGoods;
-          } else if (goods.goodsId === goodsId && goods.quantity >= goods.stock) {
+          } else if (String(goods.cartId) === String(cartId) && goods.quantity >= goods.stock) {
             wx.showToast({ title: '已达到库存上限', icon: 'none' });
           }
           return goods;
@@ -328,9 +516,9 @@ Page({
     this.updateCheckoutInfo();
     
     // 调用API更新服务器数据
-    if (updatedGoods) {
+    if (updatedGoods && cartId !== undefined && cartId !== null && String(cartId).trim() !== '') {
       try {
-        await updateCartItem(goodsId, { quantity: updatedGoods.quantity });
+        await updateCartItem(cartId, { quantity: updatedGoods.quantity });
       } catch (error) {
         console.error('更新商品数量失败:', error);
         // 恢复原数据
@@ -348,8 +536,8 @@ Page({
       e.stopPropagation();
     }
     
-    const goodsId = e.currentTarget.dataset.goodsId;
-    const merchantId = e.currentTarget.dataset.merchantId;
+    const cartId = String(e.currentTarget.dataset.cartId);
+    const merchantId = String(e.currentTarget.dataset.merchantId);
     let quantity = parseInt(e.detail.value) || 1;
     
     // 先更新本地数据，提供即时反馈
@@ -357,9 +545,9 @@ Page({
     let updatedGoods = null;
     
     merchants = merchants.map(merchant => {
-      if (merchant.merchantId === merchantId) {
+      if (String(merchant.merchantId) === merchantId) {
         const goods = merchant.goods.map(goods => {
-          if (goods.goodsId === goodsId) {
+          if (String(goods.cartId) === String(cartId)) {
             // 确保数量在有效范围内
             if (quantity < 1) quantity = 1;
             if (quantity > goods.stock) {
@@ -380,9 +568,9 @@ Page({
     this.updateCheckoutInfo();
     
     // 调用API更新服务器数据
-    if (updatedGoods) {
+    if (updatedGoods && cartId !== undefined && cartId !== null && String(cartId).trim() !== '') {
       try {
-        await updateCartItem(goodsId, { quantity: updatedGoods.quantity });
+        await updateCartItem(cartId, { quantity: updatedGoods.quantity });
       } catch (error) {
         console.error('更新商品数量失败:', error);
         // 恢复原数据
@@ -392,83 +580,22 @@ Page({
   },
 
   /**
-   * 删除商品
-   */
-  async deleteGoods(e) {
-    // 阻止事件冒泡
-    if (e.stopPropagation) {
-      e.stopPropagation();
-    }
-    
-    const goodsId = e.currentTarget.dataset.goodsId;
-    const merchantId = e.currentTarget.dataset.merchantId;
-    
-    wx.showModal({
-      title: '确认删除',
-      content: '确定要删除这个商品吗？',
-      success: async (res) => {
-        if (res.confirm) {
-          try {
-            // 调用API删除商品
-            await deleteCartItem(goodsId);
-            
-            // 重新加载购物车数据
-            this.loadCartData();
-            wx.showToast({ title: '删除成功' });
-          } catch (error) {
-            console.error('删除商品失败:', error);
-            wx.showToast({ title: '删除失败', icon: 'none' });
-          }
-        }
-      }
-    });
-  },
-
-  /**
-   * 删除选中商品
-   */
-  async deleteSelectedGoods(e) {
-    // 阻止事件冒泡
-    if (e && e.stopPropagation) {
-      e.stopPropagation();
-    }
-    
-    wx.showModal({
-      title: '确认删除',
-      content: '确定要删除选中的商品吗？',
-      success: async (res) => {
-        if (res.confirm) {
-          try {
-            // 调用API删除选中商品
-            await deleteSelectedItems();
-            
-            // 重新加载购物车数据
-            this.loadCartData();
-            this.setData({ editMode: false });
-            wx.showToast({ title: '删除成功' });
-          } catch (error) {
-            console.error('删除选中商品失败:', error);
-            wx.showToast({ title: '删除失败', icon: 'none' });
-          }
-        }
-      }
-    });
-  },
-
-  /**
    * 删除失效商品
    */
   async deleteInvalidGoods(e) {
-    // 阻止事件冒泡
-    if (e.stopPropagation) {
-      e.stopPropagation();
-    }
-    
+    if (e && e.stopPropagation) e.stopPropagation();
+
+    const cartId = e && e.currentTarget && e.currentTarget.dataset ? e.currentTarget.dataset.cartId : undefined;
+
     try {
-      // 调用API删除失效商品
-      await deleteInvalidItems();
-      
-      // 重新加载购物车数据
+      // 单条删除：按 cartId 删除
+      if (cartId !== undefined && cartId !== null && String(cartId).trim() !== '') {
+        await deleteCartItem(cartId);
+      } else {
+        // 兜底：没有 cartId 时按“一键清理”
+        await deleteInvalidItems();
+      }
+
       this.loadCartData();
       wx.showToast({ title: '删除成功' });
     } catch (error) {
@@ -505,30 +632,6 @@ Page({
         }
       }
     });
-  },
-
-  /**
-   * 进入编辑模式
-   */
-  enterEditMode(e) {
-    // 阻止事件冒泡
-    if (e && e.stopPropagation) {
-      e.stopPropagation();
-    }
-    
-    this.setData({ editMode: true });
-  },
-
-  /**
-   * 退出编辑模式
-   */
-  exitEditMode(e) {
-    // 阻止事件冒泡
-    if (e && e.stopPropagation) {
-      e.stopPropagation();
-    }
-    
-    this.setData({ editMode: false });
   },
 
   /**

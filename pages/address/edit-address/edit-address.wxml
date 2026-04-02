@@ -34,13 +34,15 @@
     
     <view class="form-item">
       <text class="label">所在地区</text>
-      <view class="region-picker" bindtap="openRegionPicker">
-        <text class="region-text">
-          {{formData.province}}{{formData.city}}{{formData.district}}
-          {{!formData.province ? '请选择省市区' : ''}}
-        </text>
-        <text class="picker-arrow">>></text>
-      </view>
+      <picker mode="region" value="{{region}}" bindchange="onSystemRegionChange" custom-item="{{customItem}}">
+        <view class="region-picker">
+          <text class="region-text">
+            {{formData.province}}{{formData.city}}{{formData.district}}
+            {{!formData.province ? '请选择省市区' : ''}}
+          </text>
+          <text class="picker-arrow">>></text>
+        </view>
+      </picker>
     </view>
     
     <view class="form-item">
@@ -65,29 +67,6 @@
         checked="{{formData.is_default === 1}}"
         bindchange="toggleDefault"
       />
-    </view>
-  </view>
-  
-  <!-- 地区选择器 -->
-  <view wx:if="{{showRegionPicker}}" class="region-picker-container">
-    <picker-view 
-      class="region-picker-view"
-      value="{{region}}"
-      bindchange="bindRegionChange"
-    >
-      <picker-view-column>
-        <view wx:for="{{provinces}}" wx:key="{{item}}" class="picker-item">{{item}}</view>
-      </picker-view-column>
-      <picker-view-column>
-        <view wx:for="{{cities}}" wx:key="{{item}}" class="picker-item">{{item}}</view>
-      </picker-view-column>
-      <picker-view-column>
-        <view wx:for="{{districts}}" wx:key="{{item}}" class="picker-item">{{item}}</view>
-      </picker-view-column>
-    </picker-view>
-    <view class="picker-footer">
-      <button class="cancel-btn" bindtap="closeRegionPicker">取消</button>
-      <button class="confirm-btn" bindtap="closeRegionPicker">确定</button>
     </view>
   </view>
   

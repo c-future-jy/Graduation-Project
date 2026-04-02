@@ -5,6 +5,48 @@ const {
   batchDeleteAdminFeedbacks
 } = require('../../../utils/api');
 
+function toInt(value, fallback = 0) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function toStr(value, fallback = '') {
+  if (value === null || value === undefined) return fallback;
+  return String(value);
+}
+
+function showErrorToast(err, fallback = '网络错误') {
+  const msg = (err && (err.message || err.error)) ? (err.message || err.error) : fallback;
+  wx.showToast({ title: msg, icon: 'none', duration: 3000 });
+}
+
+function runWithLoading(title, fn) {
+  wx.showLoading({ title: title || '加载中...' });
+  return Promise.resolve()
+    .then(fn)
+    .finally(() => {
+      wx.hideLoading();
+    });
+}
+
+const STATUS_NUM_BY_VALUE = {
+  pending: 0,
+  replied: 1,
+  rejected: 2
+};
+
+const STATUS_VALUE_BY_NUM = {
+  0: 'pending',
+  1: 'replied',
+  2: 'rejected'
+};
+
+const TYPE_VALUE_BY_NUM = {
+  1: 'order',
+  2: 'merchant',
+  3: 'platform'
+};
+
 function pad2(n) {
   return String(n).padStart(2, '0');
 }
@@ -76,14 +118,13 @@ Page({
     selectedType: 0,
     selectedStatus: 0,
     selectedFeedbacks: [],
-    selectAll: false,
+    selectedMap: {},
     currentPage: 1,
     pageSize: 10,
     totalPages: 1,
     totalCount: 0,
     showInput: false,
     currentFeedbackId: null,
-    currentAction: '',
     actionContent: '',
     showBatchModal: false,
     selectedBatchAction: 0,
@@ -101,6 +142,28 @@ Page({
       { value: 'replied', label: '已回复' },
       { value: 'rejected', label: '已驳回' }
     ]
+  },
+
+  onPullDownRefresh: function () {
+    this.clearSelection();
+    this.setData({ currentPage: 1 });
+    Promise.resolve(this.loadFeedbacks())
+      .finally(() => {
+        wx.stopPullDownRefresh();
+      });
+  },
+
+  onReachBottom: function () {
+    const { currentPage, totalPages } = this.data;
+    if (currentPage >= totalPages) return;
+    this.setData({ currentPage: currentPage + 1 });
+    this.loadFeedbacks({ append: true });
+  },
+
+  reloadFeedbacks: function () {
+    this.clearSelection();
+    this.setData({ currentPage: 1 });
+    this.loadFeedbacks();
   },
 
   onLoad: function (options) {
@@ -130,65 +193,98 @@ Page({
     }
   },
 
-  loadFeedbacks: function () {
+  setFeedbackFieldById: function (id, field, value) {
+    const idx = this.data.feedbacks.findIndex(item => item.id === id);
+    if (idx < 0) return;
+    this.setData({
+      [`feedbacks[${idx}].${field}`]: value
+    });
+  },
+
+  setSelection: function (selectedIds) {
+    const map = {};
+    (selectedIds || []).forEach((id) => {
+      map[id] = true;
+    });
+    this.setData({
+      selectedFeedbacks: selectedIds || [],
+      selectedMap: map
+    });
+  },
+
+  loadFeedbacks: function (options) {
+    const append = !!(options && options.append);
     const { currentPage, pageSize, selectedType, selectedStatus, searchKeyword } = this.data;
-    
-    wx.showLoading({ title: '加载中...' });
-    
-    // 将前端状态值转换为后端数值
-    const statusValue = this.data.feedbackStatuses[selectedStatus].value;
-    let statusNum = '';
-    if (statusValue === 'pending') {
-      statusNum = 0;
-    } else if (statusValue === 'replied') {
-      statusNum = 1;
-    } else if (statusValue === 'rejected') {
-      statusNum = 2;
-    }
-    
-    getAdminFeedbackList({
-      page: currentPage,
-      pageSize: pageSize,
-      type: this.data.feedbackTypes[selectedType].value,
-      status: statusNum,
-      keyword: searchKeyword
-    }).then(res => {
-      wx.hideLoading();
-      if (res.success) {
-        // 转换数据格式，适配前端显示
-        const feedbacks = res.data.feedbacks.map(item => {
+    const statusValue = (this.data.feedbackStatuses[selectedStatus] || {}).value;
+    const statusNum = Object.prototype.hasOwnProperty.call(STATUS_NUM_BY_VALUE, statusValue)
+      ? STATUS_NUM_BY_VALUE[statusValue]
+      : '';
+
+    return runWithLoading('加载中...', () =>
+      getAdminFeedbackList({
+        page: currentPage,
+        pageSize,
+        type: (this.data.feedbackTypes[selectedType] || {}).value,
+        status: statusNum,
+        keyword: searchKeyword
+      })
+    )
+      .then((res) => {
+        if (!res || !res.success) {
+          wx.showToast({ title: (res && res.message) || '加载失败', icon: 'none' });
+          return;
+        }
+
+        const rawList = (res.data && res.data.feedbacks) || [];
+        const nextList = rawList.map((item) => {
           const createdAt = item.create_time || item.created_at || item.createdAt || item.createTime;
-          const typeNum = typeof item.type === 'string' ? parseInt(item.type, 10) : item.type;
-          const statusNum = typeof item.status === 'string' ? parseInt(item.status, 10) : item.status;
+          const typeNum = toInt(item.type, 0);
+          const statusNum2 = toInt(item.status, 0);
+          const typeValue = TYPE_VALUE_BY_NUM[typeNum] || 'platform';
+          const statusValue2 = STATUS_VALUE_BY_NUM[statusNum2] || 'rejected';
+          const id = toInt(item.id, 0);
+
           return {
-          id: item.id,
-          userId: item.user_id,
-          userName: item.user_name,
-          type: typeNum === 1 ? 'order' : typeNum === 2 ? 'merchant' : 'platform',
-          content: item.content,
-          rating: item.rating,
-          status: statusNum === 0 ? 'pending' : statusNum === 1 ? 'replied' : 'rejected',
-          actionContent: item.reply || item.reject_reason || '',
-          showFullContent: false,
-          currentAction: '',
-          createdAt,
-          formattedTime: formatTime(createdAt)
+            id,
+            userId: toInt(item.user_id, 0),
+            userName: toStr(item.user_name, '-'),
+            type: typeValue,
+            content: toStr(item.content, ''),
+            rating: toInt(item.rating, 0),
+            status: statusValue2,
+            actionContent: toStr(item.reply || item.reject_reason || '', ''),
+            showFullContent: false,
+            currentAction: '',
+            createdAt,
+            formattedTime: formatTime(createdAt)
           };
         });
-        
+
+        let feedbacks = nextList;
+        if (append) {
+          const byId = {};
+          (this.data.feedbacks || []).forEach((it) => {
+            if (it && it.id) byId[it.id] = it;
+          });
+          nextList.forEach((it) => {
+            if (it && it.id) byId[it.id] = it;
+          });
+          feedbacks = Object.keys(byId)
+            .map((k) => byId[k])
+            .sort((a, b) => (b.id || 0) - (a.id || 0));
+        }
+
+        const pagination = (res.data && res.data.pagination) || {};
         this.setData({
-          feedbacks: feedbacks,
-          totalPages: res.data.pagination.totalPages,
-          totalCount: res.data.pagination.total
+          feedbacks,
+          totalPages: toInt(pagination.totalPages, 1),
+          totalCount: toInt(pagination.total, feedbacks.length)
         });
-      } else {
-        wx.showToast({ title: res.message || '加载失败', icon: 'none' });
-      }
-    }).catch(err => {
-      wx.hideLoading();
-      console.error('加载反馈列表失败:', err);
-      wx.showToast({ title: '网络错误', icon: 'none' });
-    });
+      })
+      .catch((err) => {
+        console.error('加载反馈列表失败:', err);
+        showErrorToast(err, '网络错误');
+      });
   },
 
   bindSearchInput: function (e) {
@@ -214,66 +310,46 @@ Page({
     });
   },
 
-  toggleSelectAll: function (e) {
-    const selectAll = e.detail.value.length > 0;
-    const selectedFeedbacks = selectAll ? this.data.feedbacks.map(item => item.id) : [];
+  toggleFeedbackSelection: function (e) {
+    const id = toInt(e.currentTarget.dataset.id, 0);
+    if (!id) return;
+
+    const nextMap = { ...this.data.selectedMap };
+    if (nextMap[id]) {
+      delete nextMap[id];
+    } else {
+      nextMap[id] = true;
+    }
+
+    const selectedFeedbacks = Object.keys(nextMap).map(k => toInt(k, 0)).filter(Boolean);
     this.setData({
-      selectAll,
+      selectedMap: nextMap,
       selectedFeedbacks
     });
   },
 
-  toggleFeedbackSelection: function (e) {
-    const id = e.currentTarget.dataset.id;
-    const selectedFeedbacks = [...this.data.selectedFeedbacks];
-    const index = selectedFeedbacks.indexOf(id);
-    if (index > -1) {
-      selectedFeedbacks.splice(index, 1);
-    } else {
-      selectedFeedbacks.push(id);
-    }
-    this.setData({
-      selectedFeedbacks,
-      selectAll: selectedFeedbacks.length === this.data.feedbacks.length
-    });
-  },
-
   clearSelection: function () {
-    this.setData({
-      selectedFeedbacks: [],
-      selectAll: false
-    });
+    this.setSelection([]);
   },
 
   viewFeedbackDetail: function (e) {
-    console.log('查看详情按钮被点击', e);
-    const id = e.currentTarget.dataset.id;
-    console.log('获取到的反馈ID:', id);
+    const id = toInt(e.currentTarget.dataset.id, 0);
+    if (!id) return;
     wx.navigateTo({
       url: `/pages/admin/feedbacks/detail?id=${id}&title=${encodeURIComponent('反馈详情')}`,
-      success: function(res) {
-        console.log('跳转成功', res);
-      },
-      fail: function(res) {
-        console.log('跳转失败', res);
+      fail: function () {
+        wx.showToast({ title: '跳转失败', icon: 'none' });
       }
     });
   },
 
   // 显示操作输入框
   showActionInput: function (e) {
-    const id = e.currentTarget.dataset.id;
+    const id = toInt(e.currentTarget.dataset.id, 0);
     const action = e.currentTarget.dataset.action;
-    
-    // 更新对应卡片的currentAction字段
-    const feedbacks = [...this.data.feedbacks];
-    const index = feedbacks.findIndex(item => item.id === id);
-    if (index > -1) {
-      feedbacks[index].currentAction = action;
-    }
-    
+
+    this.setFeedbackFieldById(id, 'currentAction', action);
     this.setData({
-      feedbacks: feedbacks,
       showInput: true,
       currentFeedbackId: id,
       actionContent: ''
@@ -290,20 +366,8 @@ Page({
   // 取消操作
   cancelActionInput: function () {
     const id = this.data.currentFeedbackId;
-    
-    // 清除对应卡片的currentAction字段
-    if (id) {
-      const feedbacks = [...this.data.feedbacks];
-      const index = feedbacks.findIndex(item => item.id === id);
-      if (index > -1) {
-        feedbacks[index].currentAction = '';
-      }
-      
-      this.setData({
-        feedbacks: feedbacks
-      });
-    }
-    
+
+    if (id) this.setFeedbackFieldById(id, 'currentAction', '');
     this.setData({
       showInput: false,
       currentFeedbackId: null,
@@ -313,57 +377,48 @@ Page({
 
   // 提交操作
   submitActionInput: function (e) {
-    const id = e.currentTarget.dataset.id;
+    const id = toInt(e.currentTarget.dataset.id, 0);
     const action = e.currentTarget.dataset.action;
-    const content = this.data.actionContent;
+    const content = toStr(this.data.actionContent, '').trim();
     
-    console.log('Submit action:', { id, action, content });
-    
-    if (!content || !content.trim()) {
+    if (!content) {
       wx.showToast({ title: action === 'reply' ? '请输入回复内容' : '请输入驳回原因', icon: 'none' });
       return;
     }
 
-    wx.showLoading({ title: action === 'reply' ? '回复中...' : '驳回中...' });
+    runWithLoading(action === 'reply' ? '回复中...' : '驳回中...', () => {
+      return action === 'reply' ? replyFeedback(id, content) : rejectFeedback(id, content);
+    })
+      .then((res) => {
+        if (!res || !res.success) {
+          wx.showToast({ title: (res && res.message) || (action === 'reply' ? '回复失败' : '驳回失败'), icon: 'none' });
+          return;
+        }
 
-    // 调用实际API
-    const apiPromise = action === 'reply' ? replyFeedback(id, content) : rejectFeedback(id, content);
-    
-    console.log('API promise created:', apiPromise);
-    
-    apiPromise.then(res => {
-      wx.hideLoading();
-      if (res.success) {
-        // 重新加载反馈列表，确保数据与后端同步
-        this.loadFeedbacks();
-        
         this.setData({
           showInput: false,
           currentFeedbackId: null,
           actionContent: ''
         });
-        
+
         wx.showToast({ title: action === 'reply' ? '回复成功' : '驳回成功', icon: 'success' });
-      } else {
-        wx.showToast({ title: res.message || (action === 'reply' ? '回复失败' : '驳回失败'), icon: 'none' });
-      }
-    }).catch(err => {
-      wx.hideLoading();
-      console.error(action === 'reply' ? '回复反馈失败:' : '驳回反馈失败:', err);
-      const errorMsg = err.message || err.error || '网络错误';
-      wx.showToast({ title: errorMsg, icon: 'none', duration: 3000 });
-    });
+        this.loadFeedbacks();
+      })
+      .catch((err) => {
+        console.error(action === 'reply' ? '回复反馈失败:' : '驳回反馈失败:', err);
+        showErrorToast(err, '网络错误');
+      });
   },
 
   // 切换操作内容展开/收起
   toggleActionContent: function (e) {
-    const id = e.currentTarget.dataset.id;
-    const feedbacks = [...this.data.feedbacks];
-    const index = feedbacks.findIndex(item => item.id === id);
-    if (index > -1) {
-      feedbacks[index].showFullContent = !feedbacks[index].showFullContent;
-      this.setData({ feedbacks: feedbacks });
-    }
+    const id = toInt(e.currentTarget.dataset.id, 0);
+    const idx = this.data.feedbacks.findIndex(item => item.id === id);
+    if (idx < 0) return;
+    const curr = !!this.data.feedbacks[idx].showFullContent;
+    this.setData({
+      [`feedbacks[${idx}].showFullContent`]: !curr
+    });
   },
 
   // 批量处理
@@ -402,28 +457,24 @@ Page({
       return;
     }
 
-    wx.showLoading({ title: '删除中...' });
-
-    batchDeleteAdminFeedbacks(selectedIds)
+    runWithLoading('删除中...', () => batchDeleteAdminFeedbacks(selectedIds))
       .then((res) => {
-        wx.hideLoading();
-        if (res && res.success) {
-          wx.showToast({ title: '删除成功', icon: 'success' });
-          this.setData({
-            showBatchModal: false,
-            selectedFeedbacks: [],
-            selectAll: false,
-            currentPage: 1
-          });
-          this.loadFeedbacks();
-        } else {
+        if (!res || !res.success) {
           wx.showToast({ title: (res && res.message) || '删除失败', icon: 'none' });
+          return;
         }
+
+        wx.showToast({ title: '删除成功', icon: 'success' });
+        this.setData({
+          showBatchModal: false,
+          currentPage: 1
+        });
+        this.clearSelection();
+        this.loadFeedbacks();
       })
       .catch((err) => {
-        wx.hideLoading();
         console.error('批量删除反馈失败:', err);
-        wx.showToast({ title: err.message || '网络错误', icon: 'none' });
+        showErrorToast(err, '网络错误');
       });
   },
 

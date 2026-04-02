@@ -12,6 +12,7 @@ router.post('/', orderController.createOrder); // 创建订单
 router.get('/counts', orderController.getOrderCounts); // 获取订单数量统计
 router.get('/:id', orderController.getOrderById); // 获取订单详情
 router.put('/:id/cancel', orderController.cancelOrder); // 取消订单
+router.put('/:id/complete', orderController.completeOrder); // 确认收货/完成订单
 router.put('/:id/status', orderController.updateOrderStatus); // 更新订单状态
 router.post('/:id/buy-again', orderController.buyAgain); // 再次购买（加入购物车）
 router.delete('/:id', orderController.deleteOrder); // 删除订单

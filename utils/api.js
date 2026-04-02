@@ -22,6 +22,7 @@ function getBaseUrl() {
  */
 function request(options) {
   return new Promise((resolve, reject) => {
+    const silent = !!(options && options.silent);
     // 获取本地存储的 token
     const token = wx.getStorageSync('token');
     
@@ -65,7 +66,7 @@ function request(options) {
         // 其他错误
         else {
           // 登录/注册接口的错误不显示toast，由调用方处理
-          if (!options.url.includes('/login') && !options.url.includes('/register')) {
+          if (!silent && !options.url.includes('/login') && !options.url.includes('/register')) {
             wx.showToast({
               title: res.data.message || '请求失败',
               icon: 'none',
@@ -76,11 +77,13 @@ function request(options) {
         }
       },
       fail: (err) => {
-        wx.showToast({
-          title: '网络连接失败',
-          icon: 'none',
-          duration: 2000
-        });
+        if (!silent) {
+          wx.showToast({
+            title: '网络连接失败',
+            icon: 'none',
+            duration: 2000
+          });
+        }
         reject(err);
       }
     });
@@ -298,6 +301,18 @@ function getProducts(params) {
 }
 
 /**
+ * 商家端：获取我的商品列表（含上/下架）
+ * @param {Object} params 查询参数 (category_id, keyword, status, page, limit)
+ */
+function getMyProducts(params) {
+  return request({
+    url: '/products/my',
+    method: 'GET',
+    data: params
+  });
+}
+
+/**
  * 获取商品详情
  * @param {Number} id 商品 ID
  */
@@ -305,6 +320,42 @@ function getProductById(id) {
   return request({
     url: `/products/${id}`,
     method: 'GET'
+  });
+}
+
+/**
+ * 创建商品（商家/管理员）
+ * @param {Object} data 商品字段 { merchant_id?, category_id, name, description, price, stock, image, status? }
+ */
+function createProduct(data) {
+  return request({
+    url: '/products',
+    method: 'POST',
+    data
+  });
+}
+
+/**
+ * 更新商品（商家/管理员）
+ * @param {Number|String} id 商品ID
+ * @param {Object} data 更新字段 { name, description, price, stock, image, status }
+ */
+function updateProduct(id, data) {
+  return request({
+    url: `/products/${id}`,
+    method: 'PUT',
+    data
+  });
+}
+
+/**
+ * 删除商品（商家/管理员）
+ * @param {Number|String} id 商品ID
+ */
+function deleteProduct(id) {
+  return request({
+    url: `/products/${id}`,
+    method: 'DELETE'
   });
 }
 //分类模块
@@ -317,6 +368,18 @@ function getCategories(params) {
     url: '/categories',
     method: 'GET',
     data: params
+  });
+}
+
+/**
+ * 创建分类（商家/管理员）
+ * @param {Object} data 分类字段 { name, icon?, type?, sort_order?, merchant_id? }
+ */
+function createCategory(data) {
+  return request({
+    url: '/categories',
+    method: 'POST',
+    data
   });
 }
 
@@ -498,6 +561,29 @@ function createFeedback(data) {
     url: '/feedback',
     method: 'POST',
     data
+  });
+}
+
+/**
+ * 商家：获取自己的反馈列表
+ */
+function getMerchantFeedbacks() {
+  return request({
+    url: '/feedback/my',
+    method: 'GET'
+  });
+}
+
+/**
+ * 商家：回复反馈
+ * @param {Number|String} id 反馈ID
+ * @param {String} reply 回复内容
+ */
+function replyMerchantFeedback(id, reply) {
+  return request({
+    url: `/feedback/${id}/reply`,
+    method: 'PUT',
+    data: { reply }
   });
 }
 //通知模块
@@ -786,6 +872,30 @@ function forceCancelAdminOrder(id, cancel_reason = '') {
 }
 
 /**
+ * 获取管理员订单详情
+ * @param {Number|String} id 订单 ID
+ */
+function getAdminOrderDetail(id) {
+  return request({
+    url: `/admin/orders/${id}`,
+    method: 'GET'
+  });
+}
+
+/**
+ * 更新订单状态（管理员）
+ * @param {Number|String} id 订单 ID
+ * @param {Number} status 目标状态
+ */
+function updateAdminOrderStatus(id, status) {
+  return request({
+    url: `/admin/orders/${id}/status`,
+    method: 'PUT',
+    data: { status }
+  });
+}
+
+/**
  * 获取管理员反馈列表
  * @param {Object} params 查询参数 (page, pageSize, type, status, user_id, merchant_id, startTime, endTime)
  */
@@ -1019,6 +1129,18 @@ function getAdminOrderTrend(params) {
 }
 
 /**
+ * 获取管理员用户趋势数据
+ * @param {Object} params 查询参数 (startTime, endTime, granularity)
+ */
+function getAdminUserTrend(params) {
+  return request({
+    url: '/admin/dashboard/user-trend',
+    method: 'GET',
+    data: params
+  });
+}
+
+/**
  * 获取管理员营业额数据
  * @param {Object} params 查询参数 (startTime, endTime)
  */
@@ -1050,13 +1172,18 @@ module.exports = {
   decryptWeixinPhone,
   uploadAvatar,
   uploadImage,
+  createCategory,
   getMerchants,
   getMerchantById,
   applyMerchant,
   getMyMerchant,
   updateMerchant,
   getProducts,
+  getMyProducts,
   getProductById,
+  createProduct,
+  updateProduct,
+  deleteProduct,
   getCategories,
   searchAll,
   getOrders,
@@ -1074,6 +1201,8 @@ module.exports = {
   setDefaultAddress,
   getFeedbacks,
   createFeedback,
+  getMerchantFeedbacks,
+  replyMerchantFeedback,
   getNotifications,
   markNotificationAsRead,
   markAllNotificationsAsRead,
@@ -1098,6 +1227,8 @@ module.exports = {
   batchUpdateAdminProducts,
   getAdminOrderList,
   forceCancelAdminOrder,
+  getAdminOrderDetail,
+  updateAdminOrderStatus,
   getAdminFeedbackList,
   replyFeedback,
   rejectFeedback,
@@ -1112,6 +1243,7 @@ module.exports = {
   batchMarkAdminNotificationsAsRead,
   getAdminDashboardStats,
   getAdminOrderTrend,
+  getAdminUserTrend,
   getAdminRevenue,
   getAdminMerchantCategories,
   getMerchantDashboardStats,

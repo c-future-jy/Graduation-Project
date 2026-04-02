@@ -55,15 +55,18 @@
   <!-- 商家信息 -->
   <view class="info-card">
     <view class="info-header">
-      <view class="merchant-info" bindtap="goToMerchant" data-merchantId="{{order.merchantId}}" data-name="{{order.merchantName}}">
+      <view class="merchant-info" bindtap="goToMerchant" data-merchant-id="{{order.merchantId}}" data-name="{{order.merchantName}}">
         <image class="merchant-logo" src="{{order.merchantLogo}}" mode="aspectFill"></image>
         <view class="merchant-name">{{order.merchantName}}</view>
         <view class="merchant-arrow">→</view>
       </view>
+      <!-- 联系商家模块：按需求暂时移除（不展示、不触发） -->
+      <!--
       <view class="contact-btn" bindtap="callShop">
         联系商家
         <text class="call-icon">📞</text>
       </view>
+      -->
     </view>
   </view>
   
@@ -74,7 +77,7 @@
       <view class="info-count">共{{order.totalQuantity}}件</view>
     </view>
     <view class="goods-list">
-      <view wx:for="{{order.goodsList}}" wx:key="goodsId" class="goods-item" bindtap="previewImage" data-image="{{item.image}}">
+      <view wx:for="{{order.goodsList}}" wx:key="goodsId" class="goods-item" bindtap="previewImage" data-image="{{item.image}}" wx:if="{{showAllGoods || index < 3}}">
         <image class="goods-image" src="{{item.image}}" mode="aspectFill"></image>
         <view class="goods-info">
           <view class="goods-name">{{item.name}}</view>
@@ -85,7 +88,7 @@
           </view>
         </view>
       </view>
-      <view wx:if="order.goodsList.length > 3" class="goods-more" bindtap="showAllGoods">
+      <view wx:if="{{!showAllGoods && order.goodsList.length > 3}}" class="goods-more" bindtap="showAllGoods">
         查看全部商品
         <text class="more-arrow">↓</text>
       </view>

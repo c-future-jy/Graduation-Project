@@ -11,24 +11,43 @@
       <input 
         class="search-input" 
         placeholder="输入商品名称搜索" 
+        value="{{searchKeyword}}"
         bindinput="searchKeyword"
       />
       <button class="search-btn" bindtap="searchProducts">搜索</button>
     </view>
     <view class="filter-box">
-      <picker class="filter-picker" bindchange="merchantFilter">
+      <picker
+        class="filter-picker"
+        range="{{merchantOptions}}"
+        range-key="label"
+        value="{{merchantIndex}}"
+        bindchange="merchantFilter"
+      >
         <view class="picker-text">
-          商家：{{merchantFilter === '' ? '全部' : merchantFilter}}
+          商家：{{merchantFilterLabel}}
         </view>
       </picker>
-      <picker class="filter-picker" bindchange="categoryFilter">
+      <picker
+        class="filter-picker"
+        range="{{categoryOptions}}"
+        range-key="label"
+        value="{{categoryIndex}}"
+        bindchange="categoryFilter"
+      >
         <view class="picker-text">
-          分类：{{categoryFilter === '' ? '全部' : categoryFilter}}
+          分类：{{categoryFilterLabel}}
         </view>
       </picker>
-      <picker class="filter-picker" bindchange="statusFilter">
+      <picker
+        class="filter-picker"
+        range="{{statusOptions}}"
+        range-key="label"
+        value="{{statusIndex}}"
+        bindchange="statusFilter"
+      >
         <view class="picker-text">
-          状态：{{statusFilter === '' ? '全部' : statusFilter === '1' ? '上架' : '下架'}}
+          状态：{{statusFilterLabel}}
         </view>
       </picker>
     </view>
@@ -38,62 +57,75 @@
   <view class="batch-actions">
     <checkbox-group bindchange="selectAllProducts">
       <label class="checkbox-label">
-        <checkbox value="all" />
+        <checkbox value="all" checked="{{products.length > 0 && selectedProducts.length === products.length}}" />
         <text>全选</text>
       </label>
     </checkbox-group>
     <button class="batch-btn" bindtap="batchOfflineProducts">批量下架</button>
     <button class="batch-btn" bindtap="batchOnlineProducts">批量上架</button>
+    <button wx:if="{{merchantFilter}}" class="batch-btn" bindtap="offlineAllByMerchant">下架该商家全部</button>
+  </view>
+
+  <!-- 数据监督 -->
+  <view class="supervise-bar">
+    <text>平台商品总数：{{total}}</text>
+    <text>当前列表异常：{{anomalyCount}}</text>
   </view>
 
   <!-- 商品列表 -->
   <view class="products-table">
-    <view class="table-header">
-      <view class="table-col select-col">选择</view>
-      <view class="table-col id-col">ID</view>
-      <view class="table-col name-col">商品名称</view>
-      <view class="table-col merchant-col">商家</view>
-      <view class="table-col category-col">分类</view>
-      <view class="table-col price-col">价格</view>
-      <view class="table-col stock-col">库存</view>
-      <view class="table-col status-col">状态</view>
-      <view class="table-col action-col">操作</view>
-    </view>
-    <view class="table-body">
-      <view wx:for="{{products}}" wx:key="id" class="table-row">
-        <view class="table-col select-col">
-          <checkbox-group bindchange="selectProduct" data-id="{{item.id}}">
-            <label class="checkbox-label">
-              <checkbox value="{{item.id}}" checked="{{selectedProducts.includes(item.id)}}" />
-            </label>
-          </checkbox-group>
+    <scroll-view scroll-x="true" class="table-scroll" enhanced="true">
+      <view class="table-inner">
+        <view class="table-header">
+          <view class="table-col select-col">选择</view>
+          <view class="table-col id-col">ID</view>
+          <view class="table-col name-col">商品名称</view>
+          <view class="table-col merchant-col">商家</view>
+          <view class="table-col category-col">分类</view>
+          <view class="table-col price-col">价格</view>
+          <view class="table-col stock-col">库存</view>
+          <view class="table-col status-col">状态</view>
+          <view class="table-col action-col">操作</view>
         </view>
-        <view class="table-col id-col">{{item.id}}</view>
-        <view class="table-col name-col">{{item.name}}</view>
-        <view class="table-col merchant-col">{{item.merchant}}</view>
-        <view class="table-col category-col">{{item.category}}</view>
-        <view class="table-col price-col">¥{{item.price.toFixed(2)}}</view>
-        <view class="table-col stock-col">
-          <text class="stock-text {{item.stock < 10 ? 'low-stock' : ''}}">{{item.stock}}</text>
-          <text wx:if="{{item.stock < 10}}" class="stock-warning">⚠️</text>
-        </view>
-        <view class="table-col status-col">
-          <text class="status-tag {{item.status === 1 ? 'online' : 'offline'}}">{{item.statusText}}</text>
-        </view>
-        <view class="table-col action-col">
-          <button class="action-btn view" bindtap="viewProductDetail" data-id="{{item.id}}">查看</button>
-          <button class="action-btn edit" bindtap="editProduct" data-id="{{item.id}}">编辑</button>
-          <button 
-            class="action-btn {{item.status === 1 ? 'offline' : 'online'}}" 
-            bindtap="toggleProductStatus" 
-            data-id="{{item.id}}" 
-            data-status="{{item.status}}"
-          >
-            {{item.status === 1 ? '下架' : '上架'}}
-          </button>
+        <view class="table-body">
+          <view wx:for="{{products}}" wx:key="id" class="table-row">
+            <view class="table-col select-col">
+              <checkbox-group bindchange="selectProduct" data-id="{{item.id}}">
+                <label class="checkbox-label">
+                  <checkbox value="{{item.id}}" checked="{{selectedMap[item.id]}}" />
+                </label>
+              </checkbox-group>
+            </view>
+            <view class="table-col id-col">{{item.id}}</view>
+            <view class="table-col name-col">{{item.name}}</view>
+            <view class="table-col merchant-col">{{item.merchant}}</view>
+            <view class="table-col category-col">{{item.category}}</view>
+            <view class="table-col price-col">
+              <text>{{item.priceDisplay}}</text>
+              <text wx:if="{{item.isPriceAnomaly}}" class="stock-warning">⚠️</text>
+            </view>
+            <view class="table-col stock-col">
+              <text class="stock-text {{item.stock < 10 ? 'low-stock' : ''}}">{{item.stock}}</text>
+              <text wx:if="{{item.stock < 10}}" class="stock-warning">⚠️</text>
+            </view>
+            <view class="table-col status-col">
+              <text class="status-tag {{item.status === 1 ? 'online' : 'offline'}}">{{item.statusText}}</text>
+            </view>
+            <view class="table-col action-col">
+              <button class="action-btn view" bindtap="viewProductDetail" data-id="{{item.id}}" data-name="{{item.name}}">查看</button>
+              <button 
+                class="action-btn {{item.status === 1 ? 'offline' : 'online'}}" 
+                bindtap="toggleProductStatus" 
+                data-id="{{item.id}}" 
+                data-status="{{item.status}}"
+              >
+                {{item.status === 1 ? '下架' : '上架'}}
+              </button>
+            </view>
+          </view>
         </view>
       </view>
-    </view>
+    </scroll-view>
   </view>
 
   <!-- 空状态 -->
@@ -110,6 +142,8 @@
   <!-- 分页信息 -->
   <view wx:if="{{products.length > 0}}" class="pagination">
     <text>共 {{total}} 条记录</text>
+    <button wx:if="{{hasMore && !loading}}" class="load-more-btn" bindtap="loadMoreProducts">加载更多</button>
+    <text wx:if="{{loading}}">加载中...</text>
     <text wx:if="{{!hasMore}}" class="no-more">没有更多数据了</text>
   </view>
 </view>

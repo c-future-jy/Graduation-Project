@@ -19,7 +19,7 @@
       <view class="tab-item {{timeRange === '30' ? 'active' : ''}}" bindtap="switchTimeRange" data-range="30">30天</view>
       <view class="tab-item {{timeRange === 'custom' ? 'active' : ''}}" bindtap="showDatePicker">自定义</view>
     </view>
-    <view wx:if="timeRange === 'custom'" class="custom-date-range">
+    <view wx:if="{{timeRange === 'custom'}}" class="custom-date-range">
       <text>{{startDate}} 至 {{endDate}}</text>
     </view>
   </view>

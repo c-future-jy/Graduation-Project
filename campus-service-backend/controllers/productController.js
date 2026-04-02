@@ -1,5 +1,38 @@
 const { pool } = require('../config/db');
 
+async function assertMerchantOwnsProductOrThrow(productId, user) {
+  const [rows] = await pool.query('SELECT id, merchant_id FROM product WHERE id = ?', [productId]);
+  if (!rows || rows.length === 0) {
+    const err = new Error('商品不存在');
+    err.status = 404;
+    throw err;
+  }
+
+  // 管理员可操作任意商品
+  if (user && user.role === 3) return rows[0];
+
+  // 商家只能操作自己的商品
+  if (user && user.role === 2) {
+    const tokenMerchantId = user.merchant_id !== undefined && user.merchant_id !== null ? parseInt(user.merchant_id, 10) : null;
+    if (!tokenMerchantId) {
+      const err = new Error('缺少商家身份信息');
+      err.status = 403;
+      throw err;
+    }
+    const ownerId = rows[0].merchant_id !== undefined && rows[0].merchant_id !== null ? parseInt(rows[0].merchant_id, 10) : null;
+    if (ownerId !== tokenMerchantId) {
+      const err = new Error('权限不足，只能操作自己的商品');
+      err.status = 403;
+      throw err;
+    }
+    return rows[0];
+  }
+
+  const err = new Error('权限不足');
+  err.status = 403;
+  throw err;
+}
+
 // 获取商品列表
 exports.getProductList = async (req, res, next) => {
   try {
@@ -37,6 +70,85 @@ exports.getProductList = async (req, res, next) => {
   }
 };
 
+// 商家端：获取自己的商品列表（含上下架）
+// GET /api/products/my
+exports.getMyProductList = async (req, res, next) => {
+  try {
+    const merchantId = req.user && req.user.merchant_id ? parseInt(req.user.merchant_id, 10) : null;
+    if (!merchantId) {
+      return res.status(403).json({
+        success: false,
+        message: '缺少商家身份信息'
+      });
+    }
+
+    const categoryId = req.query.category_id ? parseInt(req.query.category_id, 10) : null;
+    const keyword = String(req.query.keyword ?? req.query.q ?? '').trim();
+    const statusRaw = req.query.status;
+    const status = statusRaw === undefined || statusRaw === null || statusRaw === '' ? null : parseInt(statusRaw, 10);
+    const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+    const limit = Math.max(parseInt(req.query.limit, 10) || 10, 1);
+    const offset = (page - 1) * limit;
+
+    const where = ['p.merchant_id = ?'];
+    const params = [merchantId];
+
+    if (categoryId) {
+      where.push('p.category_id = ?');
+      params.push(categoryId);
+    }
+
+    if (Number.isFinite(status)) {
+      where.push('p.status = ?');
+      params.push(status);
+    }
+
+    if (keyword) {
+      where.push('(p.name LIKE ? OR p.description LIKE ?)');
+      params.push(`%${keyword}%`, `%${keyword}%`);
+    }
+
+    const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+
+    const listSql = `
+      SELECT
+        p.*, 
+        c.name AS category_name
+      FROM product p
+      LEFT JOIN category c ON p.category_id = c.id
+      ${whereSql}
+      ORDER BY p.created_at DESC
+      LIMIT ? OFFSET ?
+    `;
+
+    const countSql = `
+      SELECT COUNT(*) AS total
+      FROM product p
+      ${whereSql}
+    `;
+
+    const [products] = await pool.query(listSql, [...params, limit, offset]);
+    const [countRows] = await pool.query(countSql, params);
+    const total = countRows && countRows[0] ? parseInt(countRows[0].total, 10) : 0;
+    const totalPages = Math.ceil(total / limit);
+
+    res.json({
+      success: true,
+      data: {
+        products,
+        pagination: {
+          total,
+          page,
+          limit,
+          totalPages
+        }
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 // 获取商品详情
 exports.getProductById = async (req, res, next) => {
   try {
@@ -54,9 +166,19 @@ exports.getProductById = async (req, res, next) => {
 exports.createProduct = async (req, res, next) => {
   try {
     const { merchant_id, category_id, name, description, price, stock, image } = req.body;
+    const merchantIdFromToken = req.user && req.user.merchant_id ? parseInt(req.user.merchant_id, 10) : null;
+    const finalMerchantId = req.user && req.user.role === 2 ? merchantIdFromToken : merchant_id;
+
+    if (!finalMerchantId) {
+      return res.status(400).json({
+        success: false,
+        message: '缺少 merchant_id'
+      });
+    }
+
     const [result] = await pool.query(
       'INSERT INTO product (merchant_id, category_id, name, description, price, stock, image) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [merchant_id, category_id, name, description, price, stock, image]
+      [finalMerchantId, category_id, name, description, price, stock, image]
     );
     res.status(201).json({ success: true, data: { productId: result.insertId } });
   } catch (error) {
@@ -67,6 +189,7 @@ exports.createProduct = async (req, res, next) => {
 // 更新商品
 exports.updateProduct = async (req, res, next) => {
   try {
+    await assertMerchantOwnsProductOrThrow(req.params.id, req.user);
     const { name, description, price, stock, image, status } = req.body;
     await pool.query(
       'UPDATE product SET name = ?, description = ?, price = ?, stock = ?, image = ?, status = ?, updated_at = NOW() WHERE id = ?',
@@ -81,6 +204,7 @@ exports.updateProduct = async (req, res, next) => {
 // 删除商品
 exports.deleteProduct = async (req, res, next) => {
   try {
+    await assertMerchantOwnsProductOrThrow(req.params.id, req.user);
     await pool.query('DELETE FROM product WHERE id = ?', [req.params.id]);
     res.json({ success: true, message: '删除成功' });
   } catch (error) {

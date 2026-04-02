@@ -14,10 +14,13 @@
       </view>
       
       <view wx:else>
-        <view wx:for="{{notifications}}" wx:for-index="idx" wx:key="id" class="notice-item" bindtap="viewNotification" data-index="{{idx}}">
+          <view wx:for="{{notifications}}" wx:for-index="idx" wx:key="id" class="notice-item" bindtap="viewNotification" data-id="{{item.id}}" data-index="{{idx}}">
           <view class="notice-header">
-            <text class="notice-title">{{item.title}}</text>
-            <text class="notice-time">{{item.created_at}}</text>
+              <view class="notice-title-wrap">
+                <text wx:if="{{!item.is_read}}" class="unread-dot"></text>
+                <text class="notice-title">{{item.title}}</text>
+              </view>
+              <text class="notice-time">{{item.displayTime}}</text>
           </view>
           <text class="notice-content">{{item.content}}</text>
         </view>

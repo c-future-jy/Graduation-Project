@@ -1,7 +1,32 @@
 // pages/order-detail/order-detail.js
-const { getOrderById, cancelOrder, completeOrder } = require('../../utils/api');
-const { getOrderActions, getStatusIcon, getStatusDesc, handleOrderAction } = require('../../utils/orderUtils');
-const { showLoading, hideLoading, showError, showSuccess } = require('../../utils/pageUtils');
+const { getOrderById, cancelOrder, completeOrder, deleteOrder: apiDeleteOrder } = require('../../utils/api');
+const { getOrderActions, getStatusIcon, getStatusDesc, getStatusText, handleOrderAction } = require('../../utils/orderUtils');
+const { showError, showSuccess } = require('../../utils/pageUtils');
+const { toNetworkUrl } = require('../../utils/url');
+
+function toInt(value, fallback = 0) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function toNum(value, fallback = 0) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function toStr(value, fallback = '') {
+  if (value === null || value === undefined) return fallback;
+  return String(value);
+}
+
+function getErrMsg(err, fallback = '操作失败') {
+  if (!err) return fallback;
+  if (typeof err === 'string') return err;
+  if (err.message) return err.message;
+  if (err.data && err.data.message) return err.data.message;
+  if (err.errMsg) return err.errMsg;
+  return fallback;
+}
 
 Page({
 
@@ -10,49 +35,170 @@ Page({
    */
   data: {
     order: {},
-    showAllGoods: false
+    showAllGoods: false,
+    loading: false,
+    orderId: ''
   },
 
   /**
    * 生命周期函数--监听页面加载
    */
   onLoad(options) {
-    const orderId = options.orderId || '1001'; // 默认为1001，实际应该从options中获取
+    this._loadingCount = 0;
+    this._loadingShown = false;
+    this._detailLoadingPromise = null;
+
+    const orderId = this.normalizeOrderId(options);
+    if (!orderId) {
+      showError('订单参数缺失');
+      setTimeout(() => {
+        wx.navigateBack();
+      }, 800);
+      return;
+    }
+
+    this.setData({ orderId });
     this.loadOrderDetail(orderId);
+  },
+
+  _showLoading(title) {
+    const next = (this._loadingCount || 0) + 1;
+    this._loadingCount = next;
+    if (next !== 1) return;
+    wx.showLoading({
+      title: title || '加载中...',
+      success: () => {
+        this._loadingShown = true;
+      },
+      fail: () => {
+        this._loadingShown = false;
+      }
+    });
+  },
+
+  _hideLoading() {
+    const current = this._loadingCount || 0;
+    if (current <= 0) return;
+    const next = Math.max(0, current - 1);
+    this._loadingCount = next;
+    if (next !== 0) return;
+    if (!this._loadingShown) return;
+    wx.hideLoading({
+      complete: () => {
+        this._loadingShown = false;
+      }
+    });
+  },
+
+  _normalizeOrder(orderRaw, items) {
+    const raw = orderRaw || {};
+    const list = Array.isArray(items) ? items : [];
+
+    const status = raw.status != null ? String(raw.status) : '';
+    const totalPrice = raw.totalPrice != null
+      ? raw.totalPrice
+      : (raw.total_amount != null ? raw.total_amount : raw.totalAmount);
+
+    const goodsList = list.map((it) => ({
+      goodsId: it.product_id,
+      name: it.product_name,
+      image: toNetworkUrl(it.product_image) || '/assets/images/kong.jpg',
+      price: toNum(it.price, 0),
+      quantity: toInt(it.quantity, 0),
+      subtotal: toNum(it.subtotal, 0),
+      spec: it.spec
+    }));
+
+    const order = {
+      ...raw,
+      orderId: raw.orderId != null ? raw.orderId : raw.id,
+      merchantId: raw.merchantId != null ? raw.merchantId : raw.merchant_id,
+      merchantName: raw.merchantName || raw.merchant_name || '',
+      merchantLogo: toNetworkUrl(raw.merchantLogo || raw.merchant_logo) || '/assets/images/morentouxiang.jpg',
+      status,
+      statusText: raw.statusText || getStatusText(status),
+      receiverName: raw.receiverName || raw.receiver_name || '',
+      receiverPhone: raw.receiverPhone || raw.receiver_phone || '',
+      receiverAddress: raw.receiverAddress || raw.receiver_address || '',
+      createTime: raw.createTime || raw.created_at || raw.createdAt || '',
+      payTime: raw.payTime || raw.payment_time || raw.pay_time || '',
+      totalPrice: toNum(totalPrice, 0),
+      shippingFee: toNum(raw.shippingFee != null ? raw.shippingFee : raw.shipping_fee, 0),
+      discount: toNum(raw.discount, 0),
+      payPrice: toNum(raw.payPrice != null ? raw.payPrice : raw.pay_price, toNum(totalPrice, 0)),
+      timestamps: {
+        paidAt: (raw.timestamps && raw.timestamps.paidAt) || raw.payment_time || '',
+        shippedAt: (raw.timestamps && raw.timestamps.shippedAt) || '',
+        // 后端实际字段为 delivery_time（商家发货/配送开始时间）
+        deliveredAt: (raw.timestamps && raw.timestamps.deliveredAt) || raw.delivery_time || '',
+        completedAt: (raw.timestamps && raw.timestamps.completedAt) || raw.complete_time || ''
+      },
+      goodsList
+    };
+
+    order.totalQuantity = goodsList.reduce((sum, g) => sum + toInt(g.quantity, 0), 0);
+    order.actions = getOrderActions(status);
+    order.statusIcon = getStatusIcon(status);
+    order.statusDesc = getStatusDesc(status);
+    return order;
+  },
+
+  normalizeOrderId(options) {
+    const raw = options && (options.orderId || options.id || options.order_id);
+    const value = String(raw == null ? '' : raw).trim();
+    if (!value || value === 'undefined' || value === 'null') return '';
+    return value;
   },
 
   /**
    * 加载订单详情
    */
   async loadOrderDetail(orderId) {
-    showLoading('加载中...');
-    
-    try {
-      const res = await getOrderById(orderId);
-      const order = res.data.order;
-      
-      // 设置订单操作按钮
-      order.actions = getOrderActions(order.status);
-      
-      // 设置订单状态信息
-      order.statusIcon = getStatusIcon(order.status);
-      order.statusDesc = getStatusDesc(order.status);
-      
-      hideLoading();
-      this.setData({
-        order: order
-      });
-    } catch (error) {
-      hideLoading();
-      showError('加载失败');
-      console.error('加载订单详情失败:', error);
+    if (this._detailLoadingPromise) return this._detailLoadingPromise;
+
+    const normalizedId = String(orderId == null ? '' : orderId).trim();
+    if (!normalizedId || normalizedId === 'undefined' || normalizedId === 'null') {
+      showError('订单不存在');
+      return;
     }
+    if (this.data.loading) return;
+
+    this.setData({ loading: true });
+    this._showLoading('加载中...');
+
+    this._detailLoadingPromise = (async () => {
+      try {
+        const res = await getOrderById(normalizedId);
+        if (!res || !res.success) {
+          showError((res && res.message) || '加载失败');
+          return;
+        }
+
+        const orderRaw = (res && res.data && res.data.order) ? res.data.order : {};
+        const items = (res && res.data && Array.isArray(res.data.items)) ? res.data.items : [];
+        const order = this._normalizeOrder(orderRaw, items);
+        this.setData({ order, showAllGoods: false });
+      } catch (error) {
+        showError(getErrMsg(error, '加载失败'));
+        console.error('加载订单详情失败:', error);
+      } finally {
+        this._hideLoading();
+        this.setData({ loading: false });
+        this._detailLoadingPromise = null;
+      }
+    })();
+
+    return this._detailLoadingPromise;
   },
 
   /**
    * 联系商家
    */
   callShop() {
+    // 联系商家模块：按需求暂时移除（WXML 已隐藏入口）。
+    wx.showToast({ title: '暂不提供联系商家', icon: 'none' });
+
+    /*
     const phoneNumber = this.data.order.merchantPhone;
     wx.makePhoneCall({
       phoneNumber: phoneNumber,
@@ -63,6 +209,7 @@ Page({
         console.log('拨打电话失败');
       }
     });
+    */
   },
 
   /**
@@ -70,14 +217,12 @@ Page({
    */
   handleAction(e) {
     const action = e.currentTarget.dataset.action;
-    console.log('订单操作:', action);
-    
+
     handleOrderAction({
       action,
       orderId: this.data.order.orderId,
       onCancel: () => this.cancelOrder(),
       onPay: () => this.goToPay(),
-      onLogistics: () => this.viewLogistics(),
       onConfirm: () => this.confirmReceipt(),
       onBuyAgain: () => this.buyAgain(),
       onReview: () => this.goToReview(),
@@ -88,26 +233,35 @@ Page({
   /**
    * 取消订单
    */
-  async cancelOrder() {
+  _confirmAndRun({ title, content, run, successMsg, after }) {
     wx.showModal({
-      title: '取消订单',
-      content: '确定要取消该订单吗？',
+      title,
+      content,
       success: async (res) => {
-        if (res.confirm) {
-          showLoading('处理中...');
-          try {
-            await cancelOrder(this.data.order.orderId);
-            hideLoading();
-            showSuccess('订单已取消');
-            // 刷新订单详情
-            this.loadOrderDetail(this.data.order.orderId);
-          } catch (error) {
-            hideLoading();
-            showError('取消失败');
-            console.error('取消订单失败:', error);
-          }
+        if (!res.confirm) return;
+        this._showLoading('处理中...');
+        try {
+          await run();
+          showSuccess(successMsg);
+          if (after) after();
+        } catch (error) {
+          showError(getErrMsg(error, '操作失败'));
+          console.error(`${title}失败:`, error);
+        } finally {
+          this._hideLoading();
         }
       }
+    });
+  },
+
+  cancelOrder() {
+    const id = this.data.order.orderId;
+    this._confirmAndRun({
+      title: '取消订单',
+      content: '确定要取消该订单吗？',
+      run: () => cancelOrder(id),
+      successMsg: '订单已取消',
+      after: () => this.loadOrderDetail(id)
     });
   },
 
@@ -119,35 +273,16 @@ Page({
   },
 
   /**
-   * 查看物流
-   */
-  viewLogistics() {
-    wx.navigateTo({ url: `/pages/logistics/logistics?orderId=${this.data.order.orderId}` });
-  },
-
-  /**
    * 确认收货
    */
-  async confirmReceipt() {
-    wx.showModal({
+  confirmReceipt() {
+    const id = this.data.order.orderId;
+    this._confirmAndRun({
       title: '确认收货',
       content: '确定已收到商品吗？',
-      success: async (res) => {
-        if (res.confirm) {
-          showLoading('处理中...');
-          try {
-            await completeOrder(this.data.order.orderId);
-            hideLoading();
-            showSuccess('已确认收货');
-            // 刷新订单详情
-            this.loadOrderDetail(this.data.order.orderId);
-          } catch (error) {
-            hideLoading();
-            showError('确认失败');
-            console.error('确认收货失败:', error);
-          }
-        }
-      }
+      run: () => completeOrder(id),
+      successMsg: '已确认收货',
+      after: () => this.loadOrderDetail(id)
     });
   },
 
@@ -176,28 +311,14 @@ Page({
   /**
    * 删除订单
    */
-  async deleteOrder() {
-    wx.showModal({
+  deleteOrder() {
+    const id = this.data.order.orderId;
+    this._confirmAndRun({
       title: '删除订单',
       content: '确定要删除该订单吗？',
-      success: async (res) => {
-        if (res.confirm) {
-          showLoading('处理中...');
-          try {
-            await deleteOrder(this.data.order.orderId);
-            hideLoading();
-            showSuccess('订单已删除');
-            // 跳回订单列表页
-            setTimeout(() => {
-              wx.navigateBack();
-            }, 1000);
-          } catch (error) {
-            hideLoading();
-            showError('删除失败');
-            console.error('删除订单失败:', error);
-          }
-        }
-      }
+      run: () => apiDeleteOrder(id),
+      successMsg: '订单已删除',
+      after: () => setTimeout(() => wx.navigateBack(), 1000)
     });
   },
 

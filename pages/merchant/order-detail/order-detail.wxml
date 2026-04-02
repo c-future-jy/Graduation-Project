@@ -17,8 +17,8 @@
     </view>
     <view class="info-item">
       <text class="info-label">支付状态：</text>
-      <text class="info-value {{orderInfo.payment_status === 1 ? 'paid' : 'unpaid'}}">
-        {{orderInfo.payment_status === 1 ? '已支付' : '未支付'}}
+      <text class="info-value {{orderInfo.payment_time ? 'paid' : 'unpaid'}}">
+        {{orderInfo.payment_time ? '已支付' : '未支付'}}
       </text>
     </view>
     <view class="info-item" wx:if="{{orderInfo.remark}}">
@@ -36,7 +36,7 @@
     <view class="section-title">用户信息</view>
     <view class="user-info">
       <view class="user-avatar">
-        <image src="{{orderInfo.user_avatar || '../../../assets/default-avatar.png'}}" mode="aspectFill"></image>
+        <image src="{{orderInfo.user_avatar || '/assets/images/morentouxiang.jpg'}}" mode="aspectFill"></image>
       </view>
       <view class="user-details">
         <view class="user-name">{{orderInfo.user_nickname}}</view>
@@ -52,14 +52,14 @@
       <view 
         class="product-item" 
         wx:for="{{orderInfo.products}}" 
-        wx:key="{{item.id}}"
+        wx:key="id"
         wx:for-item="productItem"
       >
         <view class="product-image">
-          <image src="{{productItem.image || '../../../assets/default-product.png'}}" mode="aspectFill"></image>
+          <image src="{{productItem.image || '/assets/images/kong.jpg'}}" mode="aspectFill"></image>
         </view>
         <view class="product-info">
-          <view class="product-name">{{productItem.name}}</view>
+          <view class="product-name">{{productItem.name || productItem.product_name}}</view>
           <view class="product-spec" wx:if="{{productItem.spec}}">{{productItem.spec}}</view>
           <view class="product-price-info">
             <text class="product-price">¥{{productItem.price}}</text>
@@ -84,17 +84,9 @@
 
   <!-- 订单金额 -->
   <view class="amount-section">
-    <view class="amount-item">
-      <text class="amount-label">商品总价：</text>
-      <text class="amount-value">¥{{orderInfo.product_amount}}</text>
-    </view>
-    <view class="amount-item">
-      <text class="amount-label">运费：</text>
-      <text class="amount-value">¥{{orderInfo.shipping_fee}}</text>
-    </view>
     <view class="amount-item total">
       <text class="amount-label">实付金额：</text>
-      <text class="amount-value total">¥{{orderInfo.amount}}</text>
+      <text class="amount-value total">¥{{orderInfo.displayAmount}}</text>
     </view>
   </view>
 

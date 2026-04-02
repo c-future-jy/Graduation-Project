@@ -9,6 +9,58 @@ const {
 
 const DEBUG = false;
 
+function toInt(value, fallback = 0) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function toStr(value, fallback = '') {
+  if (value === null || value === undefined) return fallback;
+  return String(value);
+}
+
+function pad2(n) {
+  return String(n).padStart(2, '0');
+}
+
+// 小程序/部分 JS 引擎对 `YYYY-MM-DD HH:mm:ss` 解析不稳定；这里做兼容与空值兜底。
+function toValidDate(value) {
+  if (!value) return null;
+
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? null : value;
+  }
+
+  if (typeof value === 'number') {
+    const d = new Date(value);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+
+  if (typeof value === 'string') {
+    const raw = value.trim();
+    if (!raw) return null;
+
+    let d = new Date(raw);
+    if (!Number.isNaN(d.getTime())) return d;
+
+    const slash = raw.replace(/-/g, '/');
+    d = new Date(slash);
+    if (!Number.isNaN(d.getTime())) return d;
+
+    d = new Date(slash.replace(' ', 'T'));
+    if (!Number.isNaN(d.getTime())) return d;
+  }
+
+  return null;
+}
+
+const PROGRESS_RADIUS = 36;
+const PROGRESS_CIRCUMFERENCE = 2 * Math.PI * PROGRESS_RADIUS;
+
+function normalizeIsRead(value) {
+  return String(value) === '1' || value === 1 || value === true;
+}
+
 Page({
   data: {
     notifications: [],
@@ -20,13 +72,15 @@ Page({
     dateRangeText: '',
     selectedNotifications: [],
     selectAll: false,
+    selectedMap: {},
     currentPage: 1,
     pageSize: 10,
     totalPages: 1,
     showPublishModal: false,
     showDatePickerModal: false,
     loading: false,
-    progressAngle: 0,
+    progressCircumference: PROGRESS_CIRCUMFERENCE,
+    progressDashOffset: PROGRESS_CIRCUMFERENCE,
     readStats: {
       total: 0,
       readCount: 0,
@@ -211,88 +265,50 @@ Page({
       const res = await getAdminNotificationList(params);
       
       if (res && res.data) {
-        // 打印完整 API 响应
-        if (DEBUG) console.log('Full API response:', res);
-        
-        // 打印通知数据以验证字段
-        if (DEBUG) console.log('Notification data from API:', res.data.notifications);
-        
-        let notifications = [];
-        if (res.data.notifications && Array.isArray(res.data.notifications)) {
-          notifications = res.data.notifications.map((notification, index) => {
-            if (DEBUG) console.log(`Notification ${index} raw data:`, notification);
-            // 检查所有可能的字段名
-            const type =
-              (notification.type ??
-                notification.notification_type ??
-                notification.type_id ??
-                notification.Type ??
-                notification.TYPE) ??
-              '';
-            const sendTime = notification.created_at || notification.send_time || notification.time || notification.createdAt || notification.SendTime || notification.sent_time || '';
-            // 计算未读数量（后端 read_count/total_count 可能缺失或不可靠，这里做兜底）
-            const isReadRaw = notification.is_read ?? notification.isRead;
-            const isRead = String(isReadRaw) === '1' || isReadRaw === 1 || isReadRaw === true;
-            const readCount = (notification.read_count ?? notification.readCount);
-            const totalCount = (notification.total_count ?? notification.totalCount);
-            const normalizedReadCount = readCount !== undefined && readCount !== null
-              ? Number(readCount)
-              : (isRead ? 1 : 0);
-            const normalizedTotalCount = totalCount !== undefined && totalCount !== null
-              ? Number(totalCount)
-              : 1;
-            const unreadCount = Math.max(0, normalizedTotalCount - normalizedReadCount);
-            if (DEBUG) {
-              console.log(
-                `Extracted type: ${type}, sendTime: ${sendTime}, readCount: ${readCount}, unreadCount: ${unreadCount}`
-              );
-            }
-            return {
-              id: notification.id,
-              title: notification.title || '无标题',
-              type: type,
-              isRead,
-              receiveScope: 'all', // 默认为全体成员
-              sendTime: sendTime,
-              readCount: normalizedReadCount,
-              unreadCount: unreadCount,
-              formattedType: notification.formattedType
-            };
-          });
-        } else {
-          console.log('No notifications data found or not an array');
-          notifications = [];
-        }
-        
-        // Preprocess notifications to include formatted type and time
-        notifications = notifications.map((item, index) => {
-          if (DEBUG) console.log(`Notification ${index} before fix:`, item);
-          const fixedItem = {
-            ...item,
-            type: item.type || '',
-            sendTime: item.sendTime || '',
-            formattedType: item.formattedType || this.getTypeText(item.type || ''),
-            formattedTime: this.formatDateTime(item.sendTime || '')
+        const rawList = Array.isArray(res.data.notifications) ? res.data.notifications : [];
+        const notifications = rawList.map((notification) => {
+          const type =
+            (notification.type ??
+              notification.notification_type ??
+              notification.type_id ??
+              notification.Type ??
+              notification.TYPE) ??
+            '';
+          const sendTime =
+            notification.created_at ||
+            notification.send_time ||
+            notification.time ||
+            notification.createdAt ||
+            notification.SendTime ||
+            notification.sent_time ||
+            '';
+
+          const isReadRaw = notification.is_read ?? notification.isRead;
+          const isRead = normalizeIsRead(isReadRaw);
+          const readCount = (notification.read_count ?? notification.readCount);
+          const totalCount = (notification.total_count ?? notification.totalCount);
+          const normalizedReadCount = readCount !== undefined && readCount !== null
+            ? Number(readCount)
+            : (isRead ? 1 : 0);
+          const normalizedTotalCount = totalCount !== undefined && totalCount !== null
+            ? Number(totalCount)
+            : 1;
+          const unreadCount = Math.max(0, normalizedTotalCount - normalizedReadCount);
+
+          const typeStr = toStr(type, '');
+          return {
+            id: toInt(notification.id, 0),
+            title: toStr(notification.title, '无标题'),
+            type: typeStr,
+            isRead,
+            receiveScope: toStr(notification.receive_scope || notification.receiveScope, 'all'),
+            sendTime: toStr(sendTime, ''),
+            readCount: Number.isFinite(normalizedReadCount) ? normalizedReadCount : 0,
+            unreadCount,
+            formattedType: notification.formattedType || this.getTypeText(typeStr),
+            formattedTime: this.formatDateTime(sendTime)
           };
-          if (DEBUG) {
-            console.log(`Notification ${index} after fix:`, fixedItem);
-            console.log(
-              `Formatted type: ${fixedItem.formattedType}, Formatted time: ${fixedItem.formattedTime}`
-            );
-          }
-          return fixedItem;
         });
-        
-        // 打印处理后的数据
-        if (DEBUG) console.log('Processed notifications:', notifications);
-        
-        // 测试格式化函数
-        if (DEBUG && notifications.length > 0) {
-          console.log('Testing formatDateTime with:', notifications[0].sendTime);
-          console.log('Formatted result:', this.formatDateTime(notifications[0].sendTime));
-          console.log('Testing getTypeText with:', notifications[0].type);
-          console.log('Type text result:', this.getTypeText(notifications[0].type));
-        }
         
         const readStats = res.data.readStats || {
           total: 0,
@@ -301,27 +317,35 @@ Page({
           readRate: '0%'
         };
         
-        // 计算已读率的旋转角度
         const readRateValue = readStats.readRate ? parseFloat(readStats.readRate) : 0;
-        const progressAngle = (readRateValue / 100) * 360;
+        const normalizedReadRate = Number.isFinite(readRateValue) ? readRateValue : 0;
+        const progressDashOffset = PROGRESS_CIRCUMFERENCE * (1 - normalizedReadRate / 100);
         
         // 确保分页数据有兜底值
         const total = res.data.pagination?.total || 0;
         const totalPages = Math.ceil(total / this.data.pageSize);
-        
-        // 打印即将设置的数据结构
-        console.log('Data to be set:', {
-          notifications: notifications,
-          totalPages: totalPages,
-          readStats: readStats,
-          progressAngle: progressAngle
+
+        // 同步选择状态（仅保留当前页仍存在的 id）
+        const exist = {};
+        notifications.forEach((it) => {
+          if (it && it.id) exist[it.id] = true;
         });
-        
+        const nextMap = {};
+        (this.data.selectedNotifications || []).forEach((id) => {
+          const key = toInt(id, 0);
+          if (key && exist[key]) nextMap[key] = true;
+        });
+        const selectedNotifications = Object.keys(nextMap).map(k => toInt(k, 0)).filter(Boolean);
+        const selectAll = notifications.length > 0 && selectedNotifications.length === notifications.length;
+
         this.setData({
           notifications: notifications,
           totalPages: totalPages,
           readStats: readStats,
-          progressAngle: progressAngle
+          progressDashOffset,
+          selectedMap: nextMap,
+          selectedNotifications,
+          selectAll
         });
         
         // 操作结果提示
@@ -354,7 +378,10 @@ Page({
           unreadCount: 0,
           readRate: '0%'
         },
-        progressAngle: 0
+        progressDashOffset: PROGRESS_CIRCUMFERENCE,
+        selectedMap: {},
+        selectedNotifications: [],
+        selectAll: false
       });
     } finally {
       this.setData({ loading: false });
@@ -380,6 +407,16 @@ Page({
       this.updateActiveFilters();
       this.saveFilterConditions();
     }, 300);
+  },
+
+  clearSearch: function () {
+    this.setData({
+      searchKeyword: '',
+      currentPage: 1
+    });
+    this.updateActiveFilters();
+    this.saveFilterConditions();
+    this.loadNotifications();
   },
 
   searchNotifications: function () {
@@ -584,32 +621,43 @@ Page({
 
   toggleSelectAll: function (e) {
     const selectAll = e.detail.value.length > 0;
-    const selectedNotifications = selectAll ? this.data.notifications.map(item => item.id) : [];
+    const ids = selectAll ? (this.data.notifications || []).map(item => item.id).filter(Boolean) : [];
+    const map = {};
+    ids.forEach((id) => {
+      map[id] = true;
+    });
     this.setData({
       selectAll,
-      selectedNotifications
+      selectedNotifications: ids,
+      selectedMap: map
     });
   },
 
   toggleNotificationSelection: function (e) {
-    const id = e.currentTarget.dataset.id;
-    const selectedNotifications = [...this.data.selectedNotifications];
-    const index = selectedNotifications.indexOf(id);
-    if (index > -1) {
-      selectedNotifications.splice(index, 1);
+    const id = toInt(e.currentTarget.dataset.id, 0);
+    if (!id) return;
+
+    const nextMap = { ...this.data.selectedMap };
+    if (nextMap[id]) {
+      delete nextMap[id];
     } else {
-      selectedNotifications.push(id);
+      nextMap[id] = true;
     }
+
+    const selectedNotifications = Object.keys(nextMap).map(k => toInt(k, 0)).filter(Boolean);
+    const selectAll = (this.data.notifications || []).length > 0 && selectedNotifications.length === (this.data.notifications || []).length;
     this.setData({
+      selectedMap: nextMap,
       selectedNotifications,
-      selectAll: selectedNotifications.length === this.data.notifications.length
+      selectAll
     });
   },
 
   clearSelection: function () {
     this.setData({
       selectedNotifications: [],
-      selectAll: false
+      selectAll: false,
+      selectedMap: {}
     });
   },
 
@@ -964,33 +1012,19 @@ Page({
     }
   },
 
-  // 格式化日期为 YYYY-MM-DD 格式
-  formatDate: function (dateString) {
-    if (!dateString) return '';
-    // 确保日期字符串是正确的格式
-    const date = new Date(dateString);
-    if (isNaN(date.getTime())) return '无效日期';
-    // 格式化为 YYYY-MM-DD
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-  },
-
   // 格式化日期时间为 YYYY-MM-DD HH:MM 格式
   formatDateTime: function (dateString) {
     if (!dateString || dateString === '' || dateString === null || dateString === undefined) {
       return '未设置';
     }
-    // 确保日期字符串是正确的格式
-    const date = new Date(dateString);
-    if (isNaN(date.getTime())) return '无效日期';
+    const date = toValidDate(dateString);
+    if (!date) return '无效日期';
     // 格式化为 YYYY-MM-DD HH:MM
     const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    const hours = String(date.getHours()).padStart(2, '0');
-    const minutes = String(date.getMinutes()).padStart(2, '0');
+    const month = pad2(date.getMonth() + 1);
+    const day = pad2(date.getDate());
+    const hours = pad2(date.getHours());
+    const minutes = pad2(date.getMinutes());
     return `${year}-${month}-${day} ${hours}:${minutes}`;
   },
 

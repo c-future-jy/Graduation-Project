@@ -20,11 +20,6 @@
         <text class="card-title">今日订单</text>
       </view>
       <text class="card-value">{{stats.todayOrders}}</text>
-      <view class="card-footer">
-        <text class="trend-up" wx:if="{{stats.orderTrend > 0}}">+{{stats.orderTrend}}%</text>
-        <text class="trend-down" wx:else>-{{Math.abs(stats.orderTrend)}}%</text>
-        <text class="trend-desc">较昨日</text>
-      </view>
     </view>
     <view class="stat-card" data-page="users" bindtap="goToPage">
       <view class="card-header">
@@ -32,11 +27,6 @@
         <text class="card-title">用户总数</text>
       </view>
       <text class="card-value">{{stats.totalUsers}}</text>
-      <view class="card-footer">
-        <text class="trend-up" wx:if="{{stats.userTrend > 0}}">+{{stats.userTrend}}%</text>
-        <text class="trend-down" wx:else>-{{Math.abs(stats.userTrend)}}%</text>
-        <text class="trend-desc">较昨日</text>
-      </view>
     </view>
     <view class="stat-card" data-page="merchants" bindtap="goToPage">
       <view class="card-header">
@@ -44,11 +34,6 @@
         <text class="card-title">商家数量</text>
       </view>
       <text class="card-value">{{stats.totalMerchants}}</text>
-      <view class="card-footer">
-        <text class="trend-up" wx:if="{{stats.merchantTrend > 0}}">+{{stats.merchantTrend}}%</text>
-        <text class="trend-down" wx:else>-{{Math.abs(stats.merchantTrend)}}%</text>
-        <text class="trend-desc">较昨日</text>
-      </view>
     </view>
     <view class="stat-card" data-page="products" bindtap="goToPage">
       <view class="card-header">
@@ -56,11 +41,6 @@
         <text class="card-title">商品数量</text>
       </view>
       <text class="card-value">{{stats.totalProducts}}</text>
-      <view class="card-footer">
-        <text class="trend-up" wx:if="{{stats.productTrend > 0}}">+{{stats.productTrend}}%</text>
-        <text class="trend-down" wx:else>-{{Math.abs(stats.productTrend)}}%</text>
-        <text class="trend-desc">较昨日</text>
-      </view>
     </view>
   </view>
 
@@ -118,18 +98,21 @@
   <view class="section-title">数据趋势</view>
   <view class="trend-chart">
     <view class="chart-header">
-      <text class="chart-title">近7天订单趋势</text>
+      <text class="chart-title">{{chartType === 'orders' ? '近7天订单趋势' : '近7天用户趋势'}}</text>
       <view class="chart-toggle">
-        <text class="toggle-item active" bindtap="toggleChartType" data-type="orders">订单</text>
-        <text class="toggle-item" bindtap="toggleChartType" data-type="users">用户</text>
+        <text class="toggle-item {{chartType === 'orders' ? 'active' : ''}}" bindtap="toggleChartType" data-type="orders">订单</text>
+        <text class="toggle-item {{chartType === 'users' ? 'active' : ''}}" bindtap="toggleChartType" data-type="users">用户</text>
       </view>
     </view>
     <view class="chart-container">
-      <!-- 这里可以使用第三方图表库或自定义图表 -->
-      <view class="chart-placeholder">
-        <text class="chart-icon">📈</text>
-        <text class="chart-desc">订单趋势图表</text>
+      <view wx:if="{{trendLoading}}" class="chart-placeholder">
+        <text class="chart-desc">加载中...</text>
       </view>
+      <view wx:elif="{{trendData.length === 0}}" class="chart-placeholder">
+        <text class="chart-icon">📈</text>
+        <text class="chart-desc">暂无趋势数据</text>
+      </view>
+      <canvas wx:else canvas-id="trendChart" class="trend-canvas" width="{{canvasWidth}}" height="{{canvasHeight}}"></canvas>
     </view>
   </view>
 </view>

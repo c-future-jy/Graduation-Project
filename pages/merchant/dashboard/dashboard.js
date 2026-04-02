@@ -8,6 +8,41 @@ const {
   getMerchantDashboardOrderStatus
 } = require('../../../utils/api');
 
+function toInt(value, fallback = 0) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function toStr(value, fallback = '') {
+  if (value === null || value === undefined) return fallback;
+  return String(value);
+}
+
+function getErrMsg(err, fallback = '操作失败') {
+  if (!err) return fallback;
+  if (typeof err === 'string') return err;
+  if (err.message) return err.message;
+  if (err.data && err.data.message) return err.data.message;
+  if (err.errMsg) return err.errMsg;
+  return fallback;
+}
+
+const STATUS_TEXT_MAP = {
+  0: '待支付',
+  1: '待发货',
+  2: '已发货',
+  3: '已完成',
+  4: '已取消'
+};
+
+const STATUS_COLOR_MAP = {
+  0: '#ff9800',
+  1: '#2196f3',
+  2: '#4caf50',
+  3: '#9c27b0',
+  4: '#f44336'
+};
+
 function toYmd(date) {
   const d = new Date(date);
   const y = d.getFullYear();
@@ -20,7 +55,10 @@ function toMd(ymd) {
   const str = String(ymd || '');
   const parts = str.split('-');
   if (parts.length !== 3) return str;
-  return `${parseInt(parts[1], 10)}/${parseInt(parts[2], 10)}`;
+  const mm = parseInt(parts[1], 10);
+  const dd = parseInt(parts[2], 10);
+  if (!Number.isFinite(mm) || !Number.isFinite(dd)) return str;
+  return `${mm}/${dd}`;
 }
 
 function formatDateTime(value) {
@@ -31,6 +69,13 @@ function formatDateTime(value) {
     return s.replace('T', ' ').replace(/\.\d{3}Z$/, '').replace(/Z$/, '');
   }
   return s;
+}
+
+function toMoney(value) {
+  if (value === null || value === undefined || value === '') return '0.00';
+  const n = Number(value);
+  if (!Number.isFinite(n)) return '0.00';
+  return n.toFixed(2);
 }
 
 Page({
@@ -79,8 +124,8 @@ Page({
     
     // 加载状态
     loading: false,
-    
-    // 定时刷新
+
+    // 定时刷新（timer id）
     refreshInterval: null
   },
 
@@ -112,6 +157,61 @@ Page({
     this.stopAutoRefresh();
   },
 
+  _normalizeTrend(trendRes) {
+    const trend = ((trendRes && trendRes.data && trendRes.data.trend) || []).map((x) => ({
+      date: toStr(x.date, ''),
+      orderCount: toInt(x.orderCount, 0),
+      sales: Number(x.sales) || 0
+    }));
+    return {
+      orderTrendData: trend.map((x) => ({ date: toMd(x.date), value: x.orderCount })),
+      salesTrendData: trend.map((x) => ({ date: toMd(x.date), value: Math.round(Number(x.sales) || 0) }))
+    };
+  },
+
+  _normalizeOrderStatus(statusRes) {
+    return ((statusRes && statusRes.data && statusRes.data.items) || []).map((x) => {
+      const status = toInt(x.status, 0);
+      return {
+        status,
+        label: STATUS_TEXT_MAP[status] || '未知状态',
+        value: toInt(x.value, 0)
+      };
+    });
+  },
+
+  _normalizeTopProducts(topRes) {
+    return ((topRes && topRes.data && topRes.data.items) || []).map((x) => ({
+      id: x.id,
+      name: toStr(x.name, ''),
+      sales: toInt(x.sales, 0)
+    }));
+  },
+
+  _normalizeRecentOrders(recentRes) {
+    return ((recentRes && recentRes.data && recentRes.data.orders) || []).map((o) => {
+      const amount = (o && (o.total_amount ?? o.totalAmount ?? o.pay_amount ?? o.amount)) ?? 0;
+      const status = toInt(o.status, 0);
+      const createdAt = o.createdAt ?? o.created_at ?? o.createdAtText ?? o.created_at_text;
+      return {
+        ...o,
+        id: o.id ?? o.order_id ?? o.orderId,
+        orderNo: o.orderNo ?? o.order_no ?? o.no,
+        amount: toMoney(amount),
+        status,
+        createdAt: formatDateTime(createdAt)
+      };
+    });
+  },
+
+  _normalizeLowStock(lowStockRes) {
+    return ((lowStockRes && lowStockRes.data && lowStockRes.data.items) || []).map((x) => ({
+      id: x.id,
+      name: toStr(x.name, ''),
+      stock: toInt(x.stock, 0)
+    }));
+  },
+
   /**
    * 初始化日期选择器
    */
@@ -136,13 +236,10 @@ Page({
       days.push(i);
     }
     
-    this.setData({
-      years,
-      months,
-      days,
-      startDate: new Date().toISOString().split('T')[0],
-      endDate: new Date().toISOString().split('T')[0]
-    });
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const ymd = toYmd(today);
+    this.setData({ years, months, days, startDate: ymd, endDate: ymd });
   },
 
   /**
@@ -166,63 +263,40 @@ Page({
       ]);
 
       const stats = (statsRes && statsRes.data) || {};
-      const trend = ((trendRes && trendRes.data && trendRes.data.trend) || []).map((x) => ({
-        date: String(x.date),
-        orderCount: Number(x.orderCount) || 0,
-        sales: Number(x.sales) || 0
-      }));
-      const orderTrendData = trend.map((x) => ({ date: toMd(x.date), value: x.orderCount }));
-      const salesTrendData = trend.map((x) => ({ date: toMd(x.date), value: Math.round(x.sales) }));
-      const orderStatusData = ((statusRes && statusRes.data && statusRes.data.items) || []).map((x) => ({
-        status: x.status,
-        value: Number(x.value) || 0
-      }));
 
-      const topProducts = ((topRes && topRes.data && topRes.data.items) || []).map((x) => ({
-        id: x.id,
-        name: x.name,
-        sales: Number(x.sales) || 0
-      }));
+      const { orderTrendData, salesTrendData } = this._normalizeTrend(trendRes);
+      const orderStatusData = this._normalizeOrderStatus(statusRes);
+      const topProducts = this._normalizeTopProducts(topRes);
+      const recentOrders = this._normalizeRecentOrders(recentRes);
+      const lowStockItems = this._normalizeLowStock(lowStockRes);
 
-      const recentOrders = ((recentRes && recentRes.data && recentRes.data.orders) || []).map((o) => ({
-        ...o,
-        createdAt: formatDateTime(o.createdAt)
-      }));
-
-      const lowStockItems = ((lowStockRes && lowStockRes.data && lowStockRes.data.items) || []).map((x) => ({
-        id: x.id,
-        name: x.name,
-        stock: Number(x.stock) || 0
-      }));
-
-      await new Promise((resolve) => {
-        this.setData(
-          {
-            todayOrders: stats.todayOrders || 0,
-            todaySales: stats.todaySales || 0,
-            todayAvgOrder: stats.todayAvgOrder || 0,
-            pendingOrders: stats.pendingOrders || 0,
-            monthOrders: stats.monthOrders || 0,
-            monthSales: stats.monthSales || 0,
-            totalProducts: stats.totalProducts || 0,
-            lowStockProducts: stats.lowStockProducts || 0,
-            orderTrendData,
-            salesTrendData,
-            orderStatusData,
-            topProducts,
-            recentOrders,
-            lowStockItems
-          },
-          resolve
-        );
-      });
-
-      this.drawOrderTrendChart();
-      this.drawSalesTrendChart();
-      this.drawOrderStatusChart();
+      this.setData(
+        {
+          todayOrders: toInt(stats.todayOrders, 0),
+          todaySales: Number(stats.todaySales) || 0,
+          todayAvgOrder: Number(stats.todayAvgOrder) || 0,
+          pendingOrders: toInt(stats.pendingOrders, 0),
+          monthOrders: toInt(stats.monthOrders, 0),
+          monthSales: Number(stats.monthSales) || 0,
+          totalProducts: toInt(stats.totalProducts, 0),
+          lowStockProducts: toInt(stats.lowStockProducts, 0),
+          orderTrendData,
+          salesTrendData,
+          orderStatusData,
+          topProducts,
+          recentOrders,
+          lowStockItems
+        },
+        () => {
+          this.drawOrderTrendChart();
+          this.drawSalesTrendChart();
+          this.drawOrderStatusChart();
+        }
+      );
     })()
       .catch((e) => {
         console.error('加载商家仪表盘失败:', e);
+        throw e;
       })
       .finally(() => {
         this.setData({ loading: false });
@@ -272,17 +346,8 @@ Page({
         getMerchantDashboardOrderStatus(rangeParams)
       ]);
 
-      const trend = ((trendRes && trendRes.data && trendRes.data.trend) || []).map((x) => ({
-        date: String(x.date),
-        orderCount: Number(x.orderCount) || 0,
-        sales: Number(x.sales) || 0
-      }));
-      const orderTrendData = trend.map((x) => ({ date: toMd(x.date), value: x.orderCount }));
-      const salesTrendData = trend.map((x) => ({ date: toMd(x.date), value: Math.round(x.sales) }));
-      const orderStatusData = ((statusRes && statusRes.data && statusRes.data.items) || []).map((x) => ({
-        status: x.status,
-        value: Number(x.value) || 0
-      }));
+      const { orderTrendData, salesTrendData } = this._normalizeTrend(trendRes);
+      const orderStatusData = this._normalizeOrderStatus(statusRes);
 
       this.setData({ orderTrendData, salesTrendData, orderStatusData }, () => {
         this.drawOrderTrendChart();
@@ -297,12 +362,7 @@ Page({
   async loadTopProducts() {
     try {
       const res = await getMerchantDashboardTopProducts({ limit: parseInt(this.data.rankLimit, 10) || 5 });
-      const topProducts = ((res && res.data && res.data.items) || []).map((x) => ({
-        id: x.id,
-        name: x.name,
-        sales: Number(x.sales) || 0
-      }));
-      this.setData({ topProducts });
+      this.setData({ topProducts: this._normalizeTopProducts(res) });
     } catch (e) {
       console.error('加载销量排行失败:', e);
     }
@@ -315,7 +375,6 @@ Page({
     const range = e.currentTarget.dataset.range;
     this.setData({ timeRange: range });
     this.loadTrendAndStatus();
-    console.log('切换时间范围:', range);
   },
 
   /**
@@ -325,7 +384,6 @@ Page({
     const limit = e.currentTarget.dataset.limit;
     this.setData({ rankLimit: limit });
     this.loadTopProducts();
-    console.log('切换排行数量:', limit);
   },
 
   /**
@@ -371,10 +429,14 @@ Page({
    * 手动刷新数据
    */
   refreshData() {
-    wx.showToast({ title: '刷新中...', icon: 'loading' });
-    this.loadDashboardData().then(() => {
-      wx.showToast({ title: '刷新成功', icon: 'success' });
-    });
+    wx.showToast({ title: '刷新中...', icon: 'loading', duration: 10000 });
+    this.loadDashboardData()
+      .then(() => {
+        wx.showToast({ title: '刷新成功', icon: 'success' });
+      })
+      .catch((err) => {
+        wx.showToast({ title: getErrMsg(err, '刷新失败'), icon: 'none' });
+      });
   },
 
   /**
@@ -382,8 +444,8 @@ Page({
    */
   startAutoRefresh() {
     // 每30秒自动刷新一次数据
-    this.data.refreshInterval = setInterval(() => {
-      this.loadDashboardData();
+    this._refreshTimer = setInterval(() => {
+      this.loadDashboardData().catch(() => {});
     }, 30000);
   },
 
@@ -391,8 +453,9 @@ Page({
    * 停止自动刷新
    */
   stopAutoRefresh() {
-    if (this.data.refreshInterval) {
-      clearInterval(this.data.refreshInterval);
+    if (this._refreshTimer) {
+      clearInterval(this._refreshTimer);
+      this._refreshTimer = null;
     }
   },
 
@@ -517,6 +580,7 @@ Page({
     const radius = 60;
     
     const total = data.reduce((sum, item) => sum + item.value, 0);
+    if (!total) return;
     let startAngle = 0;
     const colors = ['#ff9800', '#2196f3', '#4caf50', '#9c27b0', '#f44336'];
     
@@ -542,7 +606,7 @@ Page({
       
       ctx.setFillStyle('#333');
       ctx.setFontSize(14);
-      ctx.fillText(item.status + ': ' + item.value, x + 25, y + 12);
+      ctx.fillText((item.label || item.status) + ': ' + item.value, x + 25, y + 12);
     });
     
     ctx.draw();
@@ -552,35 +616,21 @@ Page({
    * 获取订单状态文本
    */
   getStatusText(status) {
-    const statusMap = {
-      0: '待支付',
-      1: '待发货',
-      2: '已发货',
-      3: '已完成',
-      4: '已取消'
-    };
-    return statusMap[status] || '未知状态';
+    return STATUS_TEXT_MAP[toInt(status, -1)] || '未知状态';
   },
 
   /**
    * 获取订单状态颜色
    */
   getStatusColor(status) {
-    const colorMap = {
-      0: '#ff9800', // 待支付 - 橙色
-      1: '#2196f3', // 待发货 - 蓝色
-      2: '#4caf50', // 已发货 - 绿色
-      3: '#9c27b0', // 已完成 - 紫色
-      4: '#f44336'  // 已取消 - 红色
-    };
-    return colorMap[status] || '#999';
+    return STATUS_COLOR_MAP[toInt(status, -1)] || '#999';
   },
 
   /**
    * 快捷操作 - 发布新商品
    */
   goToAddProduct() {
-    wx.navigateTo({ url: '/pages/merchant/products/add' });
+    wx.navigateTo({ url: '/pages/merchant/products/products?openForm=1' });
   },
 
   /**
@@ -616,7 +666,7 @@ Page({
    */
   goToOrderDetail(e) {
     const orderId = e.currentTarget.dataset.id;
-    wx.navigateTo({ url: `/pages/merchant/orders/detail?id=${orderId}` });
+    wx.navigateTo({ url: `/pages/merchant/order-detail/order-detail?id=${orderId}` });
   },
 
   /**
@@ -625,6 +675,5 @@ Page({
   remindRestock(e) {
     const productId = e.currentTarget.dataset.id;
     wx.showToast({ title: '已发送补货提醒', icon: 'success' });
-    console.log('提醒补货:', productId);
   }
 })

@@ -1,6 +1,25 @@
 // pages/merchant/profile/profile.js
 const { getUserProfile, getMyMerchant, updateMerchant, uploadImage } = require('../../../utils/api');
 
+function toInt(value, fallback = 0) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function toStr(value, fallback = '') {
+  if (value === null || value === undefined) return fallback;
+  return String(value);
+}
+
+function getErrMsg(err, fallback = '操作失败') {
+  if (!err) return fallback;
+  if (typeof err === 'string') return err;
+  if (err.message) return err.message;
+  if (err.data && err.data.message) return err.data.message;
+  if (err.errMsg) return err.errMsg;
+  return fallback;
+}
+
 Page({
   data: {
     loading: true,
@@ -21,6 +40,8 @@ Page({
   _draftKey: 'merchantProfileDraft',
 
   onLoad() {
+    this._loadingCount = 0;
+    this._loadingShown = false;
     this.loadMerchant();
   },
 
@@ -62,6 +83,8 @@ Page({
 
       // 合并草稿（草稿优先）
       const merged = Object.assign({}, this.data.form || {}, draft.form || {});
+      // 归一化：status 只允许 0/1（兼容草稿里是字符串/布尔）
+      merged.status = toInt(merged.status, 1) === 1 ? 1 : 0;
       this.setData({ form: merged, logoPreview: this.toPreviewUrl(merged.logo) });
     } catch (_) {
       // ignore
@@ -77,7 +100,7 @@ Page({
   },
 
   toPreviewUrl(maybeUrl) {
-    const url = String(maybeUrl || '').trim();
+    const url = toStr(maybeUrl, '').trim();
     if (!url) return '';
     if (/^https?:\/\//i.test(url)) return url;
     if (url.startsWith('//')) return 'https:' + url;
@@ -96,48 +119,78 @@ Page({
     return origin + url;
   },
 
-  loadMerchant() {
+  _showLoading(title) {
+    const next = (this._loadingCount || 0) + 1;
+    this._loadingCount = next;
+    if (next !== 1) return;
+    wx.showLoading({
+      title: title || '处理中...',
+      success: () => {
+        this._loadingShown = true;
+      },
+      fail: () => {
+        this._loadingShown = false;
+      }
+    });
+  },
+
+  _hideLoading() {
+    const current = this._loadingCount || 0;
+    if (current <= 0) return;
+    const next = Math.max(0, current - 1);
+    this._loadingCount = next;
+    if (next !== 0) return;
+    if (!this._loadingShown) return;
+    wx.hideLoading({
+      complete: () => {
+        this._loadingShown = false;
+      }
+    });
+  },
+
+  async loadMerchant() {
     this.setData({ loading: true });
-    wx.showLoading({ title: '加载中...' });
+    this._showLoading('加载中...');
 
-    // 先拉取用户资料，触发 token 自动刷新（若管理员刚审核通过）
-    getUserProfile()
-      .catch(() => {})
-      .finally(() => {
-        getMyMerchant()
-          .then((res) => {
-            if (res && res.success && res.data && res.data.merchant) {
-              const m = res.data.merchant;
-              const nextForm = {
-                name: m.name || '',
-                logo: m.logo || '',
-                description: m.description || '',
-                address: m.address || '',
-                phone: m.phone || '',
-                status: typeof m.status === 'number' ? m.status : parseInt(m.status, 10) || 1
-              };
-              this.setData({
-                merchantId: m.id,
-                form: nextForm,
-                logoPreview: this.toPreviewUrl(nextForm.logo)
-              });
-              if (m && m.id) wx.setStorageSync('merchantId', m.id);
+    try {
+      // 先拉取用户资料，触发 token 自动刷新（若管理员刚审核通过）
+      try {
+        await getUserProfile();
+      } catch (_) {
+        // ignore
+      }
 
-              // 若存在草稿，恢复覆盖（避免选择图片等场景把输入覆盖回服务端旧值）
-              this.restoreDraft();
-            } else {
-              wx.showToast({ title: (res && res.message) || '未找到商家信息', icon: 'none' });
-            }
-          })
-          .catch((err) => {
-            console.error('getMyMerchant failed:', err);
-            wx.showToast({ title: (err && err.message) || '加载失败', icon: 'none' });
-          })
-          .finally(() => {
-            wx.hideLoading();
-            this.setData({ loading: false });
-          });
-      });
+      const res = await getMyMerchant();
+      if (res && res.success && res.data && res.data.merchant) {
+        const m = res.data.merchant;
+        const nextForm = {
+          name: toStr(m.name, ''),
+          logo: toStr(m.logo, ''),
+          description: toStr(m.description, ''),
+          address: toStr(m.address, ''),
+          phone: toStr(m.phone, ''),
+          status: (typeof m.status === 'number' ? m.status : toInt(m.status, 1)) === 1 ? 1 : 0
+        };
+
+        this.setData({
+          merchantId: m.id,
+          form: nextForm,
+          logoPreview: this.toPreviewUrl(nextForm.logo)
+        });
+        if (m && m.id) wx.setStorageSync('merchantId', m.id);
+
+        // 若存在草稿，恢复覆盖（避免选择图片等场景把输入覆盖回服务端旧值）
+        this.restoreDraft();
+      } else {
+        wx.showToast({ title: (res && res.message) || '未找到商家信息', icon: 'none' });
+      }
+    } catch (err) {
+      console.error('getMyMerchant failed:', err);
+      wx.showToast({ title: getErrMsg(err, '加载失败'), icon: 'none' });
+    } finally {
+      this._hideLoading();
+      this.setData({ loading: false });
+    }
   },
 
   onInput(e) {
@@ -169,7 +222,7 @@ Page({
           return;
         }
 
-        wx.showLoading({ title: '上传中...' });
+        this._showLoading('上传中...');
         uploadImage(tempFilePath)
           .then((resp) => {
             const url = (resp && resp.data && resp.data.url) ? resp.data.url : (resp && resp.url) || '';
@@ -184,10 +237,10 @@ Page({
           })
           .catch((err) => {
             console.error('upload logo failed:', err);
-            wx.showToast({ title: (err && err.message) || '上传失败', icon: 'none' });
+            wx.showToast({ title: getErrMsg(err, '上传失败'), icon: 'none' });
           })
           .finally(() => {
-            wx.hideLoading();
+            this._hideLoading();
             this.setData({ uploadingLogo: false });
           });
       },
@@ -205,21 +258,12 @@ Page({
     }
 
     const form = this.data.form || {};
-    if (!String(form.name || '').trim()) {
+    if (!toStr(form.name, '').trim()) {
       return wx.showToast({ title: '请填写店铺名称', icon: 'none' });
     }
 
     this.setData({ saving: true });
-    wx.showLoading({ title: '保存中...' });
-
-    const getErrMsg = (err) => {
-      if (!err) return '保存失败';
-      if (typeof err === 'string') return err;
-      if (err.message) return err.message;
-      if (err.data && err.data.message) return err.data.message;
-      if (err.errMsg) return err.errMsg;
-      return '保存失败';
-    };
+    this._showLoading('保存中...');
 
     updateMerchant(merchantId, {
       name: form.name,
@@ -253,12 +297,12 @@ Page({
       })
       .catch((err) => {
         console.error('updateMerchant failed:', err);
-        const msg = getErrMsg(err);
+        const msg = getErrMsg(err, '保存失败');
         // 失败提示尽量显眼
         wx.showModal({ title: '保存失败', content: msg, showCancel: false });
       })
       .finally(() => {
-        wx.hideLoading();
+        this._hideLoading();
         this.setData({ saving: false });
       });
   }

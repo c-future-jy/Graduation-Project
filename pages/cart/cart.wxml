@@ -1,6 +1,6 @@
 
 <!-- 购物车页面 -->
-<view class="cart-container" catchtap="preventTap">
+<view class="cart-container">
   <!-- 加载状态 -->
   <view wx:if="{{loading}}" class="loading-container">
     <view class="loading-spinner"></view>
@@ -9,7 +9,7 @@
 
   <!-- 错误状态 -->
   <view wx:elif="{{error}}" class="error-container">
-    <image src="/images/error.png" class="error-image" />
+    <image src="/assets/images/chatu-2.jpg" class="error-image" />
     <text class="error-text">网络错误，请重试</text>
     <button class="retry-button" bindtap="loadCartData">重新加载</button>
   </view>
@@ -24,44 +24,76 @@
   <!-- 购物车商品列表 -->
   <view wx:else class="cart-list">
     <!-- 商家分组 -->
-    <view wx:for="{{merchants}}" wx:key="{{item.merchantId}}" class="merchant-group" catchtap="preventTap">
+    <view wx:for="{{merchants}}" wx:key="merchantId" wx:for-item="merchant" class="merchant-group">
       <!-- 商家头部 -->
-      <view class="merchant-header" catchtap="preventTap">
-        <view class="merchant-info" catchtap="preventTap">
-          <image wx:if="{{item.merchantLogo}}" src="{{item.merchantLogo}}" class="merchant-logo" />
-          <text class="merchant-name">{{item.merchantName}}</text>
+      <view class="merchant-header">
+        <view class="merchant-info">
+          <image
+            src="{{merchant.merchantLogo || defaultMerchantLogo}}"
+            class="merchant-logo"
+            mode="aspectFill"
+            binderror="onMerchantLogoError"
+            data-merchant-id="{{merchant.merchantId}}"
+          />
+          <text class="merchant-name">{{merchant.merchantName}}</text>
         </view>
-        <checkbox class="merchant-checkbox" checked="{{item.checked}}" bindchange="toggleMerchantCheck" data-merchant-id="{{item.merchantId}}" />
+        <checkbox
+          class="merchant-checkbox"
+          checked="{{merchant.checked}}"
+          bindchange="toggleMerchantCheck"
+          data-merchant-id="{{merchant.merchantId}}"
+        />
       </view>
 
       <!-- 商品列表 -->
-      <view class="goods-list" catchtap="preventTap">
-        <view wx:for="{{item.goods}}" wx:key="{{item.goodsId}}" class="goods-item" data-goods-id="{{item.goodsId}}" data-merchant-id="{{item.merchantId}}" catchtap="preventTap">
-          <!-- 商品选中状态 -->
-          <checkbox class="goods-checkbox" checked="{{item.checked}}" bindchange="toggleGoodsCheck" data-goods-id="{{item.goodsId}}" data-merchant-id="{{item.merchantId}}" />
+      <view class="goods-list">
+        <view
+          wx:for="{{merchant.goods}}"
+          wx:key="cartId"
+          wx:for-item="goods"
+          class="goods-item"
+          bindtap="goGoodsDetail"
+          data-goods-id="{{goods.goodsId}}"
+        >
+          <!-- 商品选中状态（阻止跳转） -->
+          <checkbox
+            class="goods-checkbox"
+            checked="{{goods.checked}}"
+            catchtap="preventTap"
+            bindchange="toggleGoodsCheck"
+            data-cart-id="{{goods.cartId}}"
+            data-goods-id="{{goods.goodsId}}"
+            data-merchant-id="{{merchant.merchantId}}"
+          />
 
           <!-- 商品图片 -->
-          <image src="{{item.goodsImage}}" class="goods-image" />
+          <image
+            src="{{goods.goodsImage || defaultGoodsImage}}"
+            class="goods-image"
+            mode="aspectFill"
+            binderror="onGoodsImageError"
+            data-cart-id="{{goods.cartId}}"
+          />
 
           <!-- 商品信息 -->
-          <view class="goods-info" catchtap="preventTap">
+          <view class="goods-info">
             <!-- 商品名称 -->
-            <text class="goods-name">{{item.goodsName}}</text>
+            <text class="goods-name">{{goods.goodsName}}</text>
 
             <!-- 商品规格 -->
-            <text class="goods-spec">{{item.spec}}</text>
+            <text class="goods-spec">{{goods.spec}}</text>
 
             <!-- 价格和数量 -->
-            <view class="goods-bottom" catchtap="preventTap">
-              <text class="goods-price">¥{{item.price}}</text>
+            <view class="goods-bottom">
+              <text class="goods-price">¥{{goods.price}}</text>
               
               <!-- 数量调整 -->
               <view class="quantity-control" catchtap="preventTap">
-                <button class="quantity-btn minus" bindtap="decreaseQuantity" data-goods-id="{{item.goodsId}}" data-merchant-id="{{item.merchantId}}" disabled="{{item.quantity <= 1 || item.stock === 0}}">
+                <button class="quantity-btn minus" catchtap="decreaseQuantity" data-cart-id="{{goods.cartId}}" data-merchant-id="{{merchant.merchantId}}">
                   -
                 </button>
-                <input class="quantity-input" type="number" value="{{item.quantity}}" bindinput="changeQuantity" data-goods-id="{{item.goodsId}}" data-merchant-id="{{item.merchantId}}" />
-                <button class="quantity-btn plus" bindtap="increaseQuantity" data-goods-id="{{item.goodsId}}" data-merchant-id="{{item.merchantId}}" disabled="{{item.quantity >= item.stock || item.stock === 0}}">
+                <input class="quantity-input" type="number" value="{{goods.quantity}}" maxlength="2" bindblur="changeQuantity" data-cart-id="{{goods.cartId}}" data-merchant-id="{{merchant.merchantId}}" />
+                <button class="quantity-btn plus" catchtap="increaseQuantity" data-cart-id="{{goods.cartId}}" data-merchant-id="{{merchant.merchantId}}" disabled="{{goods.quantity >= goods.stock || goods.stock === 0}}">
                   +
                 </button>
               </view>
@@ -69,44 +101,39 @@
           </view>
 
           <!-- 库存状态 -->
-          <view wx:if="{{item.stock === 0}}" class="stock-status out-of-stock">库存不足</view>
-          <view wx:elif="{{item.stock < 10}}" class="stock-status low-stock">仅剩{{item.stock}}件</view>
-
-          <!-- 左滑删除按钮 -->
-          <view class="delete-btn" bindtap="deleteGoods" data-goods-id="{{item.goodsId}}" data-merchant-id="{{item.merchantId}}">
-            删除
-          </view>
+          <view wx:if="{{goods.stock === 0}}" class="stock-status out-of-stock">库存不足</view>
+          <view wx:elif="{{goods.stock < 10}}" class="stock-status low-stock">仅剩{{goods.stock}}件</view>
         </view>
       </view>
     </view>
 
     <!-- 失效商品 -->
-    <view wx:if="{{invalidGoods.length > 0}}" class="invalid-section" catchtap="preventTap">
-      <view class="invalid-header" catchtap="preventTap">
+    <view wx:if="{{invalidGoods.length > 0}}" class="invalid-section">
+      <view class="invalid-header">
         <text class="invalid-title">失效商品</text>
         <text class="clean-btn" bindtap="cleanInvalidGoods">一键清理</text>
       </view>
-      <view class="invalid-list" catchtap="preventTap">
-        <view wx:for="{{invalidGoods}}" wx:key="{{item.goodsId}}" class="invalid-item" catchtap="preventTap">
-          <image src="{{item.goodsImage}}" class="invalid-image" />
-          <view class="invalid-info" catchtap="preventTap">
-            <text class="invalid-name">{{item.goodsName}}</text>
-            <text class="invalid-reason">{{item.reason}}</text>
+      <view class="invalid-list">
+        <view wx:for="{{invalidGoods}}" wx:key="cartId" wx:for-item="goods" class="invalid-item">
+          <image src="{{goods.goodsImage || defaultGoodsImage}}" class="invalid-image" mode="aspectFill" binderror="onInvalidGoodsImageError" data-cart-id="{{goods.cartId}}" />
+          <view class="invalid-info">
+            <text class="invalid-name">{{goods.goodsName}}</text>
+            <text class="invalid-reason">{{goods.reason}}</text>
           </view>
-          <button class="invalid-delete-btn" bindtap="deleteInvalidGoods" data-goods-id="{{item.goodsId}}">删除</button>
+          <button class="invalid-delete-btn" bindtap="deleteInvalidGoods" data-cart-id="{{goods.cartId}}">删除</button>
         </view>
       </view>
     </view>
   </view>
 
   <!-- 结算栏 -->
-  <view wx:if="{{hasGoods}}" class="checkout-bar" catchtap="preventTap">
-    <view class="checkout-left" catchtap="preventTap">
+  <view wx:if="{{hasGoods}}" class="checkout-bar">
+    <view class="checkout-left">
       <checkbox class="checkout-checkbox" checked="{{allChecked}}" bindchange="toggleAllCheck" />
       <text class="checkout-text">全选</text>
     </view>
-    <view class="checkout-right" catchtap="preventTap">
-      <view class="total-price" catchtap="preventTap">
+    <view class="checkout-right">
+      <view class="total-price">
         <text class="total-label">合计：</text>
         <text class="total-value">¥{{totalPrice}}</text>
       </view>
@@ -116,17 +143,4 @@
     </view>
   </view>
 
-  <!-- 编辑模式 -->
-  <view wx:if="{{editMode}}" class="edit-bar" catchtap="preventTap">
-    <view class="edit-left" catchtap="preventTap">
-      <checkbox class="edit-checkbox" checked="{{allChecked}}" bindchange="toggleAllCheck" />
-      <text class="edit-text">全选</text>
-    </view>
-    <view class="edit-right" catchtap="preventTap">
-      <button class="delete-all-button" bindtap="deleteSelectedGoods" disabled="{{!hasCheckedGoods}}">
-        删除选中({{checkedCount}})
-      </button>
-      <button class="exit-edit-button" bindtap="exitEditMode">完成</button>
-    </view>
-  </view>
 </view>
