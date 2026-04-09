@@ -6,7 +6,22 @@ Page({
   data: {
     orderInfo: {},
     loading: true,
-    orderId: null
+    orderId: null,
+    submitting: false
+  },
+
+  onLoad: function (options) {
+    this._loadingCount = 0;
+    this._loadingShown = false;
+    this._detailReqId = 0;
+
+    const orderId = options && options.id;
+    if (!orderId) {
+      wx.showToast({ title: '订单ID错误', icon: 'none' });
+      return;
+    }
+    this.setData({ orderId: String(orderId) });
+    this.loadOrderDetail();
   },
 
   getErrMsg(err, fallback = '操作失败') {
@@ -14,7 +29,13 @@ Page({
     if (typeof err === 'string') return err;
     if (err.message) return err.message;
     if (err.data && err.data.message) return err.data.message;
+    if (err.errMsg) return err.errMsg;
     return fallback;
+  },
+
+  toInt(value, fallback = 0) {
+    const n = parseInt(String(value), 10);
+    return Number.isFinite(n) ? n : fallback;
   },
 
   toMoney(value) {
@@ -24,56 +45,88 @@ Page({
     return n.toFixed(2);
   },
 
-  onLoad: function (options) {
-    const orderId = options.id;
-    if (!orderId) {
-      wx.showToast({ title: '订单ID错误', icon: 'none' });
-      return;
-    }
-    this.setData({ orderId: orderId });
-    this.loadOrderDetail();
+  _incLoading(title) {
+    const next = (this._loadingCount || 0) + 1;
+    this._loadingCount = next;
+    if (next !== 1) return;
+    wx.showLoading({
+      title: title || '处理中...',
+      success: () => {
+        this._loadingShown = true;
+      },
+      fail: () => {
+        this._loadingShown = false;
+      }
+    });
+  },
+
+  _decLoading() {
+    const current = this._loadingCount || 0;
+    if (current <= 0) return;
+    const next = Math.max(0, current - 1);
+    this._loadingCount = next;
+    if (next !== 0) return;
+    if (!this._loadingShown) return;
+    wx.hideLoading({
+      complete: () => {
+        this._loadingShown = false;
+      }
+    });
   },
 
   // 加载订单详情
-  loadOrderDetail: function () {
+  async loadOrderDetail() {
     const { orderId } = this.data;
-    
-    wx.showLoading({ title: '加载中...' });
-    
-    return request({
-      url: `/orders/merchant/orders/${orderId}`,
-      method: 'GET'
-    }).then(res => {
-      wx.hideLoading();
-      if (res.success) {
-        const order = (res.data && res.data.order) ? res.data.order : {};
-        const totalAmount = order.total_amount ?? order.amount ?? 0;
+    if (!orderId) return;
 
-        const products = Array.isArray(order.products) ? order.products : [];
-        const normalizedProducts = products.map((p) => ({
-          ...p,
-          image: toNetworkUrl(p.image || p.product_image)
-        }));
+    const reqId = (this._detailReqId || 0) + 1;
+    this._detailReqId = reqId;
 
-        this.setData({
-          orderInfo: {
-            ...order,
-            user_avatar: toNetworkUrl(order.user_avatar),
-            products: normalizedProducts,
-            displayAmount: this.toMoney(totalAmount)
-          },
-          loading: false
-        });
-      } else {
-        wx.showToast({ title: res.message || '加载失败', icon: 'none' });
+    this.setData({ loading: true });
+    this._incLoading('加载中...');
+
+    try {
+      const res = await request({
+        url: `/orders/merchant/orders/${encodeURIComponent(String(orderId))}`,
+        method: 'GET'
+      });
+
+      if (reqId !== this._detailReqId) return;
+
+      if (!(res && res.success)) {
+        wx.showToast({ title: (res && res.message) || '加载失败', icon: 'none' });
+        return;
+      }
+
+      const order = (res.data && res.data.order) ? res.data.order : {};
+      const totalAmount = order.total_amount ?? order.amount ?? 0;
+
+      const products = Array.isArray(order.products) ? order.products : [];
+      const normalizedProducts = products.map((p) => ({
+        ...p,
+        image: toNetworkUrl(p.image || p.product_image)
+      }));
+
+      const status = this.toInt(order.status, this.toInt(order.order_status, 0));
+      this.setData({
+        orderInfo: {
+          ...order,
+          status,
+          user_avatar: toNetworkUrl(order.user_avatar),
+          products: normalizedProducts,
+          displayAmount: this.toMoney(totalAmount)
+        }
+      });
+    } catch (err) {
+      if (reqId !== this._detailReqId) return;
+      console.error('加载订单详情失败:', err);
+      wx.showToast({ title: this.getErrMsg(err, '网络错误'), icon: 'none' });
+    } finally {
+      if (reqId === this._detailReqId) {
         this.setData({ loading: false });
       }
-    }).catch(err => {
-      console.error('加载订单详情失败:', err);
-      wx.hideLoading();
-      wx.showToast({ title: '网络错误', icon: 'none' });
-      this.setData({ loading: false });
-    });
+      this._decLoading();
+    }
   },
 
   // 处理发货
@@ -97,7 +150,9 @@ Page({
 
   // 执行发货
   async shipOrder(orderId) {
-    wx.showLoading({ title: '发货中...' });
+    if (this.data.submitting) return;
+    this.setData({ submitting: true });
+    this._incLoading('发货中...');
     try {
       const res = await request({
         url: `/orders/merchant/orders/${orderId}/ship`,
@@ -121,7 +176,8 @@ Page({
       console.error('发货失败:', err);
       wx.showToast({ title: this.getErrMsg(err, '发货失败'), icon: 'none' });
     } finally {
-      wx.hideLoading();
+      this._decLoading();
+      this.setData({ submitting: false });
     }
   },
 
@@ -163,27 +219,30 @@ Page({
   },
 
   // 执行取消订单
-  cancelOrder: function (orderId, reason) {
-    wx.showLoading({ title: '取消中...' });
+  async cancelOrder(orderId, reason) {
+    if (this.data.submitting) return;
+    this.setData({ submitting: true });
+    this._incLoading('取消中...');
 
-    request({
-      url: `/orders/merchant/orders/${orderId}/cancel`,
-      method: 'POST',
-      data: { reason: reason }
-    }).then(res => {
-      wx.hideLoading();
-      if (res.success) {
+    try {
+      const res = await request({
+        url: `/orders/merchant/orders/${orderId}/cancel`,
+        method: 'POST',
+        data: { reason: reason }
+      });
+      if (res && res.success) {
         wx.showToast({ title: '取消成功', icon: 'success' });
-        // 刷新订单详情
-        this.loadOrderDetail();
+        await this.loadOrderDetail();
       } else {
-        wx.showToast({ title: res.message || '取消失败', icon: 'none' });
+        wx.showToast({ title: (res && res.message) || '取消失败', icon: 'none' });
       }
-    }).catch(err => {
+    } catch (err) {
       console.error('取消订单失败:', err);
-      wx.hideLoading();
-      wx.showToast({ title: '网络错误', icon: 'none' });
-    });
+      wx.showToast({ title: this.getErrMsg(err, '网络错误'), icon: 'none' });
+    } finally {
+      this._decLoading();
+      this.setData({ submitting: false });
+    }
   },
 
   // 查看评价
@@ -222,9 +281,11 @@ Page({
   },
 
   // 下拉刷新
-  onPullDownRefresh: function () {
-    this.loadOrderDetail().then(() => {
+  async onPullDownRefresh() {
+    try {
+      await this.loadOrderDetail();
+    } finally {
       wx.stopPullDownRefresh();
-    });
+    }
   }
 });

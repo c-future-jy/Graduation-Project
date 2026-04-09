@@ -120,7 +120,7 @@
       <view class="menu-left">
         <image class="menu-icon" src="/assets/images/message.jpg" mode="aspectFit"></image>
         <text class="menu-text">消息通知</text>
-        <view class="red-dot" wx:if="{{unreadNoticeCount > 0}}">{{unreadNoticeCount}}</view>
+        <view class="red-dot" wx:if="{{unreadNoticeCount > 0}}">{{unreadNoticeCount > 99 ? '99+' : unreadNoticeCount}}</view>
       </view>
       <text class="arrow">></text>
     </view>

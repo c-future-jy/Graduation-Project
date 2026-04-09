@@ -3,8 +3,42 @@ const { pool } = require('../config/db');
 const ok = (res, data) => res.json({ success: true, data });
 const bad = (res, code, message) => res.status(code).json({ success: false, message });
 
-function getMerchantId(req) {
-  return req.user && req.user.merchant_id ? parseInt(req.user.merchant_id, 10) : null;
+async function hasTable(tableName) {
+  try {
+    const [rows] = await pool.query('SHOW TABLES LIKE ?', [tableName]);
+    return Array.isArray(rows) && rows.length > 0;
+  } catch (_) {
+    return false;
+  }
+}
+
+async function resolveMerchantTableName() {
+  if (await hasTable('merchant')) return 'merchant';
+  if (await hasTable('merchants')) return 'merchants';
+  return 'merchant';
+}
+
+async function resolveMerchantId(req) {
+  const tokenMid = req.user && req.user.merchant_id !== undefined && req.user.merchant_id !== null && req.user.merchant_id !== ''
+    ? parseInt(req.user.merchant_id, 10)
+    : null;
+  if (Number.isFinite(tokenMid) && tokenMid > 0) return tokenMid;
+
+  const userId = req.user && req.user.id ? parseInt(req.user.id, 10) : null;
+  if (!userId) return null;
+
+  try {
+    const merchantTable = await resolveMerchantTableName();
+    const [rows] = await pool.query(
+      `SELECT id FROM ${merchantTable} WHERE owner_user_id = ? ORDER BY id DESC LIMIT 1`,
+      [userId]
+    );
+    const mid = rows && rows[0] && rows[0].id;
+    const midNum = mid !== undefined && mid !== null && mid !== '' ? parseInt(mid, 10) : null;
+    return Number.isFinite(midNum) && midNum > 0 ? midNum : null;
+  } catch (_) {
+    return null;
+  }
 }
 
 function isYmd(dateStr) {
@@ -20,7 +54,7 @@ function addDays(date, delta) {
 // GET /api/merchant/dashboard/stats
 exports.getStats = async (req, res, next) => {
   try {
-    const merchantId = getMerchantId(req);
+    const merchantId = await resolveMerchantId(req);
     if (!merchantId) return bad(res, 403, '商家身份验证失败');
 
     const [[todayOrdersRow]] = await pool.query(
@@ -85,7 +119,7 @@ exports.getStats = async (req, res, next) => {
 // GET /api/merchant/dashboard/trend?days=7
 exports.getTrend = async (req, res, next) => {
   try {
-    const merchantId = getMerchantId(req);
+    const merchantId = await resolveMerchantId(req);
     if (!merchantId) return bad(res, 403, '商家身份验证失败');
 
     const startDate = req.query.startDate;
@@ -155,7 +189,7 @@ exports.getTrend = async (req, res, next) => {
 // GET /api/merchant/dashboard/order-status?days=7 or startDate/endDate
 exports.getOrderStatus = async (req, res, next) => {
   try {
-    const merchantId = getMerchantId(req);
+    const merchantId = await resolveMerchantId(req);
     if (!merchantId) return bad(res, 403, '商家身份验证失败');
 
     const startDate = req.query.startDate;
@@ -210,7 +244,7 @@ exports.getOrderStatus = async (req, res, next) => {
 // GET /api/merchant/dashboard/top-products?limit=5
 exports.getTopProducts = async (req, res, next) => {
   try {
-    const merchantId = getMerchantId(req);
+    const merchantId = await resolveMerchantId(req);
     if (!merchantId) return bad(res, 403, '商家身份验证失败');
 
     const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 5, 1), 50);
@@ -245,7 +279,7 @@ exports.getTopProducts = async (req, res, next) => {
 // GET /api/merchant/dashboard/recent-orders?limit=5
 exports.getRecentOrders = async (req, res, next) => {
   try {
-    const merchantId = getMerchantId(req);
+    const merchantId = await resolveMerchantId(req);
     if (!merchantId) return bad(res, 403, '商家身份验证失败');
 
     const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 5, 1), 50);
@@ -264,7 +298,7 @@ exports.getRecentOrders = async (req, res, next) => {
 // GET /api/merchant/dashboard/low-stock?threshold=10&limit=10
 exports.getLowStock = async (req, res, next) => {
   try {
-    const merchantId = getMerchantId(req);
+    const merchantId = await resolveMerchantId(req);
     if (!merchantId) return bad(res, 403, '商家身份验证失败');
 
     const threshold = Math.min(Math.max(parseInt(req.query.threshold, 10) || 10, 1), 9999);

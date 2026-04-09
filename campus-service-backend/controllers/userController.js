@@ -18,7 +18,7 @@ async function columnExists(tableName, columnName) {
  */
 exports.login = async (req, res, next) => {
   try {
-    const { code, nickname, avatarUrl, role = 1 } = req.body;
+    const { code, nickname, avatarUrl } = req.body;
     
     // 调用微信API，用code换取openid
     let openid;
@@ -70,7 +70,7 @@ exports.login = async (req, res, next) => {
       // 用户不存在，创建新用户
       const [result] = await pool.query(
         'INSERT INTO user (openid, nickname, avatar_url, role) VALUES (?, ?, ?, ?)',
-        [openid, nickname || '新用户', avatarUrl || '', role]
+        [openid, nickname || '新用户', avatarUrl || '', 1]
       );
       
       user = {
@@ -78,24 +78,12 @@ exports.login = async (req, res, next) => {
         openid,
         nickname: nickname || '新用户',
         avatar_url: avatarUrl || '',
-        role
+        role: 1
       };
     } else {
       user = users[0];
 
-      // 商家被禁用时禁止登录（避免进入商家端）
-      if (user.role === 2 && user.merchant_id) {
-        const [merchants] = await pool.query(
-          'SELECT status FROM merchant WHERE id = ?',
-          [user.merchant_id]
-        );
-        if (merchants.length > 0 && parseInt(merchants[0].status, 10) !== 1) {
-          return res.status(403).json({
-            success: false,
-            message: '商家已被禁用，暂无法登录'
-          });
-        }
-      }
+      // 说明：merchant.status 在前端用于“营业中/休息中”，不应作为“禁用登录”的条件。
 
       // 更新用户信息
       if (nickname || avatarUrl) {
@@ -203,19 +191,7 @@ exports.accountLogin = async (req, res, next) => {
     
     const user = users[0];
 
-    // 商家被禁用时禁止登录（避免进入商家端）
-    if (user.role === 2 && user.merchant_id) {
-      const [merchants] = await pool.query(
-        'SELECT status FROM merchant WHERE id = ?',
-        [user.merchant_id]
-      );
-      if (merchants.length > 0 && parseInt(merchants[0].status, 10) !== 1) {
-        return res.status(403).json({
-          success: false,
-          message: '商家已被禁用，暂无法登录'
-        });
-      }
-    }
+    // 说明：merchant.status 在前端用于“营业中/休息中”，不应作为“禁用登录”的条件。
     
     // 验证密码
     const isPasswordValid = await bcrypt.compare(password, user.password);
@@ -264,11 +240,39 @@ exports.accountLogin = async (req, res, next) => {
  */
 exports.register = async (req, res, next) => {
   try {
-    const { code, nickname, avatarUrl, phone, account, password, role = 1, username } = req.body;
+    const { code, nickname, avatarUrl, phone, account, password, username } = req.body;
     const phoneValue = String(phone || '').trim();
     const accountValue = String(account || '').trim();
     const hasAccountColumn = await columnExists('user', 'account');
     const nicknameToSave = nickname || username || '新用户';
+
+    const hasTable = async (tableName) => {
+      try {
+        const [rows] = await pool.query('SHOW TABLES LIKE ?', [tableName]);
+        return Array.isArray(rows) && rows.length > 0;
+      } catch (_) {
+        return false;
+      }
+    };
+
+    const resolveMerchantTableName = async () => {
+      if (await hasTable('merchant')) return 'merchant';
+      if (await hasTable('merchants')) return 'merchants';
+      return 'merchant';
+    };
+
+    const getTableColumns = async (tableName) => {
+      try {
+        const [rows] = await pool.query(`SHOW COLUMNS FROM \`${tableName}\``);
+        const names = (rows || []).map((r) => r && r.Field).filter(Boolean);
+        return new Set(names);
+      } catch (_) {
+        return new Set();
+      }
+    };
+
+    // 注册默认学生；商家需走“申请成为商家”并经管理员审核
+    const roleInt = 1;
     
     let openid;
     
@@ -436,39 +440,44 @@ exports.register = async (req, res, next) => {
     if (hasAccountColumn) {
       [result] = await pool.query(
         'INSERT INTO user (openid, nickname, avatar_url, account, phone, password, username, role) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-        [openid, nicknameToSave, avatarUrl || '', accountValue || null, phoneValue || null, hashedPassword, username || null, role]
+        [openid, nicknameToSave, avatarUrl || '', accountValue || null, phoneValue || null, hashedPassword, username || null, roleInt]
       );
     } else {
       // 兼容：数据库未迁移时仍可注册，但无法保存 account 字段
       [result] = await pool.query(
         'INSERT INTO user (openid, nickname, avatar_url, phone, password, username, role) VALUES (?, ?, ?, ?, ?, ?, ?)',
-        [openid, nicknameToSave, avatarUrl || '', phoneValue || null, hashedPassword, username || null, role]
+        [openid, nicknameToSave, avatarUrl || '', phoneValue || null, hashedPassword, username || null, roleInt]
       );
     }
+
+    const userId = result.insertId;
+
+    const merchantId = null;
     
     // 生成Token
     const token = generateToken({
-      id: result.insertId,
+      id: userId,
       openid,
-      role,
-      merchant_id: null
+      role: roleInt,
+      merchant_id: merchantId
     });
     
     res.status(201).json({
       success: true,
       message: '注册成功',
       data: {
-        userId: result.insertId,
+        userId,
         token,
         user: {
-          id: result.insertId,
+          id: userId,
           openid,
           nickname: nicknameToSave,
           avatarUrl: avatarUrl || '',
           account: hasAccountColumn ? (accountValue || null) : null,
           phone: phoneValue || null,
           username: username || null,
-          role
+          role: roleInt,
+          merchant_id: merchantId
         }
       }
     });
@@ -612,23 +621,84 @@ exports.getProfile = async (req, res, next) => {
     
     const user = users[0];
 
-    // 若用户角色/merchant_id 已变更（常见于管理员审核通过后），下发新 token，避免前端仍用旧 token 访问商家接口被拦截
     const tokenRole = req.user && typeof req.user.role === 'number' ? req.user.role : parseInt(req.user && req.user.role, 10);
     const tokenMerchantId = req.user && req.user.merchant_id !== undefined && req.user.merchant_id !== null
       ? parseInt(req.user.merchant_id, 10)
       : null;
-    const dbRole = typeof user.role === 'number' ? user.role : parseInt(user.role, 10);
-    const dbMerchantId = hasMerchantId && user.merchant_id !== undefined && user.merchant_id !== null
+
+    let dbRole = typeof user.role === 'number' ? user.role : parseInt(user.role, 10);
+    let dbMerchantId = hasMerchantId && user.merchant_id !== undefined && user.merchant_id !== null
       ? parseInt(user.merchant_id, 10)
       : null;
 
+    // 兜底：
+    // - 若 role=2 但店铺不存在/未审核通过 => 降级为学生
+    // - 若 role!=2 但存在“审核通过”的店铺（可能因历史 bug/缓存导致 user.role 被写错）=> 自愈恢复为商家
+    // 注意：merchant.status 在前端用于“营业中/休息中”，不应影响商家身份与商家端管理权限。
+    try {
+      // 先检查/修正 role=2 的合法性
+      if (dbRole === 2) {
+        if (!dbMerchantId) {
+          dbRole = 1;
+        } else {
+          const [mrows] = await pool.query('SELECT audit_status FROM merchant WHERE id = ? LIMIT 1', [dbMerchantId]);
+          if (!mrows || mrows.length === 0) {
+            dbRole = 1;
+            dbMerchantId = null;
+          } else {
+            const auditNum = mrows[0].audit_status === undefined ? null : parseInt(mrows[0].audit_status, 10);
+            const approved = auditNum === null ? true : auditNum === 2;
+            if (!approved) {
+              dbRole = 1;
+              dbMerchantId = null;
+            }
+          }
+        }
+
+        if (dbRole !== 2) {
+          if (hasMerchantId) {
+            await pool.query('UPDATE user SET role = 1, merchant_id = NULL WHERE id = ? LIMIT 1', [userId]);
+          } else {
+            await pool.query('UPDATE user SET role = 1 WHERE id = ? LIMIT 1', [userId]);
+          }
+        }
+      }
+
+      // 再尝试自愈：如果用户不是商家，但存在审核通过的店铺，则恢复为商家
+      if (dbRole !== 2) {
+        const [owned] = await pool.query(
+          'SELECT id, audit_status FROM merchant WHERE owner_user_id = ? ORDER BY id DESC LIMIT 1',
+          [userId]
+        );
+        const m = owned && owned[0] ? owned[0] : null;
+        const auditNum = m && m.audit_status !== undefined && m.audit_status !== null && m.audit_status !== ''
+          ? parseInt(m.audit_status, 10)
+          : null;
+        if (m && m.id && (auditNum === null || auditNum === 2)) {
+          dbRole = 2;
+          dbMerchantId = parseInt(m.id, 10);
+          if (hasMerchantId) {
+            await pool.query('UPDATE user SET role = 2, merchant_id = ? WHERE id = ? LIMIT 1', [dbMerchantId, userId]);
+          } else {
+            await pool.query('UPDATE user SET role = 2 WHERE id = ? LIMIT 1', [userId]);
+          }
+        }
+      }
+    } catch (_) {
+      // ignore
+    }
+
+    // 若用户角色/merchant_id 已变更（常见于管理员审核通过/驳回后），下发新 token
     const needRefreshToken = (Number.isFinite(tokenRole) ? tokenRole : null) !== dbRole || tokenMerchantId !== dbMerchantId;
 
-    const data = { user };
+    const safeUser = { ...user, role: dbRole };
+    if (hasMerchantId) safeUser.merchant_id = dbMerchantId;
+
+    const data = { user: safeUser };
     if (needRefreshToken) {
       data.token = generateToken({
-        id: user.id,
-        openid: user.openid,
+        id: safeUser.id,
+        openid: safeUser.openid,
         role: dbRole,
         merchant_id: dbMerchantId
       });

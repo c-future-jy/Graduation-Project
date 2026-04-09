@@ -1,13 +1,6 @@
 const { getMerchants, getCategories } = require('../../utils/api');
 const { toNetworkUrl } = require('../../utils/url');
 
-const FILTER_TITLE_MAP = {
-  delivery: '校园内配送',
-  certified: '校内认证商家',
-  quick: '课间极速达',
-  rated: '师生高口碑'
-};
-
 function normalizeMerchants(merchants) {
   return (Array.isArray(merchants) ? merchants : []).map(m => ({
     ...m,
@@ -22,6 +15,15 @@ function normalizeCategories(categories) {
   }));
 }
 
+function getErrMsg(err, fallback = '加载失败') {
+  if (!err) return fallback;
+  if (typeof err === 'string') return err;
+  if (err.message) return err.message;
+  if (err.data && err.data.message) return err.data.message;
+  if (err.errMsg) return err.errMsg;
+  return fallback;
+}
+
 Page({
   data: {
     merchants: [],
@@ -30,34 +32,93 @@ Page({
   },
 
   onLoad() {
+    this._loadingCount = 0;
+    this._loadingShown = false;
+    this._loadingPromise = null;
+    this._loadingShowAt = 0;
+    this._hideLoadingTimer = null;
     this.loadData();
+  },
+
+  _incLoading(title) {
+    const next = (this._loadingCount || 0) + 1;
+    this._loadingCount = next;
+    if (next !== 1) return;
+
+    if (this._hideLoadingTimer) {
+      clearTimeout(this._hideLoadingTimer);
+      this._hideLoadingTimer = null;
+    }
+
+    this._loadingShowAt = Date.now();
+    // 先标记“准备展示”，避免 show/hide 过快导致配对警告
+    this._loadingShown = true;
+    wx.showLoading({
+      title: title || '加载中...',
+      success: () => {
+        this._loadingShown = true;
+      },
+      fail: () => {
+        this._loadingShown = false;
+      }
+    });
+  },
+
+  _decLoading() {
+    const current = this._loadingCount || 0;
+    if (current <= 0) return;
+    const next = Math.max(0, current - 1);
+    this._loadingCount = next;
+    if (next !== 0) return;
+    if (!this._loadingShown) return;
+
+    const minDurationMs = 150;
+    const elapsed = this._loadingShowAt ? Date.now() - this._loadingShowAt : minDurationMs;
+    const delay = Math.max(0, minDurationMs - elapsed);
+
+    const doHide = () => {
+      this._hideLoadingTimer = null;
+      wx.hideLoading({
+        complete: () => {
+          this._loadingShown = false;
+        }
+      });
+    };
+
+    if (delay > 0) {
+      this._hideLoadingTimer = setTimeout(doHide, delay);
+    } else {
+      doHide();
+    }
   },
 
   /**
    * 加载数据
    */
   async loadData() {
-    wx.showLoading({ title: '加载中...' });
-    
-    try {
-      const [merchantsRes, categoriesRes] = await Promise.all([
-        getMerchants({}),
-        getCategories({ type: 2 })
-      ]);
+    if (this._loadingPromise) return this._loadingPromise;
 
-      const merchants = normalizeMerchants(merchantsRes && merchantsRes.data && merchantsRes.data.merchants);
-      const categories = normalizeCategories(categoriesRes && categoriesRes.data && categoriesRes.data.categories);
+    this._incLoading('加载中...');
+    this._loadingPromise = (async () => {
+      try {
+        const [merchantsRes, categoriesRes] = await Promise.all([
+          getMerchants({}),
+          getCategories({ type: 2 })
+        ]);
 
-      this.setData({ merchants, categories });
-      
-    } catch (error) {
-      wx.showToast({
-        title: '加载失败',
-        icon: 'none'
-      });
-    } finally {
-      wx.hideLoading();
-    }
+        const merchants = normalizeMerchants(merchantsRes && merchantsRes.data && merchantsRes.data.merchants);
+        const categories = normalizeCategories(categoriesRes && categoriesRes.data && categoriesRes.data.categories);
+
+        this.setData({ merchants, categories });
+      } catch (error) {
+        wx.showToast({ title: getErrMsg(error, '加载失败'), icon: 'none' });
+      } finally {
+        this._decLoading();
+        this._loadingPromise = null;
+      }
+    })();
+
+    return this._loadingPromise;
   },
 
   /**
@@ -117,17 +178,6 @@ Page({
   goToSearch() {
     wx.navigateTo({
       url: `/pages/search/search?title=${encodeURIComponent('搜索')}`
-    });
-  },
-
-  /**
-   * 筛选商家
-   */
-  filterMerchants(e) {
-    const type = e.currentTarget.dataset.type;
-    const title = FILTER_TITLE_MAP[type] ? `筛选：${FILTER_TITLE_MAP[type]}` : '搜索';
-    wx.navigateTo({
-      url: `/pages/search/search?filter=${type}&title=${encodeURIComponent(title)}`
     });
   }
 });

@@ -19,7 +19,10 @@
 
   <!-- 商品列表 -->
   <view class="products-section">
-    <view class="section-title">店铺商品</view>
+    <view class="section-header">
+      <view class="section-title">店铺商品</view>
+    </view>
+
     <view class="products-list" wx:if="{{products.length > 0}}">
       <view class="product-item" wx:for="{{products}}" wx:key="id" bindtap="goToProductDetail" data-id="{{item.id}}" data-name="{{item.name}}">
         <view class="product-image">

@@ -24,6 +24,20 @@ const FILTERS = [
   { id: 'price_desc', name: '价格降序' }
 ];
 
+function toStr(value, fallback = '') {
+  if (value === null || value === undefined) return fallback;
+  return String(value);
+}
+
+function getErrMsg(err, fallback = '加载失败') {
+  if (!err) return fallback;
+  if (typeof err === 'string') return err;
+  if (err.message) return err.message;
+  if (err.data && err.data.message) return err.data.message;
+  if (err.errMsg) return err.errMsg;
+  return fallback;
+}
+
 function buildDefaultCategories() {
   return [
     { id: 'recommend', name: '推荐', icon: DEFAULT_ICON },
@@ -40,11 +54,11 @@ function buildDefaultCategories() {
 
 function normalizeCategoryKey(value) {
   if (value == null) return '';
-  if (typeof value === 'number') return CATEGORY_ID_MAP[value] || String(value);
+  if (typeof value === 'number') return String(value);
   const s = String(value).trim();
   if (!s) return '';
   if (/^\d+$/.test(s)) {
-    return CATEGORY_ID_MAP[parseInt(s, 10)] || s;
+    return s;
   }
   return s;
 }
@@ -74,6 +88,32 @@ function pickInitialCategory(categories, initialCategory) {
   return categories[0] || { id: 'recommend', name: '推荐' };
 }
 
+function normalizeCategoriesFromApi(res) {
+  const list = (res && res.data && Array.isArray(res.data.categories)) ? res.data.categories : [];
+  const mapped = list.map((category) => ({
+    // 关键：分类 id 使用后端真实 id（数字/字符串），不要再映射到固定 breakfast/lunch
+    // 否则当后端分类 id 不是 1~8 时，会导致分类筛选失效。
+    id: toStr(category.id),
+    name: category.name,
+    icon: toNetworkUrl(category.icon) || DEFAULT_ICON
+  }));
+  // 确保有推荐入口
+  return [{ id: 'recommend', name: '推荐', icon: DEFAULT_ICON }].concat(mapped);
+}
+
+function normalizeMerchantsFromApi(res) {
+  const list = (res && res.data && Array.isArray(res.data.merchants)) ? res.data.merchants : [];
+  return list.map((merchant) => ({
+    id: merchant.id,
+    name: merchant.name,
+    image: toNetworkUrl(merchant.logo) || DEFAULT_MERCHANT_IMAGE,
+    address: merchant.address || '',
+    phone: merchant.phone || '',
+    description: merchant.description || '',
+    isClosed: merchant.status !== 1
+  }));
+}
+
 Page({
   data: {
     categories: [],
@@ -86,41 +126,50 @@ Page({
     networkError: false
   },
 
-  onLoad: function (options) {
-    // 从本地存储中获取分类参数
+  onLoad() {
+    this._categoriesPromise = null;
+    this._merchantsReqId = 0;
+
     const selectedCategory = wx.getStorageSync('selectedCategory');
-    // 清除本地存储中的分类参数
     wx.removeStorageSync('selectedCategory');
-    // 初始化加载分类列表
-    this.loadCategories(selectedCategory);
+
+    this.bootstrap(selectedCategory);
   },
 
-  // 加载分类列表
-  loadCategories: function (initialCategory) {
-    getCategories({ type: 1 })
-      .then(res => {
-        const list = (res && res.data && Array.isArray(res.data.categories)) ? res.data.categories : [];
-        const categories = list.map(category => ({
-          id: CATEGORY_ID_MAP[category.id] || String(category.id),
-          name: category.name,
-          icon: category.icon || DEFAULT_ICON
-        }));
-        categories.unshift({ id: 'recommend', name: '推荐', icon: DEFAULT_ICON });
-        this.initCategoriesAndLoad(categories, initialCategory);
-      })
-      .catch(() => {
-        this.initCategoriesAndLoad(buildDefaultCategories(), initialCategory);
-      });
+  async bootstrap(initialCategory) {
+    const categories = await this.loadCategories();
+    this.initCategoriesAndLoad(categories, initialCategory);
+  },
+
+  async loadCategories() {
+    if (this._categoriesPromise) return this._categoriesPromise;
+
+    this._categoriesPromise = (async () => {
+      try {
+        const res = await getCategories({ type: 1 });
+        return normalizeCategoriesFromApi(res);
+      } catch (e) {
+        return buildDefaultCategories();
+      }
+    })().finally(() => {
+      // 只缓存一次加载过程；后续若需要强刷，可手动置空
+      this._categoriesPromise = null;
+    });
+
+    return this._categoriesPromise;
   },
 
   initCategoriesAndLoad(categories, initialCategory) {
-    this.setData({ categories });
+    const safeCategories = Array.isArray(categories) ? categories : [];
+    this.setData({ categories: safeCategories });
     this.checkTimeSensitiveCategories();
 
-    const picked = pickInitialCategory(categories, initialCategory);
+    const picked = pickInitialCategory(safeCategories, initialCategory);
     this.setData({
       currentCategory: picked.id,
-      currentCategoryName: picked.name
+      currentCategoryName: picked.name,
+      currentFilter: 'smart',
+      networkError: false
     });
 
     this.loadMerchants(picked.id);
@@ -162,13 +211,20 @@ Page({
     const categoryName = category.name;
     
     // 检查是否是早餐分类且不在早餐时间
-    if (categoryId === 'breakfast' && !category.isBreakfastTime) {
-      wx.showToast({
-        title: '当前不在早餐时间（9点前）',
-        icon: 'none',
-        duration: 2000
-      });
+    if (categoryId === 'breakfast') {
+      const hour = new Date().getHours();
+      const isBreakfastTime = hour < 9;
+      if (!isBreakfastTime) {
+        wx.showToast({
+          title: '当前不在早餐时间（9点前）',
+          icon: 'none',
+          duration: 2000
+        });
+      }
     }
+
+    // 先更新时间敏感标记，避免 UI 状态滞后
+    this.checkTimeSensitiveCategories();
     
     this.setData({
       currentCategory: categoryId,
@@ -193,40 +249,32 @@ Page({
   },
 
   // 加载商家数据
-  loadMerchants: function (categoryId) {
-    this.setData({
-      loading: true,
-      networkError: false
-    });
+  async loadMerchants(categoryId) {
+    const cid = normalizeCategoryKey(categoryId) || 'recommend';
+    const reqId = (this._merchantsReqId || 0) + 1;
+    this._merchantsReqId = reqId;
 
-    // 调用API获取商家数据
-    getMerchants({ category: categoryId })
-      .then(res => {
-        // 处理API返回的数据
-        const list = (res && res.data && Array.isArray(res.data.merchants)) ? res.data.merchants : [];
-        const merchants = list.map(merchant => ({
-          id: merchant.id,
-          name: merchant.name,
-          image: toNetworkUrl(merchant.logo) || DEFAULT_MERCHANT_IMAGE,
-          address: merchant.address || '',
-          phone: merchant.phone || '',
-          description: merchant.description || '',
-          isClosed: merchant.status !== 1
-        }));
+    this.setData({ loading: true, networkError: false });
 
-        this.setData({
-          loading: false,
-          merchants: merchants
-        });
-      })
-      .catch(err => {
-        console.error('获取商家数据失败:', err);
-        this.setData({
-          loading: false,
-          networkError: true,
-          merchants: []
-        });
-      });
+    try {
+      // 兼容：老后端只认 category=breakfast 等；新后端支持 category_id=数字
+      const isNumericId = /^\d+$/.test(String(cid));
+      const res = isNumericId
+        ? await getMerchants({ category_id: cid })
+        : await getMerchants({ category: cid });
+      if (reqId !== this._merchantsReqId) return;
+
+      const merchants = normalizeMerchantsFromApi(res);
+      this.setData({ merchants });
+    } catch (err) {
+      if (reqId !== this._merchantsReqId) return;
+      console.error('获取商家数据失败:', err);
+      this.setData({ networkError: true, merchants: [] });
+    } finally {
+      if (reqId === this._merchantsReqId) {
+        this.setData({ loading: false });
+      }
+    }
   },
 
   // 重试加载
@@ -252,6 +300,16 @@ Page({
       currentFilter: 'smart'
     });
     this.loadMerchants('recommend');
+  },
+
+  async onPullDownRefresh() {
+    try {
+      await this.loadMerchants(this.data.currentCategory);
+    } catch (e) {
+      wx.showToast({ title: getErrMsg(e, '刷新失败'), icon: 'none' });
+    } finally {
+      wx.stopPullDownRefresh();
+    }
   },
 
   // 跳转到拼单详情

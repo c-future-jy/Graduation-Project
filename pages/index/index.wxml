@@ -42,22 +42,6 @@
     <text class="announcement-text">祝2026届同学们，毕业快乐！前途似锦！不忘初心，继续前进！</text>
   </view>
 
-  <!--信息 -->
-  <view class="info">
-    <view class="info-item" bindtap="filterMerchants" data-type="delivery">
-      <text>校园内配送</text>
-    </view>
-    <view class="info-item" bindtap="filterMerchants" data-type="certified">
-      <text>校内认证商家</text>
-    </view>
-    <view class="info-item" bindtap="filterMerchants" data-type="quick">
-      <text>课间极速达</text>
-    </view>
-    <view class="info-item" bindtap="filterMerchants" data-type="rated">
-      <text>师生高口碑</text>
-    </view>
-  </view>
-
   <!-- 导航 -->
   <view class="good-nav">
     <scroll-view scroll-x="true" class="category-scroll">

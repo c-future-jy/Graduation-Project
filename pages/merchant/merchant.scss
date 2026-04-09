@@ -61,10 +61,16 @@
     background-color: #fff;
     padding: 20rpx;
 
+    .section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16rpx;
+    }
+
     .section-title {
       font-size: 28rpx;
       font-weight: bold;
-      margin-bottom: 20rpx;
       color: #333;
     }
 

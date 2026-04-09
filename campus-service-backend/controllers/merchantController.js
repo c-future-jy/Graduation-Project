@@ -1,54 +1,214 @@
 const { pool } = require('../config/db');
+const { success, fail } = require('../utils/response');
 
-async function columnExists(tableName, columnName) {
-  const [rows] = await pool.query(
-    `SELECT COUNT(*) as cnt
-     FROM information_schema.columns
-     WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?`,
-    [tableName, columnName]
-  );
-  return (rows[0] && rows[0].cnt > 0) || false;
+async function getTableColumns(tableName, connOrPool = pool) {
+  try {
+    const [rows] = await connOrPool.query(`SHOW COLUMNS FROM \`${tableName}\``);
+    const names = (rows || []).map((r) => r && r.Field).filter(Boolean);
+    return new Set(names);
+  } catch (_) {
+    return new Set();
+  }
 }
+
+async function hasTable(tableName, connOrPool = pool) {
+  try {
+    const [rows] = await connOrPool.query('SHOW TABLES LIKE ?', [tableName]);
+    return Array.isArray(rows) && rows.length > 0;
+  } catch (_) {
+    return false;
+  }
+}
+
+async function resolveMerchantTableName(connOrPool = pool) {
+  if (await hasTable('merchant', connOrPool)) return 'merchant';
+  if (await hasTable('merchants', connOrPool)) return 'merchants';
+  return 'merchant';
+}
+
+async function columnExists(tableName, columnName, connOrPool = pool) {
+  try {
+    const result = await connOrPool.query(
+      `SELECT COUNT(*) as cnt
+       FROM information_schema.columns
+       WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?`,
+      [tableName, columnName]
+    );
+
+    // mysql2: [rows, fields]
+    // jest mocks: may return rows directly or { rows }
+    const rows = Array.isArray(result)
+      ? result[0]
+      : (result && Array.isArray(result.rows) ? result.rows : result);
+
+    if (!Array.isArray(rows) || rows.length === 0) return false;
+    const cnt = rows[0] && rows[0].cnt !== undefined ? Number(rows[0].cnt) : 0;
+    return Number.isFinite(cnt) && cnt > 0;
+  } catch (_) {
+    return false;
+  }
+}
+
+// 获取商家公开评价（用于商家详情页展示）
+// GET /api/merchants/:id/feedbacks?limit=3&since_id=123
+exports.getMerchantPublicFeedbacks = async (req, res, next) => {
+  try {
+    const merchantId = parseInt(req.params.id, 10);
+    if (!Number.isFinite(merchantId) || merchantId <= 0) {
+      return res.status(400).json({ success: false, message: '商家ID不合法' });
+    }
+
+    const limitRaw = req.query.limit;
+    const limit = Math.min(Math.max(parseInt(limitRaw, 10) || 3, 1), 50);
+
+    const sinceIdRaw = req.query.since_id;
+    const sinceId = sinceIdRaw !== undefined && sinceIdRaw !== null && sinceIdRaw !== ''
+      ? parseInt(sinceIdRaw, 10)
+      : null;
+
+    const timeColumn = (await columnExists('feedback', 'create_time'))
+      ? 'create_time'
+      : (await columnExists('feedback', 'created_at'))
+        ? 'created_at'
+        : null;
+
+    const userNameColumn = (await columnExists('user', 'nickname'))
+      ? 'nickname'
+      : (await columnExists('user', 'username'))
+        ? 'username'
+        : null;
+
+    const createdAtSelect = timeColumn ? `f.\`${timeColumn}\` as created_at` : 'NULL as created_at';
+    const orderBy = timeColumn ? `f.\`${timeColumn}\` DESC` : 'f.id DESC';
+    const userNameExpr = userNameColumn
+      ? `COALESCE(u.\`${userNameColumn}\`, '匿名用户') as user_name`
+      : "'匿名用户' as user_name";
+
+    const where = ['f.merchant_id = ?', 'f.type = 2'];
+    const params = [merchantId];
+
+    if (Number.isFinite(sinceId) && sinceId > 0) {
+      where.push('f.id > ?');
+      params.push(sinceId);
+    }
+
+    const [rows] = await pool.query(
+      `
+        SELECT
+          f.id,
+          f.rating,
+          f.content,
+          f.reply,
+          ${createdAtSelect},
+          ${userNameExpr}
+        FROM feedback f
+        LEFT JOIN user u ON f.user_id = u.id
+        WHERE ${where.join(' AND ')}
+        ORDER BY ${orderBy}
+        LIMIT ?
+      `,
+      [...params, limit]
+    );
+
+    return res.json({ success: true, data: { feedbacks: rows || [] } });
+  } catch (error) {
+    next(error);
+  }
+};
 
 // 获取商家列表
 exports.getMerchantList = async (req, res, next) => {
   try {
     const { category } = req.query;
+    const categoryIdRaw = req.query.category_id;
     const keyword = String(req.query.keyword ?? req.query.q ?? '').trim();
-    let query = 'SELECT * FROM merchant WHERE status = 1';
-    let params = [];
-    
-    // 根据分类筛选
-    if (category && category !== 'recommend') {
-      // 分类映射关系
-      const categoryMap = {
-        breakfast: 1,  // 早餐
-        lunch: 2,      // 午餐
-        noodles: 3,    // 面食
-        rice: 4,       // 米饭
-        salad: 5,      // 沙拉
-        snack: 6,      // 小吃
-        drink: 7,      // 饮品
-        market: 8      // 超市
-      };
-      
-      const categoryId = categoryMap[category];
-      if (categoryId) {
-        query += ' AND category_id = ?';
-        params.push(categoryId);
+
+    // 兼容：category 既可能是老的英文 key（breakfast 等），也可能被前端当成数字 id 直接传来
+    const legacyCategoryKeyMap = {
+      breakfast: 1,
+      lunch: 2,
+      noodles: 3,
+      rice: 4,
+      salad: 5,
+      snack: 6,
+      drink: 7,
+      market: 8
+    };
+
+    let categoryId = null;
+    if (categoryIdRaw !== undefined && categoryIdRaw !== null && categoryIdRaw !== '') {
+      const n = parseInt(categoryIdRaw, 10);
+      categoryId = Number.isFinite(n) && n > 0 ? n : null;
+    }
+    if (!categoryId && category && category !== 'recommend') {
+      const s = String(category).trim();
+      if (/^\d+$/.test(s)) {
+        const n = parseInt(s, 10);
+        categoryId = Number.isFinite(n) && n > 0 ? n : null;
+      } else if (legacyCategoryKeyMap[s]) {
+        categoryId = legacyCategoryKeyMap[s];
       }
     }
 
-    // 关键词搜索（商家名/描述）
-    if (keyword) {
-      query += ' AND (name LIKE ? OR description LIKE ?)';
-      params.push(`%${keyword}%`, `%${keyword}%`);
+    const shouldFilterByCategory = !!categoryId && String(category || '').trim() !== 'recommend';
+
+    const buildSql = (tableName, includeAuditStatus) => {
+      let query = `SELECT DISTINCT m.* FROM ${tableName} m`;
+      const params = [];
+
+      if (shouldFilterByCategory) {
+        query += ' INNER JOIN product p ON p.merchant_id = m.id AND p.status = 1 AND p.category_id = ?';
+        params.push(categoryId);
+      }
+
+      query += includeAuditStatus ? ' WHERE m.audit_status = 2' : ' WHERE 1=1';
+
+      if (keyword) {
+        query += ' AND (m.name LIKE ? OR m.description LIKE ?)';
+        params.push(`%${keyword}%`, `%${keyword}%`);
+      }
+
+      query += ' ORDER BY m.status DESC, m.created_at DESC';
+      return { query, params };
+    };
+
+    // 默认路径：兼容旧测试（只发起一次 query）。若 audit_status 或表名不兼容，再降级重试。
+    try {
+      const { query, params } = buildSql('merchant', true);
+      const [merchants] = await pool.query(query, params);
+      return res.json({ success: true, data: { merchants } });
+    } catch (e) {
+      const msg = e && e.message ? String(e.message) : '';
+
+      const noSuchTable = e && (e.code === 'ER_NO_SUCH_TABLE' || msg.includes("doesn't exist"));
+      const missingAuditCol =
+        (e && e.code === 'ER_BAD_FIELD_ERROR') ||
+        msg.includes("Unknown column 'audit_status'") ||
+        msg.includes('Unknown column audit_status');
+
+      // 非兼容性问题，继续抛出
+      if (!noSuchTable && !missingAuditCol) throw e;
+
+      const tableName = noSuchTable ? 'merchants' : 'merchant';
+      const includeAuditStatus = !missingAuditCol;
+
+      try {
+        const { query, params } = buildSql(tableName, includeAuditStatus);
+        const [merchants] = await pool.query(query, params);
+        return res.json({ success: true, data: { merchants } });
+      } catch (e2) {
+        const msg2 = e2 && e2.message ? String(e2.message) : '';
+        const missingAuditCol2 =
+          (e2 && e2.code === 'ER_BAD_FIELD_ERROR') ||
+          msg2.includes("Unknown column 'audit_status'") ||
+          msg2.includes('Unknown column audit_status');
+        if (!missingAuditCol2) throw e2;
+
+        const { query, params } = buildSql(tableName, false);
+        const [merchants] = await pool.query(query, params);
+        return res.json({ success: true, data: { merchants } });
+      }
     }
-    
-    query += ' ORDER BY created_at DESC';
-    
-    const [merchants] = await pool.query(query, params);
-    res.json({ success: true, data: { merchants } });
   } catch (error) {
     next(error);
   }
@@ -65,8 +225,8 @@ exports.getMerchantById = async (req, res, next) => {
     );
     const hasAuditStatus = (auditCols[0] && auditCols[0].cnt > 0) || false;
     const sql = hasAuditStatus
-      ? 'SELECT * FROM merchant WHERE id = ? AND status = 1 AND audit_status = 2'
-      : 'SELECT * FROM merchant WHERE id = ? AND status = 1';
+      ? 'SELECT * FROM merchant WHERE id = ? AND audit_status = 2'
+      : 'SELECT * FROM merchant WHERE id = ?';
 
     const [merchants] = await pool.query(sql, [req.params.id]);
     if (merchants.length === 0) {
@@ -84,20 +244,134 @@ exports.getMyMerchant = async (req, res, next) => {
   try {
     const userId = req.user && req.user.id;
     if (!userId) {
-      return res.status(401).json({ success: false, message: '未授权访问' });
+      return fail(res, 401, '未授权访问');
     }
+
+    const merchantTable = await resolveMerchantTableName();
+
+    const tokenMerchantId = req.user && req.user.merchant_id !== undefined && req.user.merchant_id !== null && req.user.merchant_id !== ''
+      ? parseInt(req.user.merchant_id, 10)
+      : null;
 
     // 返回该用户名下的最新商家记录（不强制 status/audit_status 过滤，便于商家端管理）
     const [rows] = await pool.query(
-      'SELECT * FROM merchant WHERE owner_user_id = ? ORDER BY id DESC LIMIT 1',
+      `SELECT * FROM ${merchantTable} WHERE owner_user_id = ? ORDER BY id DESC LIMIT 1`,
       [userId]
     );
 
-    if (!rows || rows.length === 0) {
-      return res.status(404).json({ success: false, message: '未找到商家信息' });
+    if (rows && rows.length > 0) {
+      return success(res, { merchant: rows[0] });
     }
 
-    res.json({ success: true, data: { merchant: rows[0] } });
+    // 兼容：部分库可能只在 user.merchant_id 里绑定店铺，merchant.owner_user_id 为空/不一致
+    let merchantId = Number.isFinite(tokenMerchantId) && tokenMerchantId > 0 ? tokenMerchantId : null;
+
+    if (!merchantId) {
+      try {
+        const [users] = await pool.query('SELECT merchant_id FROM user WHERE id = ? LIMIT 1', [userId]);
+        const mid = users && users[0] && users[0].merchant_id;
+        const midNum = mid !== undefined && mid !== null && mid !== '' ? parseInt(mid, 10) : null;
+        if (Number.isFinite(midNum) && midNum > 0) merchantId = midNum;
+      } catch (_) {
+        merchantId = null;
+      }
+    }
+
+    if (merchantId) {
+      const [byId] = await pool.query(`SELECT * FROM ${merchantTable} WHERE id = ? LIMIT 1`, [merchantId]);
+      if (byId && byId.length > 0) {
+        return success(res, { merchant: byId[0] });
+      }
+    }
+
+    // 兜底修复：若 DB 中用户已是商家(role=2)但没有 merchant 记录，则自动创建一条（避免注册/历史数据导致商家端不可用）
+    let userRole = null;
+    let merchantName = '我的店铺';
+    try {
+      const [users] = await pool.query('SELECT role, nickname, username, merchant_id FROM user WHERE id = ? LIMIT 1', [userId]);
+      const u = users && users[0] ? users[0] : null;
+      userRole = u && u.role !== undefined && u.role !== null && u.role !== '' ? parseInt(u.role, 10) : null;
+      if (u && (u.nickname || u.username)) merchantName = String(u.nickname || u.username);
+      // 若 token/user 的 merchant_id 未取到，但 DB 里有，则再尝试一次 byId
+      if (!merchantId && u && u.merchant_id !== undefined && u.merchant_id !== null && u.merchant_id !== '') {
+        const midNum = parseInt(u.merchant_id, 10);
+        if (Number.isFinite(midNum) && midNum > 0) {
+          const [byId2] = await pool.query(`SELECT * FROM ${merchantTable} WHERE id = ? LIMIT 1`, [midNum]);
+          if (byId2 && byId2.length > 0) {
+            return success(res, { merchant: byId2[0] });
+          }
+        }
+      }
+    } catch (_) {
+      // ignore
+    }
+
+    if (userRole === 2) {
+      try {
+        const columnSet = await getTableColumns(merchantTable);
+        if (columnSet.size > 0) {
+
+          const insertColumns = [];
+          const insertPlaceholders = [];
+          const insertParams = [];
+
+          const addParamColumn = (columnName, value) => {
+            if (!columnSet.has(columnName)) return;
+            insertColumns.push(columnName);
+            insertPlaceholders.push('?');
+            insertParams.push(value);
+          };
+
+          const addRawColumn = (columnName, rawExpression) => {
+            if (!columnSet.has(columnName)) return;
+            insertColumns.push(columnName);
+            insertPlaceholders.push(rawExpression);
+          };
+
+          addParamColumn('owner_user_id', userId);
+          addParamColumn('name', merchantName);
+          addParamColumn('status', 1);
+
+          // 常见字段：部分表可能 NOT NULL，无默认值，这里尽量补齐
+          addParamColumn('phone', '');
+          addParamColumn('address', '');
+          addParamColumn('description', '');
+          addParamColumn('logo', '');
+
+          addParamColumn('audit_status', 2);
+          addRawColumn('created_at', 'NOW()');
+          addRawColumn('updated_at', 'NOW()');
+
+          if (insertColumns.length > 0) {
+            const insertSql = `INSERT INTO ${merchantTable} (${insertColumns.join(', ')}) VALUES (${insertPlaceholders.join(', ')})`;
+            const [insertRes] = await pool.query(insertSql, insertParams);
+            const newMerchantId = insertRes && insertRes.insertId ? insertRes.insertId : null;
+
+            if (newMerchantId) {
+              console.log(`merchant self-heal: created merchant ${newMerchantId} for user ${userId}`);
+              // 尝试回写 user.merchant_id（若列存在）
+              try {
+                const userCols = await getTableColumns('user');
+                if (userCols.has('merchant_id')) {
+                  await pool.query('UPDATE user SET merchant_id = ? WHERE id = ? LIMIT 1', [newMerchantId, userId]);
+                }
+              } catch (_) {
+                // ignore
+              }
+
+              const [createdRows] = await pool.query(`SELECT * FROM ${merchantTable} WHERE id = ? LIMIT 1`, [newMerchantId]);
+              if (createdRows && createdRows.length > 0) {
+                return success(res, { merchant: createdRows[0] });
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('merchant self-heal failed:', e && e.message ? e.message : e);
+      }
+    }
+
+    return fail(res, 404, '未找到商家信息');
   } catch (error) {
     next(error);
   }
@@ -223,11 +497,103 @@ exports.applyMerchant = async (req, res, next) => {
       return res.status(400).json({ success: false, message: '您已经是商家' });
     }
     
-    // 检查是否已有未处理的商家记录
-    const [existingMerchants] = await pool.query('SELECT id FROM merchant WHERE owner_user_id = ?', [user_id]);
-    
-    if (existingMerchants.length > 0) {
-      return res.status(400).json({ success: false, message: '您已经提交了申请，正在审核中' });
+    // 检查是否已有商家记录：
+    // - audit_status=1：审核中，不允许重复提交
+    // - audit_status=2：已通过，视为已是商家
+    // - audit_status=3：已驳回，允许重新提交（把状态重置为 1）
+    const [existingMerchants] = await pool.query(
+      'SELECT id, audit_status FROM merchant WHERE owner_user_id = ? ORDER BY id DESC LIMIT 1',
+      [user_id]
+    );
+
+    const existingMerchant = existingMerchants && existingMerchants[0] ? existingMerchants[0] : null;
+
+    if (existingMerchant) {
+      const auditStatusNum =
+        existingMerchant.audit_status === undefined || existingMerchant.audit_status === null || existingMerchant.audit_status === ''
+          ? null
+          : parseInt(existingMerchant.audit_status, 10);
+
+      if (auditStatusNum === 2) {
+        return res.status(400).json({ success: false, message: '您已经是商家' });
+      }
+
+      if (auditStatusNum === 1 || auditStatusNum === null) {
+        return res.status(400).json({ success: false, message: '您已经提交了申请，正在审核中' });
+      }
+
+      if (auditStatusNum === 3) {
+        // 重新提交：更新现有记录为待审核，并刷新申请信息
+        const [merchantColumns] = await pool.query(
+          `SELECT column_name AS column_name
+           FROM information_schema.columns
+           WHERE table_schema = DATABASE() AND table_name = 'merchant'`
+        );
+
+        const getColumnName = (row) =>
+          row &&
+          (row.column_name || row.COLUMN_NAME || row.Column_name || row.columnName || row.COLUMNNAME);
+
+        const columnSet = new Set((merchantColumns || []).map(getColumnName).filter(Boolean));
+
+        const setParts = [];
+        const params = [];
+        const setIfExists = (col, value) => {
+          if (!columnSet.has(col)) return;
+          setParts.push(`${col} = ?`);
+          params.push(value);
+        };
+
+        setIfExists('name', nickname);
+        setIfExists('phone', phone || '');
+        setIfExists('status', 0);
+        setIfExists('audit_status', 1);
+        if (columnSet.has('audit_remark')) {
+          // 追加一条“重新申请”记录，保留历史驳回原因/记录
+          setParts.push(
+            `audit_remark = TRIM(BOTH CHAR(10) FROM CONCAT(
+              IFNULL(audit_remark, ''),
+              IF(audit_remark IS NULL OR audit_remark = '', '', CHAR(10)),
+              '[', DATE_FORMAT(NOW(), '%Y-%m-%d %H:%i:%s'), '] ',
+              '重新申请：', ?,
+              '；电话：', ?
+            ))`
+          );
+          params.push(String(nickname));
+          params.push(String(phone || ''));
+        }
+        if (columnSet.has('updated_at')) setParts.push('updated_at = NOW()');
+
+        if (setParts.length === 0) {
+          return res.status(500).json({ success: false, message: '商家表结构异常，无法重新提交申请' });
+        }
+
+        const updateSql = `UPDATE merchant SET ${setParts.join(', ')} WHERE id = ?`;
+        params.push(existingMerchant.id);
+        await pool.query(updateSql, params);
+
+        // 操作日志：可选（缺表/字段时不影响主流程）
+        try {
+          const [tables] = await pool.query("SHOW TABLES LIKE 'admin_operation_log'");
+          const logTableExists = Array.isArray(tables) && tables.length > 0;
+          if (logTableExists) {
+            await pool.query(
+              'INSERT INTO admin_operation_log (admin_id, operation, target_user_id, created_at) VALUES (?, ?, ?, NOW())',
+              [user_id, '用户重新申请成为商家', user_id]
+            );
+          }
+        } catch (_) {
+          // ignore
+        }
+
+        return res.json({
+          success: true,
+          message: '申请已重新提交，等待管理员审核',
+          data: {
+            merchantId: existingMerchant.id
+          }
+        });
+      }
     }
 
     // 创建商家记录（待审核状态）
@@ -651,10 +1017,32 @@ exports.auditMerchant = async (req, res, next) => {
     const remarkText = audit_remark || '';
 
     // 更新商家审核状态
-    await conn.query(
-      'UPDATE merchant SET audit_status = ?, audit_remark = ?, audit_time = NOW(), audit_admin_id = ? WHERE id = ?',
-      [normalizedAuditStatus, remarkText, adminId, id]
-    );
+    // - 通过：按当前 remark 覆盖（通常为空）
+    // - 拒绝：将本次驳回原因追加到 audit_remark，保留历史
+    if (normalizedAuditStatus === 3) {
+      const reasonText = remarkText || '无';
+      // 使用 CONCAT + CHAR(10) 追加换行，避免依赖字符串转义行为
+      await conn.query(
+        `UPDATE merchant
+         SET
+           audit_status = ?,
+           audit_remark = TRIM(BOTH CHAR(10) FROM CONCAT(
+             IFNULL(audit_remark, ''),
+             IF(audit_remark IS NULL OR audit_remark = '', '', CHAR(10)),
+             '[', DATE_FORMAT(NOW(), '%Y-%m-%d %H:%i:%s'), '] ',
+             '驳回原因：', ?
+           )),
+           audit_time = NOW(),
+           audit_admin_id = ?
+         WHERE id = ?`,
+        [normalizedAuditStatus, reasonText, adminId, id]
+      );
+    } else {
+      await conn.query(
+        'UPDATE merchant SET audit_status = ?, audit_remark = ?, audit_time = NOW(), audit_admin_id = ? WHERE id = ?',
+        [normalizedAuditStatus, remarkText, adminId, id]
+      );
+    }
 
     if (normalizedAuditStatus === 2) {
       // 审核通过后更新商家状态
@@ -685,6 +1073,28 @@ exports.auditMerchant = async (req, res, next) => {
     }
 
     if (normalizedAuditStatus === 3 && ownerUserId) {
+      // 驳回后：用户恢复为学生；merchant_id 若指向该商家则清空
+      try {
+        const userHasMerchantId = await columnExists('user', 'merchant_id');
+        if (userHasMerchantId) {
+          await conn.query(
+            'UPDATE user SET role = 1, merchant_id = NULL WHERE id = ? AND (merchant_id = ? OR merchant_id IS NULL)',
+            [ownerUserId, id]
+          );
+        } else {
+          await conn.query('UPDATE user SET role = 1 WHERE id = ? AND role = 2', [ownerUserId]);
+        }
+      } catch (_) {
+        // ignore
+      }
+
+      // 店铺置为停用/不可用（仍保留记录供管理员查看）
+      try {
+        await conn.query('UPDATE merchant SET status = 0 WHERE id = ?', [id]);
+      } catch (_) {
+        // ignore
+      }
+
       // 审核拒绝后通知商家（notification.type 必填）
       await conn.query(
         'INSERT INTO notification (user_id, title, content, type, created_at) VALUES (?, ?, ?, ?, NOW())',

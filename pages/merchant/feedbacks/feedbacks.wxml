@@ -4,21 +4,33 @@
     <text class="sub">仅展示本店铺收到的评价</text>
   </view>
 
-  <view wx:if="loading" class="loading">加载中...</view>
+  <view class="filters">
+    <view
+      wx:for="{{filters}}"
+      wx:key="value"
+      class="filter-item {{index === selectedFilter ? 'active' : ''}}"
+      bindtap="onFilterTap"
+      data-index="{{index}}"
+    >
+      {{item.label}}
+    </view>
+  </view>
 
-  <view wx:elif="feedbacks.length === 0" class="empty">
-    <text>暂无评价</text>
+  <view wx:if="{{loading}}" class="loading">加载中...</view>
+
+  <view wx:elif="{{feedbacks.length === 0}}" class="empty">
+    <text>{{emptyText}}</text>
   </view>
 
   <view wx:else class="list">
-    <view wx:for="feedbacks" wx:key="id" class="card">
+    <view wx:for="{{feedbacks}}" wx:key="id" class="card">
       <view class="row">
         <text class="label">用户</text>
-        <text class="value">{{item.user_name || ('用户#' + item.user_id)}}</text>
+        <text class="value">{{item.user_name || '匿名用户'}}</text>
         <text class="time">{{item.formattedTime}}</text>
       </view>
 
-      <view class="row" wx:if="item.order_no">
+      <view class="row" wx:if="{{item.order_no}}">
         <text class="label">订单</text>
         <text class="value">{{item.order_no}}</text>
       </view>
@@ -30,18 +42,18 @@
 
       <view class="content">{{item.content}}</view>
 
-      <view class="reply" wx:if="item.reply">
+      <view class="reply" wx:if="{{item.reply}}">
         <view class="reply-title">商家回复</view>
         <view class="reply-content">{{item.reply}}</view>
       </view>
 
-      <view class="actions" wx:if="!item.reply">
+      <view class="actions" wx:if="{{!item.reply}}">
         <button class="btn" size="mini" bindtap="openReply" data-id="{{item.id}}">回复</button>
       </view>
     </view>
   </view>
 
-  <view wx:if="showReplyModal" class="modal-mask" catchtap="closeReply">
+  <view wx:if="{{showReplyModal}}" class="modal-mask" catchtap="closeReply">
     <view class="modal" catchtap="noop">
       <view class="modal-title">回复评价</view>
       <textarea class="textarea" placeholder="请输入回复内容（最多500字）" maxlength="500" value="{{replyText}}" bindinput="onReplyInput" />

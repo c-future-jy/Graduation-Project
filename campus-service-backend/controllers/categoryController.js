@@ -4,6 +4,8 @@ const { pool } = require('../config/db');
 exports.getCategoryList = async (req, res, next) => {
   try {
     const { type = 1, merchant_id } = req.query;
+    const includeMerchantRaw = req.query.include_merchant;
+    const includeMerchant = includeMerchantRaw === 1 || includeMerchantRaw === '1' || includeMerchantRaw === true || includeMerchantRaw === 'true';
     const normalizedType = parseInt(type, 10) || 1;
     const merchantId = merchant_id !== undefined && merchant_id !== null && merchant_id !== '' ? parseInt(merchant_id, 10) : null;
 
@@ -21,6 +23,8 @@ exports.getCategoryList = async (req, res, next) => {
       }
     }
 
+    // 默认：不传 merchant_id 时，仅返回公共分类（merchant_id IS NULL），避免学生端分类被商家私有分类污染
+    // 管理端如需查看全部分类，可传 include_merchant=1
     let query = 'SELECT * FROM category WHERE type = ?';
     const params = [normalizedType];
 
@@ -32,6 +36,8 @@ exports.getCategoryList = async (req, res, next) => {
         query += ' AND (merchant_id = ? OR merchant_id IS NULL)';
         params.push(merchantId);
       }
+    } else if (!includeMerchant) {
+      query += ' AND merchant_id IS NULL';
     }
 
     query += ' ORDER BY sort_order ASC';
@@ -76,31 +82,9 @@ exports.createCategory = async (req, res, next) => {
       ? parseInt(req.body.type, 10)
       : 1;
 
-    // 商家端：强制绑定当前商家（不信任前端传 merchant_id）
+    // 商家端：创建公共分类（全局共享），与学生端分类合并；并由后端做同名去重
     if (role === 2) {
-      const tokenMerchantId = req.user && req.user.merchant_id !== undefined && req.user.merchant_id !== null && req.user.merchant_id !== ''
-        ? parseInt(req.user.merchant_id, 10)
-        : null;
-
-      if (Number.isFinite(tokenMerchantId) && tokenMerchantId > 0) {
-        merchantId = tokenMerchantId;
-      } else {
-        // 兜底：用 owner_user_id 找最近一条商家记录
-        const userId = req.user && req.user.id ? parseInt(req.user.id, 10) : null;
-        if (userId) {
-          const [rows] = await pool.query(
-            'SELECT id FROM merchant WHERE owner_user_id = ? ORDER BY id DESC LIMIT 1',
-            [userId]
-          );
-          const mid = rows && rows[0] && rows[0].id ? parseInt(rows[0].id, 10) : null;
-          if (Number.isFinite(mid) && mid > 0) merchantId = mid;
-        }
-      }
-
-      if (!merchantId) {
-        return res.status(400).json({ success: false, message: '缺少商家ID，无法创建分类' });
-      }
-
+      merchantId = null;
       // 需求：商品分类 type=1
       type = 1;
     }
@@ -115,6 +99,21 @@ exports.createCategory = async (req, res, next) => {
 
     const safeSortOrder = Number.isFinite(sortOrder) ? sortOrder : 0;
     const safeType = Number.isFinite(type) ? type : 1;
+
+    // 去重：同一 (type, merchant_id) 下，分类名相同则直接复用，避免反复新增导致学生端分类列表膨胀
+    const [existingRows] = await pool.query(
+      'SELECT id, merchant_id, name, icon, type, sort_order FROM category WHERE type = ? AND name = ? AND (merchant_id <=> ?) LIMIT 1',
+      [safeType, name, merchantId]
+    );
+    if (existingRows && existingRows.length > 0) {
+      return res.json({
+        success: true,
+        data: {
+          categoryId: existingRows[0].id,
+          category: existingRows[0]
+        }
+      });
+    }
 
     const [result] = await pool.query(
       'INSERT INTO category (merchant_id, name, icon, type, sort_order) VALUES (?, ?, ?, ?, ?)',

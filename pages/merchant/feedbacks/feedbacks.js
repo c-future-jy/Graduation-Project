@@ -4,6 +4,20 @@ function pad2(n) {
   return String(n).padStart(2, '0');
 }
 
+function toInt(value, fallback = 0) {
+  const n = parseInt(String(value), 10);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function getErrMsg(err, fallback = '操作失败') {
+  if (!err) return fallback;
+  if (typeof err === 'string') return err;
+  if (err.message) return err.message;
+  if (err.data && err.data.message) return err.data.message;
+  if (err.errMsg) return err.errMsg;
+  return fallback;
+}
+
 function toValidDate(value) {
   if (!value) return null;
   if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
@@ -34,6 +48,14 @@ function formatTime(timeValue) {
 Page({
   data: {
     feedbacks: [],
+    allFeedbacks: [],
+    selectedFilter: 0,
+    filters: [
+      { value: 'all', label: '全部' },
+      { value: 'unreplied', label: '未回复' },
+      { value: 'replied', label: '已回复' }
+    ],
+    emptyText: '暂无评价',
     loading: true,
     showReplyModal: false,
     currentFeedbackId: null,
@@ -42,9 +64,15 @@ Page({
   },
 
   onLoad() {
+    this._loadingCount = 0;
+    this._loadingShown = false;
+    this._reqId = 0;
+    this._loadingPromise = null;
+
     wx.setNavigationBarTitle({ title: '评价管理' });
-    const userInfo = wx.getStorageSync('userInfo');
-    if (!userInfo || userInfo.role !== 2) {
+    const userInfo = wx.getStorageSync('userInfo') || {};
+    const role = toInt(userInfo.role, 0);
+    if (role !== 2) {
       wx.redirectTo({ url: '/pages/login/login' });
       return;
     }
@@ -57,39 +85,107 @@ Page({
     }
   },
 
+  _incLoading(title) {
+    const next = (this._loadingCount || 0) + 1;
+    this._loadingCount = next;
+    if (next !== 1) return;
+    wx.showLoading({
+      title: title || '处理中...',
+      success: () => {
+        this._loadingShown = true;
+      },
+      fail: () => {
+        this._loadingShown = false;
+      }
+    });
+  },
+
+  _decLoading() {
+    const current = this._loadingCount || 0;
+    if (current <= 0) return;
+    const next = Math.max(0, current - 1);
+    this._loadingCount = next;
+    if (next !== 0) return;
+    if (!this._loadingShown) return;
+    wx.hideLoading({
+      complete: () => {
+        this._loadingShown = false;
+      }
+    });
+  },
+
   loadFeedbacks() {
     if (this._loadingPromise) return this._loadingPromise;
 
-    this.setData({ loading: true });
-    wx.showLoading({ title: '加载中...' });
+    const reqId = (this._reqId || 0) + 1;
+    this._reqId = reqId;
 
-    this._loadingPromise = getMerchantFeedbacks()
-      .then((res) => {
-        if (res && res.success) {
-          const list = (res.data && res.data.feedbacks) || [];
-          const mapped = list.map((item) => {
-            const createdAt = item.create_time || item.created_at || item.createdAt || item.createTime;
-            return {
-              ...item,
-              formattedTime: formatTime(createdAt)
-            };
-          });
-          this.setData({ feedbacks: mapped });
-        } else {
+    this.setData({ loading: true });
+    this._incLoading('加载中...');
+
+    this._loadingPromise = (async () => {
+      try {
+        const res = await getMerchantFeedbacks();
+        if (reqId !== this._reqId) return;
+
+        if (!(res && res.success)) {
           wx.showToast({ title: (res && res.message) || '加载失败', icon: 'none' });
+          return;
         }
-      })
-      .catch((err) => {
+
+        const list = (res.data && res.data.feedbacks) || [];
+        const mapped = (Array.isArray(list) ? list : []).map((item) => {
+          const createdAt = item.create_time || item.created_at || item.createdAt || item.createTime;
+          return {
+            ...item,
+            formattedTime: formatTime(createdAt)
+          };
+        });
+        this.setData({ allFeedbacks: mapped });
+        this.applyFilter();
+      } catch (err) {
+        if (reqId !== this._reqId) return;
         console.error('加载反馈失败:', err);
-        wx.showToast({ title: '网络错误', icon: 'none' });
-      })
-      .finally(() => {
-        wx.hideLoading();
-        this.setData({ loading: false });
+        wx.showToast({ title: getErrMsg(err, '网络错误'), icon: 'none' });
+      } finally {
+        if (reqId === this._reqId) {
+          this.setData({ loading: false });
+        }
+        this._decLoading();
         this._loadingPromise = null;
-      });
+      }
+    })();
 
     return this._loadingPromise;
+  },
+
+  applyFilter() {
+    const { selectedFilter, filters, allFeedbacks } = this.data;
+    const value = (filters[selectedFilter] || {}).value || 'all';
+    const list = Array.isArray(allFeedbacks) ? allFeedbacks : [];
+
+    let filtered = list;
+    if (value === 'unreplied') {
+      filtered = list.filter((item) => !item.reply);
+    } else if (value === 'replied') {
+      filtered = list.filter((item) => !!item.reply);
+    }
+
+    const emptyTextByValue = {
+      all: '暂无评价',
+      unreplied: '暂无未回复评价',
+      replied: '暂无已回复评价'
+    };
+    const emptyText = emptyTextByValue[value] || '暂无评价';
+
+    this.setData({ feedbacks: filtered, emptyText });
+  },
+
+  onFilterTap(e) {
+    const idx = toInt(e.currentTarget.dataset.index, 0);
+    if (idx === this.data.selectedFilter) return;
+    this.setData({ selectedFilter: idx });
+    this.applyFilter();
   },
 
   openReply(e) {
@@ -97,8 +193,8 @@ Page({
     this.setData({ showReplyModal: true, currentFeedbackId: id, replyText: '' });
   },
 
-  closeReply() {
-    if (this.data.submitting) return;
+  closeReply(force) {
+    if (this.data.submitting && !force) return;
     this.setData({ showReplyModal: false, currentFeedbackId: null, replyText: '' });
   },
 
@@ -108,7 +204,7 @@ Page({
     this.setData({ replyText: e.detail.value });
   },
 
-  submitReply() {
+  async submitReply() {
     const id = this.data.currentFeedbackId;
     const reply = String(this.data.replyText || '').trim();
     if (!id) return;
@@ -116,26 +212,35 @@ Page({
       wx.showToast({ title: '请输入回复内容', icon: 'none' });
       return;
     }
+    if (this.data.submitting) return;
 
     this.setData({ submitting: true });
-    wx.showLoading({ title: '提交中...' });
+    this._incLoading('提交中...');
 
-    replyMerchantFeedback(id, reply)
-      .then((res) => {
-        if (res && res.success) {
-          wx.showToast({ title: '回复成功' });
-          this.closeReply();
-          return this.loadFeedbacks();
-        }
-        wx.showToast({ title: (res && res.message) || '回复失败', icon: 'none' });
-      })
-      .catch((err) => {
-        console.error('回复失败:', err);
-        wx.showToast({ title: '网络错误', icon: 'none' });
-      })
-      .finally(() => {
-        wx.hideLoading();
-        this.setData({ submitting: false });
-      });
+    try {
+      const res = await replyMerchantFeedback(id, reply);
+      if (res && res.success) {
+        wx.showToast({ title: '回复成功' });
+        // 成功后自动关闭弹窗（避免用户手动关闭造成重复操作）
+        this.closeReply(true);
+        await this.loadFeedbacks();
+        return;
+      }
+      wx.showToast({ title: (res && res.message) || '回复失败', icon: 'none' });
+    } catch (err) {
+      console.error('回复失败:', err);
+      wx.showToast({ title: getErrMsg(err, '网络错误'), icon: 'none' });
+    } finally {
+      this._decLoading();
+      this.setData({ submitting: false });
+    }
+  },
+
+  async onPullDownRefresh() {
+    try {
+      await this.loadFeedbacks();
+    } finally {
+      wx.stopPullDownRefresh();
+    }
   }
 });

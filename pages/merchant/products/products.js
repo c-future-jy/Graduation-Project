@@ -243,11 +243,17 @@ Page({
       }
 
       // 注意：后端在传 merchant_id 时会返回“当前商家分类 + 公共分类(merchant_id IS NULL)”
-      // 这里按需求只展示“当前商家自己创建”的分类：type=1 且 merchant_id=当前商家ID
+      // 这里展示“公共分类 + 当前商家历史分类”，避免商家每次新增商品都需要重复新建分类。
       const res = await getCategories({ type: 1, merchant_id: merchantId });
       const categories = (res && res.data && res.data.categories) || [];
       const normalized = categories
-        .filter((c) => parseInt(c.merchant_id, 10) === parseInt(merchantId, 10) && parseInt(c.type, 10) === 1)
+        .filter((c) => {
+          const typeOk = parseInt(c.type, 10) === 1;
+          if (!typeOk) return false;
+          const mid = c.merchant_id;
+          if (mid === null || mid === undefined || mid === '') return true; // 公共分类
+          return parseInt(mid, 10) === parseInt(merchantId, 10); // 本商家分类（兼容历史数据）
+        })
         .map((c) => ({ id: c.id, name: c.name }));
 
       this.setData({
@@ -438,6 +444,23 @@ Page({
     const name = toStr(this.data.newCategoryName, '').trim();
     if (!name) {
       wx.showToast({ title: '请输入分类名称', icon: 'none' });
+      return;
+    }
+
+    // 前端先去重：若同名分类已存在，直接选中即可，避免重复创建导致学生端分类越来越多
+    const existing = (this.data.formCategoryOptions || []).find(
+      (c) => c && c.id && String(c.name || '').trim() === name
+    );
+    if (existing) {
+      const idx = (this.data.formCategoryOptions || []).findIndex((c) => String(c.id) === String(existing.id));
+      wx.showToast({ title: '已存在同名分类，已为你选中', icon: 'none' });
+      this.setData({
+        showCreateCategory: false,
+        newCategoryName: '',
+        formCategoryIndex: idx > 0 ? idx : this.data.formCategoryIndex,
+        'form.category_id': existing.id
+      });
+      this.persistDraft();
       return;
     }
 

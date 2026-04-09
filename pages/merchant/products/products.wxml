@@ -40,15 +40,6 @@
 			<picker mode="selector" range="{{formCategoryOptions}}" range-key="name" value="{{formCategoryIndex}}" bindchange="onFormCategoryChange">
 				<view class="picker">{{formCategoryOptions[formCategoryIndex].name}}</view>
 			</picker>
-
-			<view class="category-create">
-				<view wx:if="{{!showCreateCategory}}" class="category-create-trigger" bindtap="openCreateCategory">+ 新建分类</view>
-				<view wx:else class="category-create-row">
-					<input class="category-create-input" placeholder="输入分类名称" maxlength="20" value="{{newCategoryName}}" bindinput="onNewCategoryNameInput" />
-					<view class="primary-btn small" bindtap="submitNewCategory">创建</view>
-					<view class="secondary-btn small" bindtap="cancelCreateCategory">取消</view>
-				</view>
-			</view>
 		</view>
 
 		<view class="field">

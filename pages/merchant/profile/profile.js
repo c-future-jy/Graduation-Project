@@ -155,12 +155,12 @@ Page({
     try {
       // 先拉取用户资料，触发 token 自动刷新（若管理员刚审核通过）
       try {
-        await getUserProfile();
+        await getUserProfile({ silent: true });
       } catch (_) {
         // ignore
       }
 
-      const res = await getMyMerchant();
+      const res = await getMyMerchant({ silent: true });
       if (res && res.success && res.data && res.data.merchant) {
         const m = res.data.merchant;
         const nextForm = {
@@ -265,14 +265,17 @@ Page({
     this.setData({ saving: true });
     this._showLoading('保存中...');
 
-    updateMerchant(merchantId, {
+    Promise.resolve()
+      // 先静默刷新一次用户资料/Token（若后端自愈恢复了商家身份，可避免紧接着的接口被 403）
+      .then(() => getUserProfile({ silent: true }).catch(() => {}))
+      .then(() => updateMerchant(merchantId, {
       name: form.name,
       logo: form.logo,
       description: form.description,
       address: form.address,
       phone: form.phone,
       status: form.status
-    })
+    }))
       .then((res) => {
         // 正常情况下：request 封装只会在 success=true 时进入 then
         if (res && res.success) {

@@ -1,20 +1,5 @@
 const { pool } = require('../config/db');
-
-// 统一响应格式
-const successResponse = (res, data = null, message = '操作成功') => {
-  return res.json({
-    success: true,
-    message,
-    data
-  });
-};
-
-const errorResponse = (res, code, message) => {
-  return res.status(code).json({
-    success: false,
-    message
-  });
-};
+const { successResponse, errorResponse } = require('../utils/response');
 
 const normalizeSpec = (spec) => {
   if (spec === undefined || spec === null) return '';

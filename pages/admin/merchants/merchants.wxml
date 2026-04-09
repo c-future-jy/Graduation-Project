@@ -110,7 +110,7 @@
 
   <!-- 商家详情弹窗 -->
   <view wx:if="{{detailVisible}}" class="detail-mask" bindtap="closeMerchantDetail">
-    <view class="detail-panel" bindtap="stopTap">
+    <view class="detail-panel" catchtap="stopTap">
       <view class="detail-header">
         <text class="detail-title">商家详情</text>
         <text class="detail-close" bindtap="closeMerchantDetail">×</text>
@@ -233,7 +233,7 @@
 
   <!-- 审核弹窗 -->
   <view wx:if="{{auditVisible}}" class="audit-mask" bindtap="closeAudit">
-    <view class="audit-panel" bindtap="stopTap">
+    <view class="audit-panel" catchtap="stopTap">
       <view class="detail-header">
         <text class="detail-title">商家审核</text>
         <text class="detail-close" bindtap="closeAudit">×</text>

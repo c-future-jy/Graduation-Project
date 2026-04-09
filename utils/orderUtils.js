@@ -25,12 +25,10 @@ export function getOrderActions(status) {
     case '3':
       return [
         { text: '评价', action: 'review', type: 'primary' },
-        { text: '删除订单', action: 'delete', type: 'default' },
         { text: '再次购买', action: 'buyAgain', type: 'default' }
       ];
     case '4':
       return [
-        { text: '删除订单', action: 'delete', type: 'default' },
         { text: '再次购买', action: 'buyAgain', type: 'primary' }
       ];
     default:
@@ -105,10 +103,9 @@ export function getStatusClass(status) {
  * @param {Function} options.onConfirm 确认收货回调
  * @param {Function} options.onBuyAgain 再次购买回调
  * @param {Function} options.onReview 去评价回调
- * @param {Function} options.onDelete 删除订单回调
  */
 export function handleOrderAction(options) {
-  const { action, orderId, onCancel, onPay, onConfirm, onBuyAgain, onReview, onDelete } = options;
+  const { action, orderId, onCancel, onPay, onConfirm, onBuyAgain, onReview } = options;
   
   switch (action) {
     case 'cancel':
@@ -125,9 +122,6 @@ export function handleOrderAction(options) {
       break;
     case 'review':
       onReview && onReview(orderId);
-      break;
-    case 'delete':
-      onDelete && onDelete(orderId);
       break;
   }
 }

@@ -239,7 +239,7 @@ App({
   globalData: {
     userInfo: null,
     token: null,
-    baseUrl: 'http://192.168.3.194:3000/api'
+    baseUrl: 'http://localhost:3000/api'
   },
 
   onLaunch() {
@@ -268,7 +268,7 @@ App({
 
       // 开发者工具默认走本机
       if (isDevtools) {
-        this.globalData.baseUrl = 'http://192.168.3.194:3000/api';
+        this.globalData.baseUrl = 'http://localhost:3000/api';
         return;
       }
 

@@ -1,4 +1,5 @@
 const { pool } = require('../config/db');
+const { successResponse, errorResponse } = require('../utils/response');
 
 let _cachedOrderPaymentMethodColumnIsNumeric = null;
 
@@ -81,22 +82,6 @@ const generateOrderNo = () => {
   const timestamp = Date.now().toString();
   const randomStr = Math.random().toString(36).substr(2, 9).toUpperCase();
   return 'ORD' + timestamp + randomStr;
-};
-
-// 统一响应格式
-const successResponse = (res, data = null, message = '操作成功') => {
-  return res.json({
-    success: true,
-    message,
-    data
-  });
-};
-
-const errorResponse = (res, code, message) => {
-  return res.status(code).json({
-    success: false,
-    message
-  });
 };
 
 // 获取订单列表
@@ -699,45 +684,32 @@ exports.updateOrderStatus = async (req, res, next) => {
 // 删除订单
 exports.deleteOrder = async (req, res, next) => {
   try {
-    const userId = req.user.id;
+    // 仅管理员允许删除订单（路由层已做 checkRole，这里再做一层兜底）
+    if (!req.user || parseInt(req.user.role, 10) !== 3) {
+      return errorResponse(res, 403, '权限不足，无法访问此资源');
+    }
     const orderId = req.params.id;
-    
-    // 检查订单是否存在
-    const [orders] = await pool.query(
-      'SELECT status FROM `order` WHERE id = ? AND user_id = ?',
-      [orderId, userId]
-    );
-    
-    if (orders.length === 0) {
+
+    const [orders] = await pool.query('SELECT id FROM `order` WHERE id = ?', [orderId]);
+    if (!orders || orders.length === 0) {
       return errorResponse(res, 404, '订单不存在');
     }
-    
-    const order = orders[0];
-    
-    // 检查订单状态
-    if (order.status === 0 || order.status === 1 || order.status === 2) {
-      return errorResponse(res, 400, '进行中的订单不可删除');
-    }
-    
-    // 开始事务
-    await pool.query('START TRANSACTION');
-    
+
+    const conn = await pool.getConnection();
     try {
-      // 删除订单详情
-      await pool.query('DELETE FROM order_item WHERE order_id = ?', [orderId]);
-      
-      // 删除订单
-      await pool.query('DELETE FROM `order` WHERE id = ? AND user_id = ?', [orderId, userId]);
-      
-      // 提交事务
-      await pool.query('COMMIT');
-      
-      successResponse(res, null, '订单删除成功');
+      await conn.beginTransaction();
+
+      await conn.query('DELETE FROM order_item WHERE order_id = ?', [orderId]);
+      await conn.query('DELETE FROM `order` WHERE id = ?', [orderId]);
+
+      await conn.commit();
+      return successResponse(res, null, '订单删除成功');
     } catch (transactionError) {
-      // 回滚事务
-      await pool.query('ROLLBACK');
+      await conn.rollback().catch(() => {});
       console.error('删除订单失败:', transactionError);
-      errorResponse(res, 500, '删除订单失败');
+      return errorResponse(res, 500, '删除订单失败');
+    } finally {
+      conn.release();
     }
   } catch (error) {
     console.error('删除订单失败:', error);

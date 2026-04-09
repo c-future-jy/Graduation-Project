@@ -1,5 +1,15 @@
 const { pool } = require('../config/db');
 
+async function columnExists(tableName, columnName) {
+  const [rows] = await pool.query(
+    `SELECT COUNT(*) as cnt
+     FROM information_schema.columns
+     WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?`,
+    [tableName, columnName]
+  );
+  return (rows[0] && rows[0].cnt > 0) || false;
+}
+
 async function assertMerchantOwnsProductOrThrow(productId, user) {
   const [rows] = await pool.query('SELECT id, merchant_id FROM product WHERE id = ?', [productId]);
   if (!rows || rows.length === 0) {

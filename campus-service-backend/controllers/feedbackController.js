@@ -63,10 +63,80 @@ exports.getFeedbackList = async (req, res, next) => {
 // 创建反馈
 exports.createFeedback = async (req, res, next) => {
   try {
-    const { merchant_id, order_id, type, rating, content } = req.body;
+    let { merchant_id, order_id, type, rating, content } = req.body;
+
+    const typeNum = parseInt(type, 10);
+    if (![1, 2, 3].includes(typeNum)) {
+      return res.status(400).json({ success: false, message: '反馈类型不合法' });
+    }
+
+    const trimmedContent = String(content || '').trim();
+    if (!trimmedContent) {
+      return res.status(400).json({ success: false, message: '反馈内容不能为空' });
+    }
+    if (trimmedContent.length > 500) {
+      return res.status(400).json({ success: false, message: '反馈内容不能超过500字符' });
+    }
+
+    const ratingNum = rating === null || rating === undefined || rating === '' ? null : parseInt(rating, 10);
+    if (typeNum === 1 || typeNum === 2) {
+      if (!Number.isFinite(ratingNum) || ratingNum < 1 || ratingNum > 5) {
+        return res.status(400).json({ success: false, message: '评分必须在1-5之间' });
+      }
+    } else if (ratingNum !== null) {
+      if (!Number.isFinite(ratingNum) || ratingNum < 1 || ratingNum > 5) {
+        return res.status(400).json({ success: false, message: '评分必须在1-5之间' });
+      }
+    }
+
+    const orderIdNum = order_id === null || order_id === undefined || order_id === '' ? null : parseInt(order_id, 10);
+    const merchantIdNum = merchant_id === null || merchant_id === undefined || merchant_id === '' ? null : parseInt(merchant_id, 10);
+
+    // 订单评价(type=1)：必须绑定订单，并自动从订单反查 merchant_id（保证商家端可按 merchant_id 看到订单评价）
+    if (typeNum === 1) {
+      if (!orderIdNum) {
+        return res.status(400).json({ success: false, message: '请选择订单' });
+      }
+
+      const orderUserIdCol = (await hasTableColumn('order', 'user_id')) ? 'user_id' : null;
+      const orderMerchantIdCol = (await hasTableColumn('order', 'merchant_id')) ? 'merchant_id' : null;
+      if (!orderUserIdCol || !orderMerchantIdCol) {
+        return res.status(500).json({ success: false, message: '订单表结构不兼容，无法创建订单评价' });
+      }
+
+      const [orders] = await pool.query(
+        `SELECT id, \`${orderUserIdCol}\` as user_id, \`${orderMerchantIdCol}\` as merchant_id FROM \`order\` WHERE id = ? LIMIT 1`,
+        [orderIdNum]
+      );
+      if (!orders || orders.length === 0) {
+        return res.status(404).json({ success: false, message: '订单不存在' });
+      }
+      const order = orders[0];
+      if (parseInt(order.user_id, 10) !== parseInt(req.user.id, 10)) {
+        return res.status(403).json({ success: false, message: '无权评价该订单' });
+      }
+      merchant_id = order.merchant_id;
+      order_id = orderIdNum;
+    }
+
+    // 商家评价(type=2)：必须指定 merchant_id
+    if (typeNum === 2) {
+      if (!merchantIdNum) {
+        return res.status(400).json({ success: false, message: '请选择商家' });
+      }
+      merchant_id = merchantIdNum;
+      order_id = orderIdNum;
+    }
+
+    // 平台反馈(type=3)：不需要 merchant_id/order_id
+    if (typeNum === 3) {
+      merchant_id = null;
+      order_id = null;
+    }
+
     const [result] = await pool.query(
       'INSERT INTO feedback (user_id, merchant_id, order_id, type, rating, content) VALUES (?, ?, ?, ?, ?, ?)',
-      [req.user.id, merchant_id, order_id, type, rating, content]
+      [req.user.id, merchant_id, order_id, typeNum, ratingNum, trimmedContent]
     );
     res.status(201).json({ success: true, data: { feedbackId: result.insertId } });
   } catch (error) {
@@ -98,19 +168,47 @@ exports.getMerchantFeedbackList = async (req, res, next) => {
 
     const orderNoColumn = (await hasTableColumn('order', 'order_no')) ? 'order_no' : null;
 
+    // 隐私保护：商家端仅返回必要字段（昵称/评分/内容/回复等），不返回手机号、地址等敏感字段。
+    // 权限收口：商家端不展示平台类反馈(type=3)，平台投诉/纠纷仲裁保留给管理员处理。
+    const selectCols = [
+      'f.id',
+      (await hasTableColumn('feedback', 'type')) ? 'f.type' : 'NULL as type',
+      (await hasTableColumn('feedback', 'order_id')) ? 'f.order_id' : 'NULL as order_id',
+      'f.merchant_id',
+      (await hasTableColumn('feedback', 'rating')) ? 'f.rating' : 'NULL as rating',
+      'f.content',
+      (await hasTableColumn('feedback', 'created_at'))
+        ? 'f.created_at'
+        : ((await hasTableColumn('feedback', 'create_time')) ? 'f.create_time' : 'NULL as created_at'),
+      (await hasTableColumn('feedback', 'reply')) ? 'f.reply' : 'NULL as reply',
+      (await hasTableColumn('feedback', 'reply_time')) ? 'f.reply_time' : 'NULL as reply_time',
+      (await hasTableColumn('feedback', 'status')) ? 'f.status' : '0 as status'
+    ];
+
+    const userNameExpr = userNicknameColumn
+      ? `COALESCE(u.\`${userNicknameColumn}\`, '匿名用户') as user_name`
+      : "'匿名用户' as user_name";
+
+    const whereParts = ['f.merchant_id = ?'];
+    const params = [merchantId];
+    if (await hasTableColumn('feedback', 'type')) {
+      // 兼容旧数据：type 为空时也当作可见评价
+      whereParts.push('(f.type IS NULL OR f.type IN (1, 2))');
+    }
+
     const [feedbacks] = await pool.query(
       `
         SELECT
-          f.*,
-          ${userNicknameColumn ? `u.\`${userNicknameColumn}\` as user_name` : 'NULL as user_name'},
+          ${selectCols.join(',\n          ')},
+          ${userNameExpr},
           ${orderNoColumn ? `o.\`${orderNoColumn}\` as order_no` : 'NULL as order_no'}
         FROM feedback f
         LEFT JOIN user u ON f.user_id = u.id
         LEFT JOIN \`order\` o ON f.order_id = o.id
-        WHERE f.merchant_id = ?
+        WHERE ${whereParts.join(' AND ')}
         ${orderBy}
       `,
-      [merchantId]
+      params
     );
 
     res.json({ success: true, data: { feedbacks } });
@@ -139,15 +237,24 @@ exports.replyFeedback = async (req, res, next) => {
     try {
       await conn.beginTransaction();
 
-      const [rows] = await conn.query('SELECT id, user_id, merchant_id FROM feedback WHERE id = ?', [id]);
+      const hasType = await hasTableColumn('feedback', 'type');
+      const [rows] = await conn.query(
+        `SELECT id, user_id, merchant_id${hasType ? ', type' : ''} FROM feedback WHERE id = ?`,
+        [id]
+      );
       if (!rows || rows.length === 0) {
         await conn.rollback();
         return res.status(404).json({ success: false, message: '反馈不存在' });
       }
       const feedback = rows[0];
 
-      // 商家只能回复自己店铺的反馈；管理员可回复任意反馈
+      // 商家只能回复自己店铺的反馈；管理员可回复任意反馈。
+      // 同时：平台类反馈(type=3)仅管理员可处理。
       if (req.user && req.user.role === 2) {
+        if (hasType && parseInt(feedback.type, 10) === 3) {
+          await conn.rollback();
+          return res.status(403).json({ success: false, message: '平台类投诉需由管理员处理' });
+        }
         const merchantId = await getMerchantIdForCurrentUser(req, conn);
         if (!merchantId || parseInt(feedback.merchant_id, 10) !== parseInt(merchantId, 10)) {
           await conn.rollback();

@@ -88,8 +88,9 @@ Page({
   checkLoginStatus() {
     const token = wx.getStorageSync('token');
     const userInfo = wx.getStorageSync('userInfo');
+    const roleNum = userInfo ? parseInt(String(userInfo.role), 10) : 0;
     
-    if (!token || !userInfo || userInfo.role !== 3) {
+    if (!token || !userInfo || roleNum !== 3) {
       wx.redirectTo({
         url: '/pages/login/login'
       });
@@ -197,7 +198,7 @@ Page({
 
   async loadCategoryOptions() {
     try {
-      const res = await getCategories({ type: 1 });
+      const res = await getCategories({ type: 1, include_merchant: 1 });
       const list = res && res.data && Array.isArray(res.data.categories) ? res.data.categories : [];
       const options = buildCategoryOptions(list);
       this.setData({ categoryOptions: options });

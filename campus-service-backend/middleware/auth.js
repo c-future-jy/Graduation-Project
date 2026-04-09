@@ -1,5 +1,11 @@
 const jwt = require('jsonwebtoken');
 
+const toIntOrUndefined = (value) => {
+  if (value === undefined || value === null || value === '') return undefined;
+  const num = parseInt(String(value), 10);
+  return Number.isFinite(num) ? num : undefined;
+};
+
 /**
  * 验证JWT Token的中间件
  */
@@ -26,9 +32,16 @@ const auth = (req, res, next) => {
 
     // 验证token
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    
-    // 将用户信息附加到请求对象
-    req.user = decoded;
+
+    // 将用户信息附加到请求对象（并规范化常用字段类型）
+    const normalized = { ...decoded };
+    const idNum = toIntOrUndefined(normalized.id);
+    const roleNum = toIntOrUndefined(normalized.role);
+    const merchantIdNum = toIntOrUndefined(normalized.merchant_id);
+    if (idNum !== undefined) normalized.id = idNum;
+    if (roleNum !== undefined) normalized.role = roleNum;
+    if (merchantIdNum !== undefined) normalized.merchant_id = merchantIdNum;
+    req.user = normalized;
     next();
   } catch (error) {
     if (error.name === 'TokenExpiredError') {
@@ -99,7 +112,8 @@ const checkMerchantAccess = (merchantIdField = 'merchant_id') => {
         });
       }
 
-      if (req.user.merchant_id && parseInt(targetMerchantId) === req.user.merchant_id) {
+      const targetMerchantIdNum = toIntOrUndefined(targetMerchantId);
+      if (req.user.merchant_id && targetMerchantIdNum !== undefined && targetMerchantIdNum === req.user.merchant_id) {
         return next();
       }
 

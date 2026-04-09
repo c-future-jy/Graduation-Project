@@ -73,39 +73,6 @@
   color: #999;
 }
 
-/* 角色选择 */
-.role-buttons {
-  display: flex;
-  margin-top: 8rpx;
-}
-
-.role-btn {
-  flex: 1;
-  height: 60rpx;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 1rpx solid #e5e5e5;
-  border-radius: 8rpx;
-  margin: 0 8rpx;
-  background-color: #fff;
-  transition: all 0.3s;
-}
-
-.role-btn.active {
-  background-color: #FF6B35;
-  border-color: #FF6B35;
-}
-
-.role-btn.active .role-text {
-  color: #fff;
-}
-
-.role-text {
-  font-size: 14px;
-  color: #333;
-}
-
 /* 注册按钮 */
 .register-section {
   padding: 32rpx 16rpx;

@@ -239,7 +239,8 @@ Page({
     const userInfo = wx.getStorageSync('userInfo');
     
     // Role 3 represents admin role
-    if (!token || !userInfo || userInfo.role !== 3) {
+    const roleNum = userInfo ? parseInt(String(userInfo.role), 10) : 0;
+    if (!token || !userInfo || roleNum !== 3) {
       wx.redirectTo({
         url: '/pages/login/login'
       });

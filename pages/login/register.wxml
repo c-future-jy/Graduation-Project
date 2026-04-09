@@ -85,27 +85,6 @@
       />
     </view>
 
-    <!-- 角色选择 -->
-    <view class="form-item">
-      <text class="form-label">选择角色</text>
-      <view class="role-buttons">
-        <view 
-          class="role-btn {{selectedRole === 1 ? 'active' : ''}}" 
-          bindtap="selectRole" 
-          data-role="1"
-        >
-          <text class="role-text">学生</text>
-        </view>
-        <view 
-          class="role-btn {{selectedRole === 2 ? 'active' : ''}}" 
-          bindtap="selectRole" 
-          data-role="2"
-        >
-          <text class="role-text">商家</text>
-        </view>
-      </view>
-    </view>
-
   </view>
 
   <!-- 注册按钮 -->

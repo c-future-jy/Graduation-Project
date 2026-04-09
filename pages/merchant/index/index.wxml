@@ -65,6 +65,10 @@
         <view class="btn-icon">📋</view>
         <view class="btn-text">订单管理</view>
       </view>
+      <view class="function-btn" bindtap="goToFeedbacks">
+        <view class="btn-icon">⭐</view>
+        <view class="btn-text">评价管理</view>
+      </view>
       <view class="function-btn" bindtap="goToProfile">
         <view class="btn-icon">🏪</view>
         <view class="btn-text">店铺信息</view>

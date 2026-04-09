@@ -1,5 +1,5 @@
 // pages/order/order.js
-const { getOrders, cancelOrder, completeOrder, buyAgain: apiBuyAgain, deleteOrder: apiDeleteOrder } = require('../../utils/api');
+const { getOrders, cancelOrder, completeOrder, buyAgain: apiBuyAgain } = require('../../utils/api');
 const { handleOrderAction, getStatusText, getOrderActions } = require('../../utils/orderUtils');
 const { showError, showSuccess } = require('../../utils/pageUtils');
 const { toNetworkUrl } = require('../../utils/url');
@@ -272,8 +272,7 @@ Page({
       onPay: (id) => this.goToPay(id),
       onConfirm: (id) => this.confirmReceipt(id),
       onBuyAgain: (id) => this.buyAgain(id),
-      onReview: (id) => this.goToReview(id),
-      onDelete: (id) => this.deleteOrder(id)
+      onReview: (id) => this.goToReview(id)
     });
   },
 
@@ -368,19 +367,6 @@ Page({
   goToReview(orderId) {
     wx.navigateTo({
       url: `/pages/feedback/feedback?order_id=${orderId}`
-    });
-  },
-
-  /**
-   * 删除订单
-   */
-  deleteOrder(orderId) {
-    this._confirmAndRun({
-      title: '删除订单',
-      content: '确定要删除该订单吗？',
-      run: () => apiDeleteOrder(orderId),
-      successMsg: '订单已删除',
-      after: () => this.loadOrders({ reset: true, showLoading: false })
     });
   },
 

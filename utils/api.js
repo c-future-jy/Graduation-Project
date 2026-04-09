@@ -132,10 +132,11 @@ function accountLogin(data) {
 /**
  * 获取个人信息
  */
-function getUserProfile() {
+function getUserProfile(options) {
   return request({
     url: '/users/profile',
-    method: 'GET'
+    method: 'GET',
+    ...(options || {})
   });
 }
 /**
@@ -268,10 +269,11 @@ function applyMerchant(data) {
 /**
  * 获取当前登录用户的商家信息（商家端）
  */
-function getMyMerchant() {
+function getMyMerchant(options) {
   return request({
     url: '/merchants/me',
-    method: 'GET'
+    method: 'GET',
+    ...(options || {})
   });
 }
 
@@ -958,10 +960,11 @@ function batchDeleteAdminFeedbacks(ids) {
 /**
  * 商家仪表盘：核心统计
  */
-function getMerchantDashboardStats() {
+function getMerchantDashboardStats(options) {
   return request({
     url: '/merchant/dashboard/stats',
-    method: 'GET'
+    method: 'GET',
+    ...(options || {})
   });
 }
 

@@ -52,25 +52,27 @@ exports.createAddress = async (req, res, next) => {
       return res.status(400).json({ success: false, message: errors[0] });
     }
     
-    // 开始事务
-    await pool.query('START TRANSACTION');
-    
+    const conn = await pool.getConnection();
     try {
+      await conn.beginTransaction();
+
       // 如果设置为默认地址，先取消其他默认
       if (is_default) {
-        await pool.query('UPDATE address SET is_default = 0 WHERE user_id = ?', [req.user.id]);
+        await conn.query('UPDATE address SET is_default = 0 WHERE user_id = ?', [req.user.id]);
       }
-      
-      const [result] = await pool.query(
+
+      const [result] = await conn.query(
         'INSERT INTO address (user_id, receiver_name, phone, province, city, district, detail, is_default) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
         [req.user.id, receiver_name, phone, province, city, district, detail, is_default || 0]
       );
-      
-      await pool.query('COMMIT');
+
+      await conn.commit();
       res.status(201).json({ success: true, data: { addressId: result.insertId } });
     } catch (transactionError) {
-      await pool.query('ROLLBACK');
+      await conn.rollback().catch(() => {});
       throw transactionError;
+    } finally {
+      conn.release();
     }
   } catch (error) {
     next(error);
@@ -88,29 +90,31 @@ exports.updateAddress = async (req, res, next) => {
       return res.status(400).json({ success: false, message: errors[0] });
     }
     
-    // 开始事务
-    await pool.query('START TRANSACTION');
-    
+    const conn = await pool.getConnection();
     try {
+      await conn.beginTransaction();
+
       if (is_default) {
-        await pool.query('UPDATE address SET is_default = 0 WHERE user_id = ?', [req.user.id]);
+        await conn.query('UPDATE address SET is_default = 0 WHERE user_id = ?', [req.user.id]);
       }
-      
-      const [result] = await pool.query(
+
+      const [result] = await conn.query(
         'UPDATE address SET receiver_name = ?, phone = ?, province = ?, city = ?, district = ?, detail = ?, is_default = ?, updated_at = NOW() WHERE id = ? AND user_id = ?',
         [receiver_name, phone, province, city, district, detail, is_default, req.params.id, req.user.id]
       );
-      
+
       if (result.affectedRows === 0) {
-        await pool.query('ROLLBACK');
+        await conn.rollback().catch(() => {});
         return res.status(404).json({ success: false, message: '地址不存在' });
       }
-      
-      await pool.query('COMMIT');
+
+      await conn.commit();
       res.json({ success: true, message: '更新成功' });
     } catch (transactionError) {
-      await pool.query('ROLLBACK');
+      await conn.rollback().catch(() => {});
       throw transactionError;
+    } finally {
+      conn.release();
     }
   } catch (error) {
     next(error);
@@ -127,22 +131,24 @@ exports.deleteAddress = async (req, res, next) => {
       return res.status(400).json({ success: false, message: '至少保留一个收货地址' });
     }
     
-    // 开始事务
-    await pool.query('START TRANSACTION');
-    
+    const conn = await pool.getConnection();
     try {
-      const [result] = await pool.query('DELETE FROM address WHERE id = ? AND user_id = ?', [req.params.id, req.user.id]);
-      
+      await conn.beginTransaction();
+
+      const [result] = await conn.query('DELETE FROM address WHERE id = ? AND user_id = ?', [req.params.id, req.user.id]);
+
       if (result.affectedRows === 0) {
-        await pool.query('ROLLBACK');
+        await conn.rollback().catch(() => {});
         return res.status(404).json({ success: false, message: '地址不存在' });
       }
-      
-      await pool.query('COMMIT');
+
+      await conn.commit();
       res.json({ success: true, message: '删除成功' });
     } catch (transactionError) {
-      await pool.query('ROLLBACK');
+      await conn.rollback().catch(() => {});
       throw transactionError;
+    } finally {
+      conn.release();
     }
   } catch (error) {
     next(error);
@@ -159,18 +165,20 @@ exports.setDefaultAddress = async (req, res, next) => {
       return res.status(404).json({ success: false, message: '地址不存在' });
     }
     
-    // 开始事务
-    await pool.query('START TRANSACTION');
-    
+    const conn = await pool.getConnection();
     try {
-      await pool.query('UPDATE address SET is_default = 0 WHERE user_id = ?', [req.user.id]);
-      await pool.query('UPDATE address SET is_default = 1 WHERE id = ? AND user_id = ?', [req.params.id, req.user.id]);
-      
-      await pool.query('COMMIT');
+      await conn.beginTransaction();
+
+      await conn.query('UPDATE address SET is_default = 0 WHERE user_id = ?', [req.user.id]);
+      await conn.query('UPDATE address SET is_default = 1 WHERE id = ? AND user_id = ?', [req.params.id, req.user.id]);
+
+      await conn.commit();
       res.json({ success: true, message: '设置成功' });
     } catch (transactionError) {
-      await pool.query('ROLLBACK');
+      await conn.rollback().catch(() => {});
       throw transactionError;
+    } finally {
+      conn.release();
     }
   } catch (error) {
     next(error);

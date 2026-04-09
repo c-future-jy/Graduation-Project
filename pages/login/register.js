@@ -39,7 +39,6 @@ Page({
     phone: '',
     password: '',
     confirmPassword: '',
-    selectedRole: 1, // 默认选择学生角色
     passwordStrength: 0,
     strengthText: '',
     usernameError: '',
@@ -201,16 +200,6 @@ Page({
     return { strength, text };
   },
 
-  /**
-   * 选择角色
-   */
-  selectRole(e) {
-    const role = toInt(e && e.currentTarget && e.currentTarget.dataset ? e.currentTarget.dataset.role : 1, 1);
-    this.setData({
-      selectedRole: role
-    });
-  },
-
   _getFormError() {
     const username = maskTrim(this.data.username);
     const account = maskTrim(this.data.account);
@@ -239,7 +228,7 @@ Page({
     return '';
   },
 
-  _handleRegisterSuccess(res, { fallbackNickName, fallbackAccount, fallbackPhone, fallbackRole } = {}) {
+  _handleRegisterSuccess(res, { fallbackNickName, fallbackAccount, fallbackPhone } = {}) {
     try {
       const token = res && res.data && res.data.token;
       const user = res && res.data && res.data.user;
@@ -249,7 +238,7 @@ Page({
         avatarUrl: (user && (user.avatarUrl || user.avatar_url)) || '/assets/images/morentouxiang.jpg',
         nickName: (user && (user.nickname || user.nickName)) || fallbackNickName || '新用户',
         phone: (user && user.phone) || fallbackPhone || '',
-        role: (user && user.role) || fallbackRole || 1,
+        role: (user && user.role) || 1,
         merchantId: (user && (user.merchant_id || user.merchantId)) || null,
         account: (user && user.account) || fallbackAccount || null
       };
@@ -280,7 +269,6 @@ Page({
     const accountValue = maskTrim(this.data.account);
     const phoneValue = maskTrim(this.data.phone);
     const password = toStr(this.data.password, '');
-    const selectedRole = this.data.selectedRole;
 
     this._showLoading('注册中...');
     try {
@@ -288,15 +276,13 @@ Page({
         username,
         account: accountValue,
         phone: phoneValue || null,
-        password,
-        role: selectedRole
+        password
       });
       this._hideLoading();
       this._handleRegisterSuccess(res, {
         fallbackNickName: username,
         fallbackAccount: accountValue,
-        fallbackPhone: phoneValue,
-        fallbackRole: selectedRole
+        fallbackPhone: phoneValue
       });
     } catch (err) {
       this._hideLoading();
@@ -353,10 +339,9 @@ Page({
    * 微信授权注册
    */
   async wechatAuth(code) {
-    const selectedRole = this.data.selectedRole;
     try {
-      const res = await register({ code, role: selectedRole });
-      this._handleRegisterSuccess(res, { fallbackRole: selectedRole });
+      const res = await register({ code });
+      this._handleRegisterSuccess(res);
     } catch (err) {
       wx.showToast({ title: getErrMsg(err, '注册失败'), icon: 'none' });
       console.error('微信注册失败:', err);

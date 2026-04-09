@@ -6,6 +6,27 @@
   margin-bottom: 20rpx;
 }
 
+.filters {
+  display: flex;
+  gap: 16rpx;
+  margin-bottom: 18rpx;
+}
+
+.filter-item {
+  flex: 1;
+  text-align: center;
+  padding: 14rpx 0;
+  font-size: 26rpx;
+  border-radius: 999rpx;
+  background: #fff;
+  color: #333;
+}
+
+.filter-item.active {
+  background: #f3514f;
+  color: #fff;
+}
+
 .title {
   font-size: 34rpx;
   font-weight: 600;

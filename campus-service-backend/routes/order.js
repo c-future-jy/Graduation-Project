@@ -15,7 +15,7 @@ router.put('/:id/cancel', orderController.cancelOrder); // 取消订单
 router.put('/:id/complete', orderController.completeOrder); // 确认收货/完成订单
 router.put('/:id/status', orderController.updateOrderStatus); // 更新订单状态
 router.post('/:id/buy-again', orderController.buyAgain); // 再次购买（加入购物车）
-router.delete('/:id', orderController.deleteOrder); // 删除订单
+router.delete('/:id', checkRole([3]), orderController.deleteOrder); // 删除订单（仅管理员）
 
 // 商家订单接口
 router.get('/merchant/orders', checkRole([2]), orderController.getMerchantOrders); // 商家获取订单列表

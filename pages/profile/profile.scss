@@ -183,9 +183,15 @@ page {
 }
 
 .red-dot {
-  width: 16rpx;
-  height: 16rpx;                                 /* 小红点高度 */
   background-color: #ff4d4f;
-  border-radius: 50%;                            /* 圆形 */
-  margin-left: 10rpx;                            /* 左侧留白，与文字分开 */
+  color: #fff;
+  height: 28rpx;
+  min-width: 28rpx;
+  padding: 0 10rpx;
+  border-radius: 999rpx;
+  margin-left: 12rpx;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22rpx;
 }

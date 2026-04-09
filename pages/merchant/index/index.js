@@ -40,6 +40,8 @@ Page({
   onLoad: function () {
     this._loadingCount = 0;
     this._loadingShown = false;
+    this._loadingShowAt = 0;
+    this._hideLoadingTimer = null;
     this.loadData();
   },
 
@@ -54,6 +56,14 @@ Page({
     const next = (this._loadingCount || 0) + 1;
     this._loadingCount = next;
     if (next !== 1) return;
+
+    if (this._hideLoadingTimer) {
+      clearTimeout(this._hideLoadingTimer);
+      this._hideLoadingTimer = null;
+    }
+
+    this._loadingShowAt = Date.now();
+    this._loadingShown = true;
     wx.showLoading({
       title: title || '处理中...',
       success: () => {
@@ -72,11 +82,25 @@ Page({
     this._loadingCount = next;
     if (next !== 0) return;
     if (!this._loadingShown) return;
-    wx.hideLoading({
-      complete: () => {
-        this._loadingShown = false;
-      }
-    });
+
+    const minDurationMs = 150;
+    const elapsed = this._loadingShowAt ? Date.now() - this._loadingShowAt : minDurationMs;
+    const delay = Math.max(0, minDurationMs - elapsed);
+
+    const doHide = () => {
+      this._hideLoadingTimer = null;
+      wx.hideLoading({
+        complete: () => {
+          this._loadingShown = false;
+        }
+      });
+    };
+
+    if (delay > 0) {
+      this._hideLoadingTimer = setTimeout(doHide, delay);
+    } else {
+      doHide();
+    }
   },
 
   // 加载数据
@@ -84,30 +108,34 @@ Page({
     this.setData({ loading: true });
     this._showLoading('加载中...');
 
+    let loadErr = null;
     try {
       // 先拉取一次用户资料：若管理员刚审核通过，会下发新 token（utils/api.js 会自动更新本地 token）
       try {
-        await getUserProfile();
+        await getUserProfile({ silent: true });
       } catch (_) {
         // ignore
       }
 
-      await Promise.all([
-        this.getShopInfo(),
-        this.getStats()
-      ]);
+      // 先拿到店铺信息，再按需拉统计（避免店铺不存在时仍继续请求 stats）
+      await this.getShopInfo();
+      await this.getStats();
     } catch (err) {
+      loadErr = err;
       console.error('加载数据失败:', err);
-      wx.showToast({ title: getErrMsg(err, '加载失败'), icon: 'none' });
     } finally {
       this._hideLoading();
       this.setData({ loading: false });
+    }
+
+    if (loadErr) {
+      wx.showToast({ title: getErrMsg(loadErr, '加载失败'), icon: 'none' });
     }
   },
 
   // 获取店铺信息
   getShopInfo: async function () {
-    const res = await getMyMerchant();
+    const res = await getMyMerchant({ silent: true });
     if (!(res && res.success && res.data && res.data.merchant)) {
       throw new Error((res && res.message) || '获取店铺信息失败');
     }
@@ -130,7 +158,7 @@ Page({
   // 获取数据统计
   getStats: async function () {
     try {
-      const res = await getMerchantDashboardStats();
+      const res = await getMerchantDashboardStats({ silent: true });
       if (res && res.success && res.data) {
         this.setData({
           stats: {
@@ -165,6 +193,13 @@ Page({
   goToProfile: function () {
     wx.navigateTo({
       url: '../profile/profile'
+    });
+  },
+
+  // 跳转到评价管理
+  goToFeedbacks: function () {
+    wx.navigateTo({
+      url: '../feedbacks/feedbacks'
     });
   },
 

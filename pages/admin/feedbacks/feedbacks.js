@@ -185,8 +185,9 @@ Page({
   checkLoginStatus: function () {
     const token = wx.getStorageSync('token');
     const userInfo = wx.getStorageSync('userInfo');
+    const roleNum = userInfo ? parseInt(String(userInfo.role), 10) : 0;
     
-    if (!token || !userInfo || userInfo.role !== 3) {
+    if (!token || !userInfo || roleNum !== 3) {
       wx.redirectTo({
         url: '/pages/login/login'
       });
