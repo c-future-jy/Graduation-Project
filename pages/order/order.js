@@ -109,8 +109,14 @@ Page({
     const list = Array.isArray(rawOrders) ? rawOrders : [];
     return list.map((o) => {
       const orderId = o.orderId != null ? o.orderId : o.id;
+      const orderNo = o.orderNo || o.order_no || '';
       const merchantId = o.merchantId != null ? o.merchantId : o.merchant_id;
       const status = o.status != null ? String(o.status) : '';
+
+      // 展示用订单号：待支付不展示 TMP 号，避免困惑；支付后展示 ORD...
+      const displayOrderNo = status === '0'
+        ? String(orderId)
+        : (orderNo && !String(orderNo).startsWith('TMP') ? String(orderNo) : String(orderId));
 
       const goodsList = Array.isArray(o.goodsList) ? o.goodsList : [];
       const normalizedGoodsList = goodsList.map((g) => ({
@@ -133,6 +139,8 @@ Page({
       return {
         ...o,
         orderId,
+        orderNo,
+        displayOrderNo,
         merchantId,
         merchantName: o.merchantName || o.merchant_name || '',
         merchantLogo: toNetworkUrl(o.merchantLogo || o.merchant_logo) || '/assets/images/morentouxiang.jpg',

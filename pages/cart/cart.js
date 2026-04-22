@@ -2,13 +2,6 @@
 const { getCartList, updateCartItem, deleteCartItem, deleteInvalidItems } = require('../../utils/api');
 const { toNetworkUrl } = require('../../utils/url');
 
-function coerceChecked(detailValue) {
-  if (Array.isArray(detailValue)) return detailValue.length > 0;
-  if (typeof detailValue === 'boolean') return detailValue;
-  if (detailValue === null || detailValue === undefined) return false;
-  return Boolean(detailValue);
-}
-
 function toInt(v, fallback = 0) {
   const n = parseInt(v, 10);
   return Number.isFinite(n) ? n : fallback;
@@ -248,65 +241,30 @@ Page({
     if (e.stopPropagation) {
       e.stopPropagation();
     }
-    
-    const allChecked = coerceChecked(e && e.detail && e.detail.value);
+
+    // 单个 checkbox 的 change 事件在不同基础库版本里 detail 形态不稳定
+    // 这里直接基于当前全选状态取反，保证“全选”一定可用
+    const nextAllChecked = !this.data.allChecked;
     let merchants = this.data.merchants;
-    
-    merchants = merchants.map(merchant => {
-      const goods = merchant.goods.map(goods => ({
+
+    merchants = (merchants || []).map((merchant) => {
+      const goods = (merchant.goods || []).map((goods) => ({
         ...goods,
-        checked: allChecked
+        checked: nextAllChecked
       }));
       return {
         ...merchant,
-        checked: allChecked,
+        checked: goods.length > 0 && goods.every((x) => x.checked),
         goods
       };
     });
-    
-    this.setData({ merchants, allChecked });
+
+    this.setData({ merchants, allChecked: nextAllChecked });
     this.updateCheckoutInfo();
 
     // 同步到后端 selected（结算页依赖 /cart/selected）
-    persistSelectedForItems(extractAllCartItems(merchants), allChecked).catch((err) => {
+    persistSelectedForItems(extractAllCartItems(merchants), nextAllChecked).catch((err) => {
       console.error('同步选中状态失败:', err);
-      this.loadCartData();
-    });
-  },
-
-  /**
-   * 切换商家选中状态
-   */
-  toggleMerchantCheck(e) {
-    // 阻止事件冒泡
-    if (e.stopPropagation) {
-      e.stopPropagation();
-    }
-    
-    const merchantId = String(e.currentTarget.dataset.merchantId);
-    const checked = coerceChecked(e && e.detail && e.detail.value);
-    
-    let merchants = this.data.merchants;
-    merchants = merchants.map(merchant => {
-      const isTarget = String(merchant.merchantId) === merchantId;
-      const goods = merchant.goods.map(goods => ({
-        ...goods,
-        checked: isTarget ? checked : goods.checked
-      }));
-      return {
-        ...merchant,
-        checked: isTarget ? checked : merchant.checked,
-        goods
-      };
-    });
-    
-    this.setData({ merchants });
-    this.updateAllCheckedStatus();
-    this.updateCheckoutInfo();
-
-    const merchant = (merchants || []).find((m) => String(m.merchantId) === String(merchantId));
-    persistSelectedForItems((merchant && merchant.goods) || [], checked).catch((err) => {
-      console.error('同步商家选中状态失败:', err);
       this.loadCartData();
     });
   },
@@ -322,14 +280,17 @@ Page({
     
     const cartId = String(e.currentTarget.dataset.cartId);
     const merchantId = String(e.currentTarget.dataset.merchantId);
-    const checked = coerceChecked(e && e.detail && e.detail.value);
+    let nextChecked = false;
+    let found = false;
     
     let merchants = this.data.merchants;
     merchants = merchants.map(merchant => {
       if (String(merchant.merchantId) === merchantId) {
         const goods = merchant.goods.map(goods => {
           if (String(goods.cartId) === String(cartId)) {
-            return { ...goods, checked };
+            nextChecked = !Boolean(goods.checked);
+            found = true;
+            return { ...goods, checked: nextChecked };
           }
           return goods;
         });
@@ -351,8 +312,8 @@ Page({
     this.updateAllCheckedStatus();
     this.updateCheckoutInfo();
 
-    if (cartId !== undefined && cartId !== null && String(cartId).trim() !== '') {
-      updateCartItem(cartId, { selected: checked }).catch((err) => {
+    if (found && cartId !== undefined && cartId !== null && String(cartId).trim() !== '') {
+      updateCartItem(cartId, { selected: nextChecked }).catch((err) => {
         console.error('同步商品选中状态失败:', err);
         this.loadCartData();
       });
@@ -363,16 +324,8 @@ Page({
    * 更新全选状态
    */
   updateAllCheckedStatus() {
-    const merchants = this.data.merchants;
-    let allChecked = true;
-    
-    for (const merchant of merchants) {
-      if (!merchant.checked) {
-        allChecked = false;
-        break;
-      }
-    }
-    
+    const allItems = extractAllCartItems(this.data.merchants);
+    const allChecked = allItems.length > 0 && allItems.every((g) => Boolean(g.checked));
     this.setData({ allChecked });
   },
 

@@ -1,5 +1,5 @@
 // pages/order-detail/order-detail.js
-const { getOrderById, cancelOrder, completeOrder } = require('../../utils/api');
+const { getOrderById, cancelOrder, completeOrder, updateOrderAddress } = require('../../utils/api');
 const { getOrderActions, getStatusIcon, getStatusDesc, getStatusText, handleOrderAction } = require('../../utils/orderUtils');
 const { showError, showSuccess } = require('../../utils/pageUtils');
 const { toNetworkUrl } = require('../../utils/url');
@@ -61,6 +61,10 @@ Page({
     this.loadOrderDetail(orderId);
   },
 
+  onShow() {
+    this.applySelectedAddressFromStorage();
+  },
+
   _showLoading(title) {
     const next = (this._loadingCount || 0) + 1;
     this._loadingCount = next;
@@ -95,6 +99,7 @@ Page({
     const list = Array.isArray(items) ? items : [];
 
     const status = raw.status != null ? String(raw.status) : '';
+    const orderNo = raw.orderNo || raw.order_no || '';
     const totalPrice = raw.totalPrice != null
       ? raw.totalPrice
       : (raw.total_amount != null ? raw.total_amount : raw.totalAmount);
@@ -112,6 +117,9 @@ Page({
     const order = {
       ...raw,
       orderId: raw.orderId != null ? raw.orderId : raw.id,
+      orderNo,
+      // 展示用订单号：未支付时仍显示数字 id；已支付后显示 ORD...（由后端在支付完成时生成）
+      displayOrderNo: (status === '0' || !orderNo) ? String(raw.orderId != null ? raw.orderId : raw.id) : String(orderNo),
       merchantId: raw.merchantId != null ? raw.merchantId : raw.merchant_id,
       merchantName: raw.merchantName || raw.merchant_name || '',
       merchantLogo: toNetworkUrl(raw.merchantLogo || raw.merchant_logo) || '/assets/images/morentouxiang.jpg',
@@ -136,11 +144,75 @@ Page({
       goodsList
     };
 
+    order.canEditAddress = (status === '0' || status === '1');
+    order.isSelfPickup = order.receiverName === '到店自取' || /配送方式[:：]到店自取/.test(String(order.remark || ''));
+
     order.totalQuantity = goodsList.reduce((sum, g) => sum + toInt(g.quantity, 0), 0);
     order.actions = getOrderActions(status);
     order.statusIcon = getStatusIcon(status);
     order.statusDesc = getStatusDesc(status);
     return order;
+  },
+
+  applySelectedAddressFromStorage() {
+    try {
+      const raw = wx.getStorageSync('selectedAddress');
+      const addrId = raw && raw.id ? raw.id : null;
+      if (!addrId) return;
+
+      // 用完即清，避免下次误用旧选择
+      wx.removeStorageSync('selectedAddress');
+
+      const order = this.data.order || {};
+      if (!order || !order.orderId) return;
+      if (order.isSelfPickup) {
+        wx.showToast({ title: '到店自取无需修改收货地址', icon: 'none' });
+        return;
+      }
+      if (!order.canEditAddress) {
+        wx.showToast({ title: '当前状态不可修改地址', icon: 'none' });
+        return;
+      }
+
+      this.updateOrderAddressById(order.orderId, addrId);
+    } catch (_) {
+      // ignore
+    }
+  },
+
+  async updateOrderAddressById(orderId, addressId) {
+    this._showLoading('更新地址...');
+    try {
+      const res = await updateOrderAddress(orderId, { address_id: addressId });
+      if (!res || !res.success) {
+        wx.showToast({ title: (res && res.message) || '更新失败', icon: 'none' });
+        return;
+      }
+      showSuccess('地址已更新');
+      await this.loadOrderDetail(orderId);
+    } catch (err) {
+      showError(getErrMsg(err, '更新失败'));
+      console.error('更新订单地址失败:', err);
+    } finally {
+      this._hideLoading();
+    }
+  },
+
+  editDeliveryInfo() {
+    const order = this.data.order || {};
+    if (!order || !order.orderId) return;
+    if (order.isSelfPickup) {
+      wx.showToast({ title: '到店自取无需修改收货地址', icon: 'none' });
+      return;
+    }
+    if (!order.canEditAddress) {
+      wx.showToast({ title: '当前状态不可修改地址', icon: 'none' });
+      return;
+    }
+
+    wx.navigateTo({
+      url: '/pages/address/address?selectMode=1&title=' + encodeURIComponent('选择收货地址')
+    });
   },
 
   normalizeOrderId(options) {
@@ -338,7 +410,7 @@ Page({
    * 复制订单号
    */
   copyOrderId() {
-    const orderId = this.data.order.orderId;
+    const orderId = this.data.order.displayOrderNo || this.data.order.orderId;
     wx.setClipboardData({
       data: orderId,
       success: function() {

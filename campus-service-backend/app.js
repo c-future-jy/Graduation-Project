@@ -44,7 +44,7 @@ app.use((req, res, next) => {
 app.get('/api/health', (req, res) => {
   res.json({
     success: true,
-    message: '校园一站式服务平台API运行正常',
+    message: '多模式履约校园商城API运行正常',
     timestamp: new Date().toISOString()
   });
 });

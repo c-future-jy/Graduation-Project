@@ -456,6 +456,19 @@ function completeOrder(id) {
 }
 
 /**
+ * 修改订单收货地址（未发货前）
+ * @param {Number|String} orderId 订单ID
+ * @param {Object} data { address_id }
+ */
+function updateOrderAddress(orderId, data) {
+  return request({
+    url: `/orders/${orderId}/address`,
+    method: 'PUT',
+    data
+  });
+}
+
+/**
  * 删除订单
  * @param {Number|String} id 订单ID
  */
@@ -1194,6 +1207,7 @@ module.exports = {
   getOrderById,
   cancelOrder,
   completeOrder,
+  updateOrderAddress,
   getOrderCounts,
   buyAgain,
   deleteOrder,

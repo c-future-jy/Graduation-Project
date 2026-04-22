@@ -1,5 +1,5 @@
 // pages/feedback/feedback.js
-const { request, uploadImage } = require('../../utils/api');
+const { request } = require('../../utils/api');
 
 function toInt(value, fallback = 0) {
   const n = Number(value);
@@ -25,7 +25,6 @@ Page({
     feedbackType: 1, // 1-订单评价, 2-商家评价, 3-平台反馈
     rating: '',
     content: '',
-    images: [],
     loading: false,
     orderId: null,
     merchantId: null,
@@ -51,25 +50,52 @@ Page({
   // 加载用户订单列表
   async loadOrders() {
     try {
-      const res = await request({ url: '/orders', method: 'GET' });
+      const normalizeOrder = (order) => {
+        const id = order && (order.id ?? order.order_id);
+        const orderNoRaw = order && (order.orderNo || order.order_no || order.orderNoText || order.order_no_text);
+        const merchantName = order && (order.merchantName || order.merchant_name);
+        const orderNo = toStr(orderNoRaw, id ? `订单#${id}` : '');
+        const orderNoText = merchantName ? `${orderNo} - ${merchantName}` : orderNo;
+        return {
+          ...order,
+          id,
+          orderNo: orderNoText
+        };
+      };
+
+      // 取更多订单用于选择；反馈仅允许选择“已完成”的订单（3=已完成）
+      const res = await request({ url: '/orders', method: 'GET', data: { pageSize: 50 } });
       if (!res || !res.success) return;
 
       const rawOrders = (res.data && res.data.orders) || [];
-      const completedOrders = rawOrders
-        .filter((order) => toInt(order.status, -1) === 4)
-        .map((order) => ({
-          ...order,
-          id: order.id,
-          orderNo: order.orderNo || order.order_no || order.orderNoText || order.order_no_text || (order.id ? `订单#${order.id}` : '')
-        }));
+      let selectableOrders = rawOrders
+        .map(normalizeOrder)
+        .filter((order) => toInt(order.status, -1) === 3);
 
+      // 如果从其它页面带了 order_id，确保该订单一定出现在列表里（避免分页/筛选导致找不到）
       const { orderId } = this.data;
+      if (orderId && !selectableOrders.some((o) => String(o.id) === String(orderId))) {
+        try {
+          const detail = await request({ url: `/orders/${orderId}`, method: 'GET', silent: true });
+          const order = detail && detail.success && detail.data && detail.data.order;
+          if (order) {
+            const normalized = normalizeOrder(order);
+            // 仅允许已完成
+            if (toInt(normalized.status, -1) === 3) {
+              selectableOrders = [normalized, ...selectableOrders];
+            }
+          }
+        } catch (e) {
+          // ignore
+        }
+      }
+
       const orderIndex = orderId
-        ? completedOrders.findIndex((o) => String(o.id) === String(orderId))
+        ? selectableOrders.findIndex((o) => String(o.id) === String(orderId))
         : -1;
 
       this.setData({
-        orders: completedOrders,
+        orders: selectableOrders,
         orderIndex: orderIndex >= 0 ? orderIndex : -1
       });
     } catch (err) {
@@ -150,43 +176,6 @@ Page({
     this.setData({ content: (e.detail && e.detail.value) || '' });
   },
 
-  // 选择图片
-  chooseImage() {
-    const { images } = this.data;
-    const remaining = 4 - images.length;
-    if (remaining <= 0) return;
-
-    wx.chooseImage({
-      count: remaining,
-      sizeType: ['compressed'],
-      sourceType: ['album', 'camera'],
-      success: (res) => {
-        const newImages = [...images, ...res.tempFilePaths];
-        this.setData({ images: newImages });
-      }
-    });
-  },
-
-  // 预览图片
-  previewImage(e) {
-    const { images } = this.data;
-    const index = toInt(e.currentTarget.dataset.index, 0);
-
-    wx.previewImage({
-      urls: images,
-      current: images[index]
-    });
-  },
-
-  // 删除图片
-  deleteImage(e) {
-    const { images } = this.data;
-    const index = toInt(e.currentTarget.dataset.index, -1);
-    if (index < 0) return;
-    const next = (images || []).filter((_, i) => i !== index);
-    this.setData({ images: next });
-  },
-
   _getFormError() {
     const { feedbackType, rating, content, orderId, merchantId } = this.data;
     const trimmed = toStr(content, '').trim();
@@ -233,10 +222,6 @@ Page({
 
     try {
       const data = this._buildPayload();
-      const images = this.data.images || [];
-      if (images.length > 0) {
-        data.images = await this.uploadImages(images);
-      }
 
       const res = await request({
         url: '/feedback',
@@ -264,19 +249,4 @@ Page({
     }
   },
 
-  // 上传图片
-  async uploadImages(images) {
-    const list = Array.isArray(images) ? images : [];
-    const uploaded = [];
-    for (const image of list) {
-      // eslint-disable-next-line no-await-in-loop
-      const res = await uploadImage(image);
-      const url = res && res.success && res.data && res.data.url;
-      if (!url) {
-        throw new Error((res && res.message) || '图片上传失败');
-      }
-      uploaded.push(url);
-    }
-    return uploaded;
-  }
 });

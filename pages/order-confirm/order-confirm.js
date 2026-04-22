@@ -1,5 +1,5 @@
 // pages/order-confirm/order-confirm.js
-const { getSelectedItems, getAddresses, createOrder } = require('../../utils/api');
+const { getSelectedItems, getAddresses, createOrder, getMerchantById } = require('../../utils/api');
 const { toNetworkUrl } = require('../../utils/url');
 
 function toInt(value, fallback = 0) {
@@ -15,6 +15,16 @@ function toNum(value, fallback = 0) {
 function toStr(value, fallback = '') {
   if (value === null || value === undefined) return fallback;
   return String(value);
+}
+
+function pad2(n) {
+  const s = String(n);
+  return s.length >= 2 ? s : `0${s}`;
+}
+
+function formatHHmm(date) {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return '';
+  return `${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
 }
 
 function getErrMsg(err, fallback = '操作失败') {
@@ -33,6 +43,9 @@ Page({
    */
   data: {
     address: null,
+    merchant: null,
+    pickupTime: '',
+    pickupTimeTouched: false,
     goodsList: [],
     merchantGroups: [],
     totalPrice: 0,
@@ -64,6 +77,7 @@ Page({
     this._loadingShown = false;
     this.loadSelectedGoods();
     this.loadDefaultAddress();
+    this._refreshPickupTime(true);
   },
 
   /**
@@ -196,12 +210,44 @@ Page({
       const goodsList = merchantGroups.flatMap((g) => g.goodsList || []);
       this.setData({ merchantGroups, goodsList });
       this._recalcTotals(merchantGroups);
+
+      const first = merchantGroups && merchantGroups[0];
+      const merchantId = first && first.merchantId;
+      if (merchantId) {
+        this.loadMerchantInfo(merchantId);
+      }
     } catch (err) {
       console.error('获取选中商品失败:', err);
       wx.showToast({ title: getErrMsg(err, '获取选中商品失败'), icon: 'none' });
     } finally {
       this._hideLoading();
     }
+  },
+
+  async loadMerchantInfo(merchantId) {
+    try {
+      const res = await getMerchantById(merchantId);
+      const merchant = res && res.success && res.data && res.data.merchant;
+      if (merchant) {
+        this.setData({ merchant });
+      }
+    } catch (err) {
+      // 商家地址仅用于展示/自取兜底，不阻塞主流程
+      console.error('获取商家信息失败:', err);
+    }
+  },
+
+  _refreshPickupTime(force = false) {
+    if (!force && this.data.pickupTimeTouched) return;
+    const d = new Date();
+    d.setMinutes(d.getMinutes() + 10);
+    this.setData({ pickupTime: formatHHmm(d) });
+  },
+
+  bindPickupTimeChange(e) {
+    const t = e && e.detail && e.detail.value ? String(e.detail.value) : '';
+    if (!t) return;
+    this.setData({ pickupTime: t, pickupTimeTouched: true });
   },
 
   /**
@@ -240,6 +286,10 @@ Page({
   selectDelivery(e) {
     const deliveryType = e.currentTarget.dataset.id;
     this.setData({ deliveryType });
+
+    if (deliveryType === 'self') {
+      this._refreshPickupTime(false);
+    }
     
     // 根据配送方式更新配送费
     const deliveryOption = this.data.deliveryOptions.find(option => option.id === deliveryType);
@@ -283,10 +333,15 @@ Page({
     const parts = [];
     const remark = toStr(this.data.remark, '').trim();
     if (remark) parts.push(remark);
-    parts.push(`配送方式:${this.data.deliveryType}`);
-    parts.push(
-      `配送时间:${this.data.timeType === 'appointment' ? this.data.appointmentTime : '尽快送达'}`
-    );
+    parts.push(`配送方式:${this.data.deliveryType === 'self' ? '到店自取' : '配送上门'}`);
+    if (this.data.deliveryType === 'self') {
+      const t = toStr(this.data.pickupTime, '').trim();
+      if (t) parts.push(`自取时间:${t}`);
+    } else {
+      parts.push(
+        `配送时间:${this.data.timeType === 'appointment' ? this.data.appointmentTime : '尽快送达'}`
+      );
+    }
     return parts.join('；');
   },
 
@@ -296,7 +351,8 @@ Page({
   async submitOrder() {
     if (this.data.submitting) return;
 
-    if (!this.data.address) {
+    const isDelivery = this.data.deliveryType === 'delivery';
+    if (isDelivery && !this.data.address) {
       wx.showToast({ title: '请选择收货地址', icon: 'none' });
       return;
     }
@@ -328,10 +384,13 @@ Page({
     this.setData({ submitting: true });
     this._showLoading('提交中...');
     try {
+      const addressId = isDelivery && this.data.address ? this.data.address.id : null;
       const res = await createOrder({
         merchant_id: merchantId,
         items,
-        address_id: this.data.address.id,
+        address_id: addressId,
+        delivery_type: this.data.deliveryType,
+        pickup_time: this.data.deliveryType === 'self' ? this.data.pickupTime : null,
         remark: this._buildOrderRemark(),
         // 支付走模拟支付，正式部署时替换为真实微信支付
         payment_method: 'mock'

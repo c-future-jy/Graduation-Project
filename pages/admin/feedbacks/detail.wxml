@@ -22,7 +22,7 @@
       <text class="label">内容：</text>
       <text class="value content">{{feedback.content}}</text>
     </view>
-    
+
     <view class="detail-item">
       <text class="label">评分：</text>
       <text class="value rating-number">{{feedback.rating}}分</text>

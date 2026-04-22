@@ -9,6 +9,7 @@ router.use(auth);
 // 用户订单接口
 router.get('/', orderController.getOrderList); // 获取订单列表
 router.post('/', orderController.createOrder); // 创建订单
+router.put('/:id/address', orderController.updateOrderAddress); // 修改订单收货地址（未发货前）
 router.get('/counts', orderController.getOrderCounts); // 获取订单数量统计
 router.get('/:id', orderController.getOrderById); // 获取订单详情
 router.put('/:id/cancel', orderController.cancelOrder); // 取消订单

@@ -35,10 +35,10 @@
   </view>
   
   <!-- 配送信息 -->
-  <view class="info-card">
+  <view class="info-card" bindtap="editDeliveryInfo">
     <view class="info-header">
       <view class="info-title">配送信息</view>
-      <view class="info-arrow" wx:if="order.status !== '3'">→</view>
+      <view class="info-arrow" wx:if="order.canEditAddress">→</view>
     </view>
     <view class="delivery-info">
       <view class="delivery-icon">📍</view>
@@ -103,7 +103,7 @@
     <view class="order-info-list">
       <view class="info-item">
         <view class="info-label">订单编号</view>
-        <view class="info-value" bindtap="copyOrderId">{{order.orderId}} <text class="copy-icon">📋</text></view>
+        <view class="info-value" bindtap="copyOrderId">{{order.displayOrderNo}} <text class="copy-icon">📋</text></view>
       </view>
       <view class="info-item">
         <view class="info-label">下单时间</view>

@@ -1,25 +1,25 @@
 <!--pages/address/edit-address/edit-address.wxml-->
 <view class="container">
   <!-- 联系人信息 -->
-  <view class="form-section">
-    <text class="section-title">联系人信息</text>
-    
+  <view class="card">
+    <view class="card-header">
+      <text class="card-title">联系人信息</text>
+    </view>
     <view class="form-item">
       <text class="label">收货人</text>
-      <input 
-        class="input" 
-        placeholder="请输入收货人姓名（2-20个字符）" 
+      <input
+        class="input"
+        placeholder="请输入收货人姓名（2-20个字符）"
         data-field="receiver_name"
         value="{{formData.receiver_name}}"
         bindinput="handleInput"
       />
     </view>
-    
     <view class="form-item">
       <text class="label">联系电话</text>
-      <input 
-        class="input" 
-        placeholder="请输入11位手机号" 
+      <input
+        class="input"
+        placeholder="请输入11位手机号"
         data-field="phone"
         value="{{formData.phone}}"
         bindinput="handleInput"
@@ -29,27 +29,26 @@
   </view>
   
   <!-- 地址信息 -->
-  <view class="form-section">
-    <text class="section-title">地址信息</text>
-    
+  <view class="card">
+    <view class="card-header">
+      <text class="card-title">地址信息</text>
+    </view>
     <view class="form-item">
       <text class="label">所在地区</text>
       <picker mode="region" value="{{region}}" bindchange="onSystemRegionChange" custom-item="{{customItem}}">
         <view class="region-picker">
-          <text class="region-text">
-            {{formData.province}}{{formData.city}}{{formData.district}}
-            {{!formData.province ? '请选择省市区' : ''}}
+          <text class="region-text {{formData.province ? '' : 'placeholder'}}">
+            {{formData.province ? (formData.province + formData.city + formData.district) : '请选择省市区'}}
           </text>
-          <text class="picker-arrow">>></text>
+          <text class="picker-arrow">→</text>
         </view>
       </picker>
     </view>
-    
     <view class="form-item">
       <text class="label">详细地址</text>
-      <input 
-        class="input detail-input" 
-        placeholder="请输入详细地址，如街道、门牌号等（最多100个字符）" 
+      <input
+        class="input"
+        placeholder="请输入详细地址，如街道、门牌号等（最多100个字符）"
         data-field="detail"
         value="{{formData.detail}}"
         bindinput="handleInput"
@@ -59,11 +58,11 @@
   </view>
   
   <!-- 默认地址设置 -->
-  <view class="form-section">
+  <view class="card">
     <view class="form-item checkbox-item">
       <text class="label">默认地址</text>
-      <checkbox 
-        value="is_default" 
+      <checkbox
+        value="is_default"
         checked="{{formData.is_default === 1}}"
         bindchange="toggleDefault"
       />
@@ -71,12 +70,14 @@
   </view>
   
   <!-- 提交按钮 -->
-  <button 
-    class="submit-btn" 
-    loading="{{loading}}"
-    disabled="{{loading}}"
-    bindtap="submitForm"
-  >
-    {{addressId ? '更新地址' : '添加地址'}}
-  </button>
+  <view class="submit-bar">
+    <button
+      class="submit-btn"
+      loading="{{loading}}"
+      disabled="{{loading}}"
+      bindtap="submitForm"
+    >
+      {{addressId ? '更新地址' : '添加地址'}}
+    </button>
+  </view>
 </view>

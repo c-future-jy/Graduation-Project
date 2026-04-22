@@ -39,7 +39,7 @@ router.get('/search', searchController.search);
 router.get('/', (req, res) => {
   res.json({
     success: true,
-    message: '校园一站式服务平台API',
+    message: '多模式履约校园商城API',
     version: '1.0.0',
     endpoints: {
       users: '/api/users',

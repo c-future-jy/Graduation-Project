@@ -1,7 +1,7 @@
 <!--pages/order-confirm/order-confirm.wxml-->
 <view class="order-confirm-container">
-  <!-- 收货地址 -->
-  <view class="address-section" bindtap="selectAddress">
+  <!-- 收货地址/自取地址 -->
+  <view wx:if="{{deliveryType === 'delivery'}}" class="address-section" bindtap="selectAddress">
     <view class="address-header">
       <text class="address-title">收货地址</text>
       <text class="address-arrow">→</text>
@@ -12,6 +12,19 @@
     </view>
     <view wx:else class="address-empty">
       <text>请添加收货地址</text>
+    </view>
+  </view>
+
+  <view wx:else class="address-section pickup-address">
+    <view class="address-header">
+      <text class="address-title">自取地址</text>
+    </view>
+    <view class="address-content">
+      <view class="address-name">{{merchant ? merchant.name : '商家门店'}}</view>
+      <view class="address-detail">{{merchant && merchant.address ? merchant.address : '商家地址加载中...'}}</view>
+      <picker mode="time" value="{{pickupTime}}" start="00:00" end="23:59" bindchange="bindPickupTimeChange">
+        <view class="pickup-time">预计自取时间：{{pickupTime || '--:--'}}</view>
+      </picker>
     </view>
   </view>
   
@@ -65,8 +78,8 @@
     </view>
   </view>
   
-  <!-- 配送时间 -->
-  <view class="time-section">
+  <!-- 配送时间（配送上门才显示） -->
+  <view class="time-section" wx:if="{{deliveryType === 'delivery'}}">
     <view class="section-header">
       <view class="section-title">配送时间</view>
     </view>

@@ -37,12 +37,6 @@
           />
           <text class="merchant-name">{{merchant.merchantName}}</text>
         </view>
-        <checkbox
-          class="merchant-checkbox"
-          checked="{{merchant.checked}}"
-          bindchange="toggleMerchantCheck"
-          data-merchant-id="{{merchant.merchantId}}"
-        />
       </view>
 
       <!-- 商品列表 -->
@@ -59,8 +53,7 @@
           <checkbox
             class="goods-checkbox"
             checked="{{goods.checked}}"
-            catchtap="preventTap"
-            bindchange="toggleGoodsCheck"
+            catchtap="toggleGoodsCheck"
             data-cart-id="{{goods.cartId}}"
             data-goods-id="{{goods.goodsId}}"
             data-merchant-id="{{merchant.merchantId}}"
@@ -129,7 +122,7 @@
   <!-- 结算栏 -->
   <view wx:if="{{hasGoods}}" class="checkout-bar">
     <view class="checkout-left">
-      <checkbox class="checkout-checkbox" checked="{{allChecked}}" bindchange="toggleAllCheck" />
+      <checkbox class="checkout-checkbox" checked="{{allChecked}}" catchtap="toggleAllCheck" />
       <text class="checkout-text">全选</text>
     </view>
     <view class="checkout-right">

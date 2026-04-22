@@ -37,7 +37,7 @@
     "pages/admin/notifications/notifications"
   ],
   "window": {
-    "navigationBarTitleText": "校园一站式服务平台",
+    "navigationBarTitleText": "多模式履约校园商城",
     "navigationBarBackgroundColor": "#f3514f",
     "navigationBarTextStyle": "white",
     "enablePullDownRefresh": true,

@@ -22,6 +22,14 @@ function isDev() {
   return String(process.env.NODE_ENV || '').toLowerCase() !== 'production';
 }
 
+function stripFeedbackImagesField(row) {
+  if (!row || typeof row !== 'object') return row;
+  if (!Object.prototype.hasOwnProperty.call(row, 'images')) return row;
+  // eslint-disable-next-line no-unused-vars
+  const { images, ...rest } = row;
+  return rest;
+}
+
 async function getMerchantIdForCurrentUser(req, connOrPool = pool) {
   const userId = req.user && req.user.id;
   const merchantIdFromToken = req.user && req.user.merchant_id;
@@ -54,7 +62,8 @@ exports.getFeedbackList = async (req, res, next) => {
 
     const orderBy = timeColumn ? `ORDER BY \`${timeColumn}\` DESC` : 'ORDER BY id DESC';
     const [feedbacks] = await pool.query(`SELECT * FROM feedback ${orderBy}`);
-    res.json({ success: true, data: { feedbacks } });
+    const sanitized = (Array.isArray(feedbacks) ? feedbacks : []).map(stripFeedbackImagesField);
+    res.json({ success: true, data: { feedbacks: sanitized } });
   } catch (error) {
     next(error);
   }
@@ -64,6 +73,15 @@ exports.getFeedbackList = async (req, res, next) => {
 exports.createFeedback = async (req, res, next) => {
   try {
     let { merchant_id, order_id, type, rating, content } = req.body;
+
+    // 图片能力下线：不接受 images 字段（避免旧客户端/第三方直接写入）
+    const images = req.body && req.body.images;
+    const hasImages = Array.isArray(images)
+      ? images.length > 0
+      : (images !== undefined && images !== null && String(images).trim() !== '');
+    if (hasImages) {
+      return res.status(400).json({ success: false, message: '当前版本反馈暂不支持上传图片' });
+    }
 
     const typeNum = parseInt(type, 10);
     if (![1, 2, 3].includes(typeNum)) {
@@ -134,9 +152,13 @@ exports.createFeedback = async (req, res, next) => {
       order_id = null;
     }
 
+    const insertCols = ['user_id', 'merchant_id', 'order_id', 'type', 'rating', 'content'];
+    const insertVals = [req.user.id, merchant_id, order_id, typeNum, ratingNum, trimmedContent];
+
+    const placeholders = insertCols.map(() => '?').join(', ');
     const [result] = await pool.query(
-      'INSERT INTO feedback (user_id, merchant_id, order_id, type, rating, content) VALUES (?, ?, ?, ?, ?, ?)',
-      [req.user.id, merchant_id, order_id, typeNum, ratingNum, trimmedContent]
+      `INSERT INTO feedback (${insertCols.join(', ')}) VALUES (${placeholders})`,
+      insertVals
     );
     res.status(201).json({ success: true, data: { feedbackId: result.insertId } });
   } catch (error) {
@@ -211,7 +233,8 @@ exports.getMerchantFeedbackList = async (req, res, next) => {
       params
     );
 
-    res.json({ success: true, data: { feedbacks } });
+    const sanitized = (Array.isArray(feedbacks) ? feedbacks : []).map(stripFeedbackImagesField);
+    res.json({ success: true, data: { feedbacks: sanitized } });
   } catch (error) {
     next(error);
   }
@@ -239,7 +262,7 @@ exports.replyFeedback = async (req, res, next) => {
 
       const hasType = await hasTableColumn('feedback', 'type');
       const [rows] = await conn.query(
-        `SELECT id, user_id, merchant_id${hasType ? ', type' : ''} FROM feedback WHERE id = ?`,
+        `SELECT id, user_id, merchant_id, content${hasType ? ', type' : ''} FROM feedback WHERE id = ?`,
         [id]
       );
       if (!rows || rows.length === 0) {
@@ -267,7 +290,12 @@ exports.replyFeedback = async (req, res, next) => {
         [String(reply).trim(), req.user.id, id]
       );
 
-      await insertFeedbackNotification(conn, feedback.user_id, '反馈已回复', '商家已回复您的反馈，请在“通知”中查看');
+      const replyText = String(reply).trim();
+      const originalContent = feedback && feedback.content !== undefined && feedback.content !== null
+        ? String(feedback.content).trim()
+        : '';
+      const noticeContent = `商家回复：${replyText}${originalContent ? `\n\n您的反馈：${originalContent}` : ''}`;
+      await insertFeedbackNotification(conn, feedback.user_id, '反馈已回复', noticeContent);
 
       await conn.commit();
       res.json({ success: true, message: '回复成功' });
@@ -435,14 +463,16 @@ exports.getAdminFeedbackList = async (req, res, next) => {
     const [ratingStats] = await pool.query(
       'SELECT AVG(rating) as avg_rating, COUNT(*) as total_feedbacks FROM feedback WHERE rating IS NOT NULL'
     );
-    
+
     const total = countResult[0].total;
     const totalPages = Math.ceil(total / pageSizeNum);
-    
+
+    const sanitizedFeedbacks = (Array.isArray(feedbacks) ? feedbacks : []).map(stripFeedbackImagesField);
+
     res.json({
       success: true,
       data: {
-        feedbacks,
+        feedbacks: sanitizedFeedbacks,
         pagination: {
           total,
           page: pageNum,
@@ -536,7 +566,7 @@ exports.getAdminFeedbackDetail = async (req, res, next) => {
       return res.status(404).json({ success: false, message: '反馈不存在' });
     }
     
-    const feedback = feedbacks[0];
+    const feedback = stripFeedbackImagesField(feedbacks[0]);
     
     // 获取用户的历史反馈记录
     const historyTimeSelect = feedbackTimeColumn
@@ -558,12 +588,14 @@ exports.getAdminFeedbackDetail = async (req, res, next) => {
         ${historyOrderBy}
       LIMIT 5
     `, [feedback.user_id, id]);
+
+    const sanitizedUserFeedbacks = (Array.isArray(userFeedbacks) ? userFeedbacks : []).map(stripFeedbackImagesField);
     
     res.json({
       success: true,
       data: {
         feedback,
-        userFeedbacks
+        userFeedbacks: sanitizedUserFeedbacks
       }
     });
   } catch (error) {

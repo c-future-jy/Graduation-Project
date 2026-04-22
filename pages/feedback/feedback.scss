@@ -190,84 +190,6 @@
     }
   }
 
-  .image-section {
-    background-color: #fff;
-    padding: 20rpx;
-    border-radius: 8rpx;
-    margin-bottom: 20rpx;
-
-    .image-label {
-      font-size: 28rpx;
-      color: #333;
-      margin-bottom: 20rpx;
-      display: block;
-    }
-
-    .image-uploader {
-      display: flex;
-      gap: 20rpx;
-      flex-wrap: wrap;
-
-      .upload-btn {
-        width: 120rpx;
-        height: 120rpx;
-        border: 2rpx dashed #e5e5e5;
-        border-radius: 8rpx;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        transition: all 0.3s ease;
-
-        &:hover {
-          border-color: #ff9500;
-        }
-
-        .upload-icon {
-          font-size: 48rpx;
-          color: #999;
-        }
-      }
-
-      .image-item {
-        position: relative;
-        width: 120rpx;
-        height: 120rpx;
-        border-radius: 8rpx;
-        overflow: hidden;
-        animation: fadeIn 0.3s ease;
-
-        .uploaded-image {
-          width: 100%;
-          height: 100%;
-        }
-
-        .image-delete {
-          position: absolute;
-          top: -10rpx;
-          right: -10rpx;
-          width: 40rpx;
-          height: 40rpx;
-          background-color: rgba(0, 0, 0, 0.6);
-          border-radius: 50%;
-          display: flex;
-          justify-content: center;
-          align-items: center;
-          transition: all 0.3s ease;
-
-          &:hover {
-            background-color: rgba(255, 59, 48, 0.8);
-          }
-
-          text {
-            color: #fff;
-            font-size: 28rpx;
-            font-weight: bold;
-          }
-        }
-      }
-    }
-  }
-
   .submit-section {
     padding: 20rpx 0;
 
@@ -285,17 +207,5 @@
         background-color: #ccc;
       }
     }
-  }
-}
-
-/* 动画效果 */
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: scale(0.8);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
   }
 }

@@ -112,7 +112,7 @@
 
 .merchant-header {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-start;
   align-items: center;
   padding: 20rpx;
   border-bottom: 1rpx solid #f0f0f0;
@@ -134,10 +134,6 @@
   font-size: 32rpx;
   font-weight: bold;
   color: #333;
-}
-
-.merchant-checkbox {
-  transform: scale(1.2);
 }
 
 /* 商品列表 */

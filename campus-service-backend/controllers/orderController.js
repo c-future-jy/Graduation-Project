@@ -84,6 +84,25 @@ const generateOrderNo = () => {
   return 'ORD' + timestamp + randomStr;
 };
 
+// 生成临时订单号（用于待支付阶段占位，支付完成后会被正式 ORD 号替换）
+const generateTempOrderNo = () => {
+  const timestamp = Date.now().toString();
+  const randomStr = Math.random().toString(36).substr(2, 9).toUpperCase();
+  return 'TMP' + timestamp + randomStr;
+};
+
+let _cachedOrderNoColumnExists = null;
+async function hasOrderNoColumn() {
+  if (_cachedOrderNoColumnExists !== null) return _cachedOrderNoColumnExists;
+  try {
+    const [rows] = await pool.query("SHOW COLUMNS FROM `order` LIKE 'order_no'");
+    _cachedOrderNoColumnExists = !!(rows && rows.length > 0);
+  } catch (e) {
+    _cachedOrderNoColumnExists = false;
+  }
+  return _cachedOrderNoColumnExists;
+}
+
 // 获取订单列表
 exports.getOrderList = async (req, res, next) => {
   try {
@@ -237,7 +256,7 @@ exports.getOrderById = async (req, res, next) => {
 exports.createOrder = async (req, res, next) => {
   try {
     const userId = req.user.id;
-    const { merchant_id, items, address_id, remark, payment_method = 'wechat' } = req.body;
+    const { merchant_id, items, address_id, remark, payment_method = 'wechat', delivery_type, pickup_time } = req.body;
     const payMethod = normalizePaymentMethodString(payment_method);
     const isMockPay = payMethod === 'mock';
     const paymentMethodDb = paymentMethodToDbValue(payMethod, await isOrderPaymentMethodColumnNumeric());
@@ -247,11 +266,29 @@ exports.createOrder = async (req, res, next) => {
       return errorResponse(res, 400, '缺少必要参数');
     }
 
+    const normalizedDeliveryType = String(delivery_type || 'delivery').trim().toLowerCase() === 'self'
+      ? 'self'
+      : 'delivery';
+
     // 校验商家状态：禁用/休息/未通过审核时，不允许下单
-    const [merchantRows] = await pool.query(
-      'SELECT status, audit_status FROM merchant WHERE id = ?',
-      [merchant_id]
-    );
+    let merchantRows;
+    try {
+      [merchantRows] = await pool.query(
+        'SELECT status, audit_status, name, address, phone FROM merchant WHERE id = ?',
+        [merchant_id]
+      );
+    } catch (e) {
+      const msg = e && e.message ? String(e.message) : '';
+      const missingAuditCol =
+        (e && e.code === 'ER_BAD_FIELD_ERROR') ||
+        msg.includes("Unknown column 'audit_status'") ||
+        msg.includes('Unknown column audit_status');
+      if (!missingAuditCol) throw e;
+      [merchantRows] = await pool.query(
+        'SELECT status, name, address, phone FROM merchant WHERE id = ?',
+        [merchant_id]
+      );
+    }
     if (merchantRows.length === 0) {
       return errorResponse(res, 400, '商家不存在');
     }
@@ -265,24 +302,41 @@ exports.createOrder = async (req, res, next) => {
       return errorResponse(res, 400, '商家未通过审核，暂无法下单');
     }
     
-    // 验证地址
+    // 验证地址（配送上门才需要）
     let receiverName, receiverPhone, receiverAddress;
-    if (address_id) {
-      const [addresses] = await pool.query(
-        'SELECT receiver_name, phone, province, city, district, detail FROM address WHERE id = ? AND user_id = ?',
-        [address_id, userId]
-      );
-      
-      if (addresses.length === 0) {
-        return errorResponse(res, 400, '地址不存在');
+    if (normalizedDeliveryType === 'delivery') {
+      if (address_id) {
+        const [addresses] = await pool.query(
+          'SELECT receiver_name, phone, province, city, district, detail FROM address WHERE id = ? AND user_id = ?',
+          [address_id, userId]
+        );
+
+        if (addresses.length === 0) {
+          return errorResponse(res, 400, '地址不存在');
+        }
+
+        const address = addresses[0];
+        receiverName = address.receiver_name;
+        receiverPhone = address.phone;
+        receiverAddress = `${address.province}${address.city}${address.district}${address.detail}`;
+      } else {
+        return errorResponse(res, 400, '请选择收货地址');
       }
-      
-      const address = addresses[0];
-      receiverName = address.receiver_name;
-      receiverPhone = address.phone;
-      receiverAddress = `${address.province}${address.city}${address.district}${address.detail}`;
     } else {
-      return errorResponse(res, 400, '请选择收货地址');
+      // 到店自取：使用商家地址做收货信息兜底（避免表字段非空导致插入失败）
+      const m = merchantRows[0] || {};
+      receiverName = '到店自取';
+      receiverPhone = m.phone ? String(m.phone) : '';
+      receiverAddress = m.address ? String(m.address) : (m.name ? String(m.name) : '到店自取');
+    }
+
+    // 将自取时间写入备注（不新增数据库字段，保持兼容）
+    let finalRemark = remark;
+    if (normalizedDeliveryType === 'self' && pickup_time) {
+      const t = String(pickup_time).trim();
+      if (t) {
+        finalRemark = finalRemark ? `${finalRemark}；自取时间:${t}` : `自取时间:${t}`;
+      }
     }
 
     // 注意：mysql2 的 pool.query('START TRANSACTION') 不能保证后续查询在同一连接上，
@@ -291,8 +345,9 @@ exports.createOrder = async (req, res, next) => {
     try {
       await conn.beginTransaction();
 
-      // 生成订单号
-      const orderNo = generateOrderNo();
+      // 订单号：待支付时用临时号占位；支付完成后（status=1）生成正式 ORD 号
+      // 说明：部分库的 order_no 为 UNIQUE NOT NULL，必须在创建时写入一个值。
+      const orderNo = isMockPay ? generateOrderNo() : generateTempOrderNo();
 
       // 计算总金额
       let totalAmount = 0;
@@ -354,7 +409,7 @@ exports.createOrder = async (req, res, next) => {
             status
           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `,
-        [orderNo, userId, merchant_id, totalAmount, receiverName, receiverPhone, receiverAddress, remark, paymentMethodDb, orderStatus]
+        [orderNo, userId, merchant_id, totalAmount, receiverName, receiverPhone, receiverAddress, finalRemark, paymentMethodDb, orderStatus]
       );
 
       // 订单创建后通知商家（owner_user_id）有新订单待处理
@@ -580,9 +635,10 @@ exports.updateOrderStatus = async (req, res, next) => {
     const userRole = req.user.role;
     const orderId = req.params.id;
     const { status } = req.body;
+    const statusNum = status === undefined || status === null || status === '' ? NaN : parseInt(status, 10);
     
     // 验证参数
-    if (status === undefined) {
+    if (!Number.isFinite(statusNum)) {
       return errorResponse(res, 400, '缺少状态参数');
     }
     
@@ -617,7 +673,7 @@ exports.updateOrderStatus = async (req, res, next) => {
       4: []       // 已取消 → 无
     };
     
-    if (!validTransitions[order.status] || !validTransitions[order.status].includes(status)) {
+    if (!validTransitions[order.status] || !validTransitions[order.status].includes(statusNum)) {
       return errorResponse(res, 400, '无效的状态变更');
     }
     
@@ -626,20 +682,28 @@ exports.updateOrderStatus = async (req, res, next) => {
       await conn.beginTransaction();
 
       let updateFields = ['status = ?', 'updated_at = NOW()'];
-      let updateParams = [status, orderId];
+      let updateParams = [statusNum];
 
-      if (status === 1) {
+      if (statusNum === 1) {
         updateFields.push('payment_time = NOW()');
-      } else if (status === 2) {
+
+        // 支付完成后生成正式订单号：ORD + 时间戳 + 随机串
+        // 若库结构不包含 order_no，则跳过（兼容旧库）。
+        if (await hasOrderNoColumn()) {
+          updateFields.push('order_no = ?');
+          updateParams.push(generateOrderNo());
+        }
+      } else if (statusNum === 2) {
         updateFields.push('delivery_time = NOW()');
-      } else if (status === 3) {
+      } else if (statusNum === 3) {
         updateFields.push('complete_time = NOW()');
       }
 
+      updateParams.push(orderId);
       await conn.query(`UPDATE \`order\` SET ${updateFields.join(', ')} WHERE id = ?`, updateParams);
 
       // 若是取消（0/1 -> 4），恢复库存
-      if (status === 4 && (order.status === 0 || order.status === 1)) {
+      if (statusNum === 4 && (order.status === 0 || order.status === 1)) {
         const [items] = await conn.query('SELECT product_id, quantity FROM order_item WHERE order_id = ?', [orderId]);
         for (const item of items) {
           await conn.query('UPDATE product SET stock = stock + ? WHERE id = ?', [item.quantity, item.product_id]);
@@ -649,17 +713,17 @@ exports.updateOrderStatus = async (req, res, next) => {
       const orderNoSuffix = order.order_no ? `（${order.order_no}）` : '';
       const merchantOwnerUserId = await getMerchantOwnerUserIdByMerchantId(order.merchant_id, conn);
 
-      if (status === 1) {
+      if (statusNum === 1) {
         if (merchantOwnerUserId) {
           await insertOrderNotification(conn, merchantOwnerUserId, '新订单待处理', `订单已支付，待发货${orderNoSuffix}`);
         }
-      } else if (status === 2) {
+      } else if (statusNum === 2) {
         await insertOrderNotification(conn, order.user_id, '订单已发货', `您的订单已发货，请注意查收${orderNoSuffix}`);
-      } else if (status === 3) {
+      } else if (statusNum === 3) {
         if (merchantOwnerUserId) {
           await insertOrderNotification(conn, merchantOwnerUserId, '订单已完成', `订单已完成${orderNoSuffix}`);
         }
-      } else if (status === 4) {
+      } else if (statusNum === 4) {
         await insertOrderNotification(conn, order.user_id, '订单已取消', `您的订单已取消${orderNoSuffix}`);
         if (merchantOwnerUserId) {
           await insertOrderNotification(conn, merchantOwnerUserId, '订单已取消', `订单已取消${orderNoSuffix}`);
@@ -1446,5 +1510,61 @@ exports.getOrderCounts = async (req, res, next) => {
   } catch (error) {
     console.error('获取订单数量失败:', error);
     errorResponse(res, 500, '服务器内部错误');
+  }
+};
+
+// 用户修改订单收货地址（未发货前）
+// PUT /api/orders/:id/address
+exports.updateOrderAddress = async (req, res, next) => {
+  try {
+    const userId = req.user && req.user.id;
+    const orderId = parseInt(req.params.id, 10);
+    const addressId = req.body && req.body.address_id ? parseInt(req.body.address_id, 10) : null;
+
+    if (!userId) {
+      return errorResponse(res, 401, '未授权访问');
+    }
+    if (!Number.isFinite(orderId) || orderId <= 0) {
+      return errorResponse(res, 400, '订单ID不合法');
+    }
+    if (!Number.isFinite(addressId) || addressId <= 0) {
+      return errorResponse(res, 400, '请选择收货地址');
+    }
+
+    const [orders] = await pool.query(
+      'SELECT id, status FROM `order` WHERE id = ? AND user_id = ? LIMIT 1',
+      [orderId, userId]
+    );
+    if (!orders || orders.length === 0) {
+      return errorResponse(res, 404, '订单不存在');
+    }
+
+    const status = orders[0] && orders[0].status != null ? String(orders[0].status) : '';
+    if (status !== '0' && status !== '1') {
+      return errorResponse(res, 400, '当前订单状态不允许修改地址');
+    }
+
+    const [addresses] = await pool.query(
+      'SELECT receiver_name, phone, province, city, district, detail FROM address WHERE id = ? AND user_id = ? LIMIT 1',
+      [addressId, userId]
+    );
+    if (!addresses || addresses.length === 0) {
+      return errorResponse(res, 400, '地址不存在');
+    }
+
+    const a = addresses[0];
+    const receiverName = a.receiver_name;
+    const receiverPhone = a.phone;
+    const receiverAddress = `${a.province}${a.city}${a.district}${a.detail}`;
+
+    await pool.query(
+      'UPDATE `order` SET receiver_name = ?, receiver_phone = ?, receiver_address = ?, updated_at = NOW() WHERE id = ? AND user_id = ?',
+      [receiverName, receiverPhone, receiverAddress, orderId, userId]
+    );
+
+    return successResponse(res, { orderId }, '地址已更新');
+  } catch (error) {
+    console.error('修改订单地址失败:', error);
+    return errorResponse(res, 500, '服务器内部错误');
   }
 };

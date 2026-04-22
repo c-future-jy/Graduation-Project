@@ -153,8 +153,31 @@ Page({
       const userInfo = (res && res.data && res.data.user) ? res.data.user : {};
       const cached = this._normalizeStoredUser(wx.getStorageSync('userInfo'));
 
-      const serverNickname = userInfo.nickname || userInfo.nickName || '';
-      const displayName = userInfo.username || (serverNickname && serverNickname !== '新用户' ? serverNickname : '') || cached.nickName || '未设置昵称';
+      // 个人中心展示名应优先使用 nickname（可编辑），username/account 仅作为兜底
+      const serverNickname = toStr(userInfo.nickname || userInfo.nickName || '').trim();
+      const serverUsername = toStr(userInfo.username || userInfo.account || '').trim();
+      let displayName = (serverNickname && serverNickname !== '新用户' ? serverNickname : '')
+        || serverUsername
+        || cached.nickName
+        || '未设置昵称';
+
+      // 如果刚在“个人信息”页保存过昵称，返回后一小段时间内优先用本地缓存，避免被旧接口值覆盖
+      try {
+        const updatedAt = parseInt(wx.getStorageSync('profileUpdatedAt'), 10);
+        const withinWindow = Number.isFinite(updatedAt) && Date.now() - updatedAt >= 0 && Date.now() - updatedAt <= 8000;
+        if (withinWindow && cached && cached.nickName) {
+          const cachedName = toStr(cached.nickName, '').trim();
+          if (cachedName && cachedName !== displayName) {
+            displayName = cachedName;
+          }
+        }
+
+        // 若后端已返回最新昵称或超过窗口，清理标记
+        const shouldClear = (!withinWindow) || (serverNickname && cached && toStr(cached.nickName, '').trim() === serverNickname);
+        if (shouldClear) wx.removeStorageSync('profileUpdatedAt');
+      } catch (_) {
+        // ignore
+      }
       const rawAvatar = userInfo.avatar_url || userInfo.avatarUrl || '';
       const avatarUrl = rawAvatar ? toNetworkUrl(rawAvatar) : (cached.avatarUrl ? toNetworkUrl(cached.avatarUrl) : DEFAULT_AVATAR);
 
@@ -311,8 +334,8 @@ Page({
    */
   goToAbout() {
     wx.showModal({
-      title: '关于校园一站式服务平台',
-      content: '版本号：v1.0.0\n\n本平台致力于为校园师生提供便捷的一站式生活服务，整合校园周边商家资源，让校园生活更美好。',
+      title: '关于多模式履约校园商城',
+      content: '版本号：v1.0.0\n\n本平台致力于为校园师生提供便捷的多模式生活服务，整合校园周边商家资源，让校园生活更美好。',
       showCancel: false,
       confirmText: '我知道了'
     });

@@ -68,7 +68,7 @@
         <view class="content-preview">
           <text class="content-text">{{item.content}}</text>
         </view>
-        
+
         <!-- 回复/驳回内容展示 -->
         <view class="action-content" wx:if="{{item.status === 'replied' || item.status === 'rejected'}}">
           <view class="action-content-header">

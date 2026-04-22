@@ -431,6 +431,29 @@ Page({
         avatar_url: nextAvatar
       });
 
+      // 标记“刚更新过资料”，用于返回上一页时短暂优先使用本地昵称，避免被旧接口数据覆盖
+      try {
+        wx.setStorageSync('profileUpdatedAt', Date.now());
+      } catch (_) {
+        // ignore
+      }
+
+      // 立刻同步到上一页（我的页），确保返回后立即可见
+      try {
+        const pages = typeof getCurrentPages === 'function' ? getCurrentPages() : [];
+        const prev = pages && pages.length >= 2 ? pages[pages.length - 2] : null;
+        if (prev && prev.route === 'pages/profile/profile' && typeof prev.setData === 'function') {
+          const patch = {
+            'userInfo.nickName': nickName,
+            'userInfo.phone': phone
+          };
+          if (nextAvatar) patch['userInfo.avatarUrl'] = toNetworkUrl(nextAvatar);
+          prev.setData(patch);
+        }
+      } catch (_) {
+        // ignore
+      }
+
       wx.showToast({ title: '保存成功', icon: 'success' });
       setTimeout(() => wx.navigateBack(), 800);
     } catch (err) {

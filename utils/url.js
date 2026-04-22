@@ -17,8 +17,15 @@ function getBaseUrl() {
 }
 
 function getOrigin() {
-  const baseUrl = getBaseUrl();
-  return String(baseUrl || '').replace(/\/api\/?$/, '');
+  const baseUrl = String(getBaseUrl() || '').trim();
+  if (!baseUrl) return '';
+
+  // 优先直接提取 scheme://host[:port]，避免 baseUrl 带 /api/v1 等路径导致拼接 /uploads 出错
+  const m = baseUrl.match(/^(https?:\/\/[^/]+)(?:\/.*)?$/i);
+  if (m && m[1]) return m[1];
+
+  // 兜底：沿用旧逻辑（兼容相对路径/异常值）
+  return baseUrl.replace(/\/api\/?$/, '');
 }
 
 function normalizeOrigin(origin) {
@@ -56,6 +63,11 @@ function toNetworkUrl(maybeUrl) {
   if (!url) return '';
   if (/^https?:\/\//i.test(url)) return url;
   if (url.startsWith('//')) return 'https:' + url;
+
+  // 兼容少了前导 / 的情况：uploads/... -> /uploads/...
+  if (url.startsWith('uploads/')) {
+    return getUploadsOrigin() + '/' + url;
+  }
 
   if (url.startsWith('/uploads/')) {
     return getUploadsOrigin() + url;

@@ -1,55 +1,99 @@
 /* pages/address/edit-address/edit-address.wxss */
 .container {
-  padding: 20rpx;
+  padding: 24rpx;
+  padding-bottom: 160rpx;
   min-height: 100vh;
   background-color: #f5f5f5;
 }
 
-.form-section {
-  height: 400rpx;
-  width: 100%;
-}
-
-/* 选择器底部按钮 */
-.picker-footer {
-  display: flex;
-  border-top: 1rpx solid #f0f0f0;
-}
-
-.cancel-btn,
-.confirm-btn {
-  flex: 1;
-  padding: 20rpx;
-  font-size: 32rpx;
-  border: none;
+.card {
   background-color: #fff;
+  margin-bottom: 16rpx;
+  border-radius: 12rpx;
+  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.05);
+  overflow: hidden;
 }
 
-.cancel-btn {
-  color: #666;
-  border-right: 1rpx solid #f0f0f0;
+.card-header {
+  padding: 24rpx;
+  border-bottom: 1rpx solid #f0f0f0;
 }
 
-.confirm-btn {
-  color: #ff6b6b;
-  font-weight: bold;
+.card-title {
+  font-size: 32rpx;
+  font-weight: 500;
+  color: #333;
 }
 
-.picker-item {
+.form-item {
+  display: flex;
+  align-items: center;
+  padding: 24rpx;
+  border-bottom: 1rpx solid #f0f0f0;
+}
+
+.card .form-item:last-child {
+  border-bottom: none;
+}
+
+.label {
+  width: 160rpx;
   font-size: 28rpx;
-  text-align: center;
-  height: 80rpx;
-  line-height: 80rpx;
+  color: #333;
 }
 
-/* 提交按钮 */
+.input {
+  flex: 1;
+  font-size: 28rpx;
+  color: #333;
+  padding: 8rpx 0;
+}
+
+.region-picker {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.region-text {
+  flex: 1;
+  font-size: 28rpx;
+  color: #333;
+}
+
+.region-text.placeholder {
+  color: #999;
+}
+
+.picker-arrow {
+  margin-left: 16rpx;
+  font-size: 28rpx;
+  color: #999;
+}
+
+.checkbox-item {
+  justify-content: space-between;
+}
+
+/* 底部提交栏 */
+.submit-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 20rpx 24rpx 30rpx;
+  background-color: #fff;
+  box-shadow: 0 -2rpx 8rpx rgba(0, 0, 0, 0.05);
+}
+
 .submit-btn {
-  margin-top: 40rpx;
-  margin-bottom: 100rpx;
+  width: 100%;
+  margin: 0;
   background-color: #ff6b6b;
   color: #fff;
   font-size: 32rpx;
-  padding: 20rpx;
-  border-radius: 10rpx;
-  box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.15);
+  padding: 22rpx;
+  border-radius: 12rpx;
+  box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.12);
 }
