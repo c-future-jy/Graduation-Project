@@ -1,5 +1,5 @@
 // pages/order-confirm/order-confirm.js
-const { getSelectedItems, getAddresses, createOrder, getMerchantById } = require('../../utils/api');
+const { getSelectedItems, getAddresses, createOrder, cancelOrder, updateOrderStatus, getMerchantById } = require('../../utils/api');
 const { toNetworkUrl } = require('../../utils/url');
 
 function toInt(value, fallback = 0) {
@@ -34,6 +34,12 @@ function getErrMsg(err, fallback = '操作失败') {
   if (err.data && err.data.message) return err.data.message;
   if (err.errMsg) return err.errMsg;
   return fallback;
+}
+
+function formatMoney(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return '0.00';
+  return n.toFixed(2);
 }
 
 Page({
@@ -392,17 +398,71 @@ Page({
         delivery_type: this.data.deliveryType,
         pickup_time: this.data.deliveryType === 'self' ? this.data.pickupTime : null,
         remark: this._buildOrderRemark(),
-        // 支付走模拟支付，正式部署时替换为真实微信支付
+        // 支付走模拟支付：下单后进入“待支付”，确认支付后再更新为“已支付”
         payment_method: 'mock'
       });
 
       if (res && res.success) {
-        wx.showToast({ title: '模拟支付成功' });
-        setTimeout(() => {
-          wx.navigateTo({
-            url: `/pages/order-detail/order-detail?orderId=${res.data.orderId}`
-          });
-        }, 600);
+        const orderId = res && res.data && res.data.orderId;
+        if (!orderId) {
+          wx.showToast({ title: '下单成功但缺少订单号', icon: 'none' });
+          return;
+        }
+
+        // 下单成功后先弹出支付确认弹窗，模拟真实支付流程
+        this._hideLoading();
+
+        wx.showModal({
+          title: '支付确认',
+          content: `确认支付 ¥${formatMoney(this.data.payPrice)} 吗？`,
+          confirmText: '确认支付',
+          cancelText: '取消支付',
+          success: async (modalRes) => {
+            if (modalRes.confirm) {
+              this._showLoading('支付中...');
+              try {
+                const payRes = await updateOrderStatus(orderId, 1);
+                if (!payRes || !payRes.success) {
+                  wx.showToast({ title: (payRes && payRes.message) || '支付失败', icon: 'none' });
+                  return;
+                }
+                wx.showToast({ title: '支付成功' });
+                setTimeout(() => {
+                  wx.navigateTo({
+                    url: `/pages/order-detail/order-detail?orderId=${orderId}`
+                  });
+                }, 600);
+              } catch (e) {
+                wx.showToast({ title: getErrMsg(e, '支付失败'), icon: 'none' });
+                console.error('确认支付失败:', e);
+              } finally {
+                this._hideLoading();
+              }
+              return;
+            }
+
+            // 取消支付：按更贴近真实场景，这里将订单取消（也可改为保留待支付）。
+            this._showLoading('取消中...');
+            try {
+              const cancelRes = await cancelOrder(orderId);
+              if (!cancelRes || !cancelRes.success) {
+                wx.showToast({ title: (cancelRes && cancelRes.message) || '已取消支付（订单仍待支付）', icon: 'none' });
+              } else {
+                wx.showToast({ title: '已取消支付' });
+              }
+              setTimeout(() => {
+                wx.navigateTo({
+                  url: `/pages/order-detail/order-detail?orderId=${orderId}`
+                });
+              }, 600);
+            } catch (e) {
+              wx.showToast({ title: getErrMsg(e, '已取消支付（订单仍待支付）'), icon: 'none' });
+              console.error('取消支付失败:', e);
+            } finally {
+              this._hideLoading();
+            }
+          }
+        });
       } else {
         wx.showToast({ title: (res && res.message) || '订单提交失败', icon: 'none' });
       }

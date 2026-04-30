@@ -258,7 +258,6 @@ exports.createOrder = async (req, res, next) => {
     const userId = req.user.id;
     const { merchant_id, items, address_id, remark, payment_method = 'wechat', delivery_type, pickup_time } = req.body;
     const payMethod = normalizePaymentMethodString(payment_method);
-    const isMockPay = payMethod === 'mock';
     const paymentMethodDb = paymentMethodToDbValue(payMethod, await isOrderPaymentMethodColumnNumeric());
     
     // 验证参数
@@ -347,7 +346,7 @@ exports.createOrder = async (req, res, next) => {
 
       // 订单号：待支付时用临时号占位；支付完成后（status=1）生成正式 ORD 号
       // 说明：部分库的 order_no 为 UNIQUE NOT NULL，必须在创建时写入一个值。
-      const orderNo = isMockPay ? generateOrderNo() : generateTempOrderNo();
+      const orderNo = generateTempOrderNo();
 
       // 计算总金额
       let totalAmount = 0;
@@ -393,7 +392,9 @@ exports.createOrder = async (req, res, next) => {
         totalAmount += product.price * qty;
       }
 
-      const orderStatus = isMockPay ? 1 : 0;
+      // 订单创建后统一进入待支付（status=0）。
+      // 模拟支付的“支付成功”由前端确认后调用 /orders/:id/status 变更为 status=1。
+      const orderStatus = 0;
       const [orderResult] = await conn.query(
         `
           INSERT INTO \`order\` (
@@ -427,14 +428,7 @@ exports.createOrder = async (req, res, next) => {
         // 通知失败不影响下单主流程
       }
 
-      // 模拟支付：写入 payment_time（若字段不存在则忽略）
-      if (isMockPay) {
-        try {
-          await conn.query('UPDATE `order` SET payment_time = NOW() WHERE id = ?', [orderResult.insertId]);
-        } catch (_) {
-          // ignore
-        }
-      }
+
 
       // 创建订单详情
       for (const item of items) {
@@ -483,8 +477,8 @@ exports.createOrder = async (req, res, next) => {
         orderId: orderResult.insertId,
         orderNo,
         pay: {
-          provider: isMockPay ? 'mock' : 'wechat',
-          status: isMockPay ? 'paid' : 'pending'
+          provider: payMethod === 'mock' ? 'mock' : 'wechat',
+          status: 'pending'
         }
       }, '订单创建成功');
     } catch (transactionError) {

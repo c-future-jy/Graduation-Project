@@ -1,7 +1,7 @@
 // pages/cart/cart.js
 const { getCartList, updateCartItem, deleteCartItem, deleteInvalidItems } = require('../../utils/api');
 const { toNetworkUrl } = require('../../utils/url');
-
+//处理整数数据，确保数据格式正确
 function toInt(v, fallback = 0) {
   const n = parseInt(v, 10);
   return Number.isFinite(n) ? n : fallback;
@@ -11,7 +11,7 @@ function toNum(v, fallback = 0) {
   const n = Number(v);
   return Number.isFinite(n) ? n : fallback;
 }
-
+//处理购物车数据，确保数据格式正确
 function normalizeMerchants(rawMerchants) {
   const merchants = (rawMerchants || []).map((m) => {
     const goods = (m.goods || []).map((g) => {
@@ -51,6 +51,8 @@ function normalizeInvalidGoods(rawInvalidGoods) {
   }));
 }
 
+//从商家数据中提取所有购物车项
+//从商家数据中提取所有购物车商品项
 function extractAllCartItems(merchants) {
   const items = [];
   (merchants || []).forEach((m) => {
@@ -63,7 +65,7 @@ function extractAllCartItems(merchants) {
   });
   return items;
 }
-
+//持久化购物车项的选中状态
 async function persistSelectedForItems(items, checked) {
   const tasks = (items || [])
     .map((g) => g && g.cartId)
@@ -112,7 +114,7 @@ Page({
     }
     this.loadCartData();
   },
-
+  //处理商家logo加载错误
   onMerchantLogoError(e) {
     const merchantId = String(e.currentTarget.dataset.merchantId);
     const merchants = (this.data.merchants || []).map((m) => {
@@ -121,7 +123,7 @@ Page({
     });
     this.setData({ merchants });
   },
-
+  //处理商品图片加载错误
   onGoodsImageError(e) {
     const cartId = String(e.currentTarget.dataset.cartId);
     const merchants = (this.data.merchants || []).map((m) => ({
@@ -133,7 +135,7 @@ Page({
     }));
     this.setData({ merchants });
   },
-
+  //处理无效商品图片加载错误
   onInvalidGoodsImageError(e) {
     const cartId = String(e.currentTarget.dataset.cartId);
     const invalidGoods = (this.data.invalidGoods || []).map((g) => {
@@ -175,7 +177,7 @@ Page({
     }
     
     this.setData({ loading: true, error: false });
-    
+    // 加载购物车数据
     try {
       const res = await getCartList();
 
@@ -277,7 +279,7 @@ Page({
     if (e.stopPropagation) {
       e.stopPropagation();
     }
-    
+    // 处理事件数据
     const cartId = String(e.currentTarget.dataset.cartId);
     const merchantId = String(e.currentTarget.dataset.merchantId);
     let nextChecked = false;

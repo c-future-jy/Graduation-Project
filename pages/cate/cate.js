@@ -3,7 +3,7 @@ const { toNetworkUrl } = require('../../utils/url');
 
 const DEFAULT_ICON = '../../assets/images/message.jpg';
 const DEFAULT_MERCHANT_IMAGE = '../../assets/tabbar/biyetu.jpg';
-
+//分类ID映射表
 const CATEGORY_ID_MAP = {
   1: 'breakfast',
   2: 'lunch',
@@ -14,7 +14,7 @@ const CATEGORY_ID_MAP = {
   7: 'drink',
   8: 'market'
 };
-
+//筛选选项
 const FILTERS = [
   { id: 'smart', name: '智能排序' },
   { id: 'distance', name: '距离最近' },
@@ -28,7 +28,7 @@ function toStr(value, fallback = '') {
   if (value === null || value === undefined) return fallback;
   return String(value);
 }
-
+//获取错误消息
 function getErrMsg(err, fallback = '加载失败') {
   if (!err) return fallback;
   if (typeof err === 'string') return err;
@@ -37,7 +37,7 @@ function getErrMsg(err, fallback = '加载失败') {
   if (err.errMsg) return err.errMsg;
   return fallback;
 }
-
+//在网络不稳定的情况下，分类页面仍然能够正常显示和使用
 function buildDefaultCategories() {
   return [
     { id: 'recommend', name: '推荐', icon: DEFAULT_ICON },
@@ -51,7 +51,7 @@ function buildDefaultCategories() {
     { id: 'market', name: '超市便利', icon: DEFAULT_ICON }
   ];
 }
-
+//标准化分类键，确保分类ID的格式一致性
 function normalizeCategoryKey(value) {
   if (value == null) return '';
   if (typeof value === 'number') return String(value);
@@ -62,7 +62,7 @@ function normalizeCategoryKey(value) {
   }
   return s;
 }
-
+//根据初始分类ID选择对应的分类对象
 function pickInitialCategory(categories, initialCategory) {
   const desiredId = normalizeCategoryKey(initialCategory) || 'recommend';
   let category = categories.find(cat => cat.id === desiredId);
@@ -125,7 +125,7 @@ Page({
     loading: false,
     networkError: false
   },
-
+//页面加载时调用，用于初始化分类和商家数据
   onLoad() {
     this._categoriesPromise = null;
     this._merchantsReqId = 0;
@@ -140,7 +140,7 @@ Page({
     const categories = await this.loadCategories();
     this.initCategoriesAndLoad(categories, initialCategory);
   },
-
+//加载分类数据，支持API请求失败时的降级处理
   async loadCategories() {
     if (this._categoriesPromise) return this._categoriesPromise;
 

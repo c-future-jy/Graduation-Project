@@ -456,6 +456,19 @@ function completeOrder(id) {
 }
 
 /**
+ * 更新订单状态（用户侧）
+ * @param {Number|String} id 订单 ID
+ * @param {Number} status 目标状态
+ */
+function updateOrderStatus(id, status) {
+  return request({
+    url: `/orders/${id}/status`,
+    method: 'PUT',
+    data: { status }
+  });
+}
+
+/**
  * 修改订单收货地址（未发货前）
  * @param {Number|String} orderId 订单ID
  * @param {Object} data { address_id }
@@ -911,6 +924,18 @@ function updateAdminOrderStatus(id, status) {
 }
 
 /**
+ * 获取管理员操作日志列表
+ * @param {Object} params 查询参数 (page, pageSize, admin_id, operation, startTime, endTime)
+ */
+function getAdminLogs(params) {
+  return request({
+    url: '/admin/logs',
+    method: 'GET',
+    data: params
+  });
+}
+
+/**
  * 获取管理员反馈列表
  * @param {Object} params 查询参数 (page, pageSize, type, status, user_id, merchant_id, startTime, endTime)
  */
@@ -1207,6 +1232,7 @@ module.exports = {
   getOrderById,
   cancelOrder,
   completeOrder,
+  updateOrderStatus,
   updateOrderAddress,
   getOrderCounts,
   buyAgain,
@@ -1246,6 +1272,7 @@ module.exports = {
   forceCancelAdminOrder,
   getAdminOrderDetail,
   updateAdminOrderStatus,
+  getAdminLogs,
   getAdminFeedbackList,
   replyFeedback,
   rejectFeedback,

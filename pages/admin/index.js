@@ -77,6 +77,12 @@ Page({
             name: '通知管理',
             icon: '📢',
             url: '/pages/admin/notifications/notifications'
+          },
+          {
+            id: 'logs',
+            name: '操作日志',
+            icon: '📋',
+            url: '/pages/admin/logs/logs'
           }
         ]
       }

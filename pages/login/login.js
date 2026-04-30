@@ -137,7 +137,15 @@ Page({
   _wxLogin() {
     return new Promise((resolve, reject) => {
       wx.login({
-        success: resolve,
+        success: (res) => {
+          if (res.code) {
+            // 打印 code 到控制台
+            console.log('=== 登录 code ===');
+            console.log('code:', res.code);
+            console.log('================');
+          }
+          resolve(res);
+        },
         fail: reject
       });
     });

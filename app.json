@@ -34,7 +34,8 @@
     "pages/admin/orders/orders",
     "pages/admin/feedbacks/feedbacks",
     "pages/admin/feedbacks/detail",
-    "pages/admin/notifications/notifications"
+    "pages/admin/notifications/notifications",
+    "pages/admin/logs/logs"
   ],
   "window": {
     "navigationBarTitleText": "多模式履约校园商城",

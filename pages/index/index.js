@@ -1,20 +1,20 @@
 const { getMerchants, getCategories } = require('../../utils/api');
 const { toNetworkUrl } = require('../../utils/url');
-
+//处理商家数据，确保数据格式正确
 function normalizeMerchants(merchants) {
   return (Array.isArray(merchants) ? merchants : []).map(m => ({
     ...m,
     logo: toNetworkUrl(m.logo)
   }));
 }
-
+//处理分类数据，确保数据格式正确
 function normalizeCategories(categories) {
   return (Array.isArray(categories) ? categories : []).map(c => ({
     ...c,
     icon: toNetworkUrl(c.icon)
   }));
 }
-
+//从错误对象中提取错误信息，支持多种格式
 function getErrMsg(err, fallback = '加载失败') {
   if (!err) return fallback;
   if (typeof err === 'string') return err;
@@ -39,7 +39,7 @@ Page({
     this._hideLoadingTimer = null;
     this.loadData();
   },
-
+//开始加载时调用，用于显示加载动画。
   _incLoading(title) {
     const next = (this._loadingCount || 0) + 1;
     this._loadingCount = next;
@@ -63,7 +63,7 @@ Page({
       }
     });
   },
-
+//加载完成后调用，用于隐藏加载动画。
   _decLoading() {
     const current = this._loadingCount || 0;
     if (current <= 0) return;

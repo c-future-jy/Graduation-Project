@@ -8,7 +8,10 @@ const https = require('https');
 const fs = require('fs');
 
 // 导入配置
-const { testConnection } = require('./config/db');
+const { testConnection, pool } = require('./config/db');
+
+// 自动取消超时未支付订单
+const { startAutoCancelScheduler } = require('./utils/orderAutoCancel');
 
 // 导入中间件
 const { errorHandler, notFound } = require('./middleware/errorHandler');
@@ -66,6 +69,23 @@ const startServer = async () => {
   try {
     // 测试数据库连接
     await testConnection();
+
+    // 待支付订单超时自动取消（默认：5 分钟未支付自动取消；每分钟扫描一次）
+    try {
+      const env = String(process.env.NODE_ENV || 'development').toLowerCase();
+      const enabled = String(process.env.ORDER_AUTO_CANCEL_ENABLED || 'true').toLowerCase() !== 'false';
+      if (enabled && env !== 'test') {
+        startAutoCancelScheduler({
+          pool,
+          expireMinutes: process.env.ORDER_AUTO_CANCEL_MINUTES || 5,
+          intervalMs: process.env.ORDER_AUTO_CANCEL_INTERVAL_MS || 60_000,
+          batchSize: process.env.ORDER_AUTO_CANCEL_BATCH_SIZE || 50
+        });
+        console.log('⏱️ 已启用待支付订单超时自动取消任务');
+      }
+    } catch (e) {
+      console.warn('⚠️ 启动自动取消超时订单任务失败:', e && e.message ? e.message : e);
+    }
 
     // 启动 HTTP
     const httpServer = http.createServer(app);
